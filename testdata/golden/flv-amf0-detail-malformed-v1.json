@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "documentType": "flv-tag-detail",
+  "source": {
+    "sizeBytes": 30
+  },
+  "tag": {
+    "id": 0,
+    "typeCode": 18,
+    "typeName": "script",
+    "offset": 13,
+    "span": {
+      "byteOffset": 13,
+      "bitOffset": 0,
+      "bitLength": 104
+    },
+    "headerSpan": {
+      "byteOffset": 13,
+      "bitOffset": 0,
+      "bitLength": 88
+    },
+    "payloadSpan": {
+      "byteOffset": 24,
+      "bitOffset": 0,
+      "bitLength": 16
+    },
+    "rawTypeFlags": 18,
+    "filter": false,
+    "dataSize": 2,
+    "availableDataSize": 2,
+    "dts": 0,
+    "streamId": 0,
+    "payloadComplete": true,
+    "previousTagSize": {
+      "present": true,
+      "span": {
+        "byteOffset": 26,
+        "bitOffset": 0,
+        "bitLength": 32
+      },
+      "value": 13,
+      "expected": 13,
+      "valid": true
+    }
+  },
+  "detail": {
+    "kind": "amf0ScriptData",
+    "span": {
+      "byteOffset": 24,
+      "bitOffset": 0,
+      "bitLength": 16
+    },
+    "bytesConsumed": 2,
+    "complete": false,
+    "eventNameNodeId": 0,
+    "roots": [
+      0
+    ],
+    "nodes": [
+      {
+        "id": 0,
+        "childCount": 0,
+        "typeCode": 2,
+        "typeName": "string",
+        "complete": false,
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 0,
+          "bitLength": 16
+        },
+        "markerSpan": {
+          "byteOffset": 24,
+          "bitOffset": 0,
+          "bitLength": 8
+        }
+      }
+    ],
+    "properties": [],
+    "stringBytes": 0
+  },
+  "diagnostics": [
+    {
+      "code": "AMF0_STRING_LENGTH_TRUNCATED",
+      "severity": "error",
+      "offset": 26,
+      "bitOffset": 0,
+      "message": "AMF0 string length is truncated",
+      "expected": 2,
+      "actual": 1,
+      "recoveryOffset": 26
+    },
+    {
+      "code": "AMF0_SCRIPT_VALUE_MISSING",
+      "severity": "error",
+      "offset": 26,
+      "bitOffset": 0,
+      "message": "script data event value is missing",
+      "recoveryOffset": 26
+    }
+  ]
+}

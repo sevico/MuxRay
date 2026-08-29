@@ -5,3 +5,4 @@ Repository-wide architecture and compatibility decisions are recorded here. An a
 | ADR | Status | Decision |
 |---|---|---|
 | [ADR-001](./001-initial-architecture.md) | Accepted | Initial core, process, data-model, scaling, and compliance boundaries |
+| [ADR-002](./002-on-demand-tag-details.md) | Accepted | Keep scans compact and expose bounded syntax through a separate tag-detail contract |

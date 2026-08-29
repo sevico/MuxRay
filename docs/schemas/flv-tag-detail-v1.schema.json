@@ -1,0 +1,319 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "flv-tag-detail-v1.schema.json",
+  "title": "MuxRay FLV tag detail v1",
+  "description": "Deterministic, path-free, on-demand syntax detail for one indexed FLV tag.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "documentType", "source", "tag", "detail", "diagnostics"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "documentType": {"const": "flv-tag-detail"},
+    "source": {"$ref": "#/$defs/source"},
+    "tag": {
+      "allOf": [
+        {"$ref": "#/$defs/tag"},
+        {
+          "properties": {
+            "typeCode": {"const": 18},
+            "typeName": {"const": "script"},
+            "filter": {"const": false},
+            "payloadComplete": {"const": true}
+          }
+        }
+      ]
+    },
+    "detail": {"$ref": "#/$defs/detail"},
+    "diagnostics": {
+      "type": "array",
+      "description": "AMF0 and ScriptData diagnostics in deterministic discovery order.",
+      "maxItems": 4096,
+      "items": {"$ref": "#/$defs/diagnostic"}
+    }
+  },
+  "$defs": {
+    "uint8": {"type": "integer", "minimum": 0, "maximum": 255},
+    "uint16": {"type": "integer", "minimum": 0, "maximum": 65535},
+    "int16": {"type": "integer", "minimum": -32768, "maximum": 32767},
+    "uint24": {"type": "integer", "minimum": 0, "maximum": 16777215},
+    "uint32": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+    "uint64": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615},
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["byteOffset", "bitOffset", "bitLength"],
+      "properties": {
+        "byteOffset": {"$ref": "#/$defs/uint64"},
+        "bitOffset": {"type": "integer", "minimum": 0, "maximum": 7},
+        "bitLength": {"$ref": "#/$defs/uint32"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sizeBytes"],
+      "properties": {"sizeBytes": {"$ref": "#/$defs/uint64"}}
+    },
+    "previousTagSize": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["present", "value", "expected", "valid"],
+      "properties": {
+        "present": {"type": "boolean"},
+        "span": {"$ref": "#/$defs/span"},
+        "value": {"$ref": "#/$defs/uint32"},
+        "expected": {"$ref": "#/$defs/uint32"},
+        "valid": {"type": "boolean"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"present": {"const": true}}, "required": ["present"]},
+          "then": {"required": ["span"]},
+          "else": {
+            "properties": {"value": {"const": 0}, "valid": {"const": false}},
+            "not": {"required": ["span"]}
+          }
+        }
+      ]
+    },
+    "tag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "typeCode", "typeName", "offset", "span", "headerSpan", "payloadSpan",
+        "rawTypeFlags", "filter", "dataSize", "availableDataSize", "dts", "streamId",
+        "payloadComplete", "previousTagSize"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/uint64"},
+        "typeCode": {"type": "integer", "minimum": 0, "maximum": 31},
+        "typeName": {"enum": ["audio", "video", "script", "unknown"]},
+        "offset": {"$ref": "#/$defs/uint64"},
+        "span": {"$ref": "#/$defs/span"},
+        "headerSpan": {"$ref": "#/$defs/span"},
+        "payloadSpan": {"$ref": "#/$defs/span"},
+        "rawTypeFlags": {"$ref": "#/$defs/uint8"},
+        "filter": {"type": "boolean"},
+        "dataSize": {"$ref": "#/$defs/uint24"},
+        "availableDataSize": {"$ref": "#/$defs/uint24"},
+        "dts": {"$ref": "#/$defs/uint32"},
+        "streamId": {"$ref": "#/$defs/uint24"},
+        "payloadComplete": {"type": "boolean"},
+        "previousTagSize": {"$ref": "#/$defs/previousTagSize"}
+      }
+    },
+    "ieee754": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bits", "class", "span"],
+      "properties": {
+        "bits": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
+        "class": {"enum": ["finite", "nan", "positiveInfinity", "negativeInfinity"]},
+        "span": {"$ref": "#/$defs/span"},
+        "value": {"type": "number"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"class": {"const": "finite"}}, "required": ["class"]},
+          "then": {"required": ["value"]},
+          "else": {"not": {"required": ["value"]}}
+        }
+      ]
+    },
+    "booleanValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw", "value", "span"],
+      "properties": {
+        "raw": {"$ref": "#/$defs/uint8"},
+        "value": {"type": "boolean"},
+        "span": {"$ref": "#/$defs/span"}
+      }
+    },
+    "stringValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["length", "lengthSpan", "span", "omitted"],
+      "properties": {
+        "length": {"$ref": "#/$defs/uint32"},
+        "lengthSpan": {"$ref": "#/$defs/span"},
+        "span": {"$ref": "#/$defs/span"},
+        "omitted": {"type": "boolean"},
+        "value": {"type": "string"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"omitted": {"const": false}}, "required": ["omitted"]},
+          "then": {"required": ["value"]},
+          "else": {"not": {"required": ["value"]}}
+        }
+      ]
+    },
+    "referenceValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "span", "valid"],
+      "properties": {
+        "index": {"$ref": "#/$defs/uint16"},
+        "span": {"$ref": "#/$defs/span"},
+        "valid": {"type": "boolean"},
+        "referencedNodeId": {"$ref": "#/$defs/uint32"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"valid": {"const": true}}, "required": ["valid"]},
+          "then": {"required": ["referencedNodeId"]},
+          "else": {"not": {"required": ["referencedNodeId"]}}
+        }
+      ]
+    },
+    "uint32Field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "span"],
+      "properties": {
+        "value": {"$ref": "#/$defs/uint32"},
+        "span": {"$ref": "#/$defs/span"}
+      }
+    },
+    "countValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actual"],
+      "properties": {
+        "declared": {"$ref": "#/$defs/uint32Field"},
+        "actual": {"$ref": "#/$defs/uint32"}
+      }
+    },
+    "dateValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["milliseconds", "timezoneMinutes", "timezoneSpan"],
+      "properties": {
+        "milliseconds": {"$ref": "#/$defs/ieee754"},
+        "timezoneMinutes": {"$ref": "#/$defs/int16"},
+        "timezoneSpan": {"$ref": "#/$defs/span"}
+      }
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "childCount", "typeCode", "typeName", "complete", "span", "markerSpan"],
+      "properties": {
+        "id": {"$ref": "#/$defs/uint32"},
+        "parentId": {"$ref": "#/$defs/uint32"},
+        "firstChildId": {"$ref": "#/$defs/uint32"},
+        "nextSiblingId": {"$ref": "#/$defs/uint32"},
+        "childCount": {"$ref": "#/$defs/uint32"},
+        "propertyId": {"$ref": "#/$defs/uint32"},
+        "typeCode": {"$ref": "#/$defs/uint8"},
+        "typeName": {
+          "enum": [
+            "number", "boolean", "string", "object", "movieClip", "null", "undefined",
+            "reference", "ecmaArray", "objectEnd", "strictArray", "date", "longString",
+            "unsupported", "recordSet", "xmlDocument", "typedObject", "avmPlus", "unknown"
+          ]
+        },
+        "complete": {"type": "boolean"},
+        "span": {"$ref": "#/$defs/span"},
+        "markerSpan": {"$ref": "#/$defs/span"},
+        "terminatorSpan": {"$ref": "#/$defs/span"},
+        "number": {"$ref": "#/$defs/ieee754"},
+        "boolean": {"$ref": "#/$defs/booleanValue"},
+        "string": {"$ref": "#/$defs/stringValue"},
+        "reference": {"$ref": "#/$defs/referenceValue"},
+        "count": {"$ref": "#/$defs/countValue"},
+        "date": {"$ref": "#/$defs/dateValue"},
+        "className": {"$ref": "#/$defs/stringValue"}
+      },
+      "allOf": [
+        {
+          "oneOf": [
+            {"properties": {"typeCode": {"const": 0}, "typeName": {"const": "number"}}, "required": ["typeCode", "typeName"]},
+            {"properties": {"typeCode": {"const": 1}, "typeName": {"const": "boolean"}}, "required": ["typeCode", "typeName"]},
+            {"properties": {"typeCode": {"const": 2}, "typeName": {"const": "string"}}, "required": ["typeCode", "typeName"]},
+            {"properties": {"typeCode": {"const": 3}, "typeName": {"const": "object"}}, "required": ["typeCode", "typeName"]},
+            {"properties": {"typeCode": {"const": 4}, "typeName": {"const": "movieClip"}}, "required": ["typeCode", "typeName"]},
+            {"properties": {"typeCode": {"const": 5}, "typeName": {"const": "null"}}, "required": ["typeCode", "typeName"]},
+            {"properties": {"typeCode": {"const": 6}, "typeName": {"const": "undefined"}}, "required": ["typeCode", "typeName"]},
+            {"properties": {"typeCode": {"const": 7}, "typeName": {"const": "reference"}}, "required": ["typeCode", "typeName"]},
+            {"properties": {"typeCode": {"const": 8}, "typeName": {"const": "ecmaArray"}}, "required": ["typeCode", "typeName"]},
+            {"properties": {"typeCode": {"const": 9}, "typeName": {"const": "objectEnd"}}, "required": ["typeCode", "typeName"]},
+            {"properties": {"typeCode": {"const": 10}, "typeName": {"const": "strictArray"}}, "required": ["typeCode", "typeName"]},
+            {"properties": {"typeCode": {"const": 11}, "typeName": {"const": "date"}}, "required": ["typeCode", "typeName"]},
+            {"properties": {"typeCode": {"const": 12}, "typeName": {"const": "longString"}}, "required": ["typeCode", "typeName"]},
+            {"properties": {"typeCode": {"const": 13}, "typeName": {"const": "unsupported"}}, "required": ["typeCode", "typeName"]},
+            {"properties": {"typeCode": {"const": 14}, "typeName": {"const": "recordSet"}}, "required": ["typeCode", "typeName"]},
+            {"properties": {"typeCode": {"const": 15}, "typeName": {"const": "xmlDocument"}}, "required": ["typeCode", "typeName"]},
+            {"properties": {"typeCode": {"const": 16}, "typeName": {"const": "typedObject"}}, "required": ["typeCode", "typeName"]},
+            {"properties": {"typeCode": {"const": 17}, "typeName": {"const": "avmPlus"}}, "required": ["typeCode", "typeName"]},
+            {
+              "properties": {"typeName": {"const": "unknown"}},
+              "required": ["typeCode", "typeName"],
+              "not": {"properties": {"typeCode": {"enum": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]}}, "required": ["typeCode"]}
+            }
+          ]
+        },
+        {"if": {"required": ["number"]}, "then": {"properties": {"typeCode": {"const": 0}}}},
+        {"if": {"required": ["boolean"]}, "then": {"properties": {"typeCode": {"const": 1}}}},
+        {"if": {"required": ["string"]}, "then": {"properties": {"typeCode": {"enum": [2, 12, 15]}}}},
+        {"if": {"required": ["reference"]}, "then": {"properties": {"typeCode": {"const": 7}}}},
+        {"if": {"required": ["count"]}, "then": {"properties": {"typeCode": {"enum": [3, 8, 10, 16]}}}},
+        {"if": {"required": ["date"]}, "then": {"properties": {"typeCode": {"const": 11}}}},
+        {"if": {"required": ["className"]}, "then": {"properties": {"typeCode": {"const": 16}}}},
+        {"if": {"properties": {"complete": {"const": true}, "typeCode": {"const": 0}}, "required": ["complete", "typeCode"]}, "then": {"required": ["number"]}},
+        {"if": {"properties": {"complete": {"const": true}, "typeCode": {"const": 1}}, "required": ["complete", "typeCode"]}, "then": {"required": ["boolean"]}},
+        {"if": {"properties": {"complete": {"const": true}, "typeCode": {"enum": [2, 12, 15]}}, "required": ["complete", "typeCode"]}, "then": {"required": ["string"]}},
+        {"if": {"properties": {"complete": {"const": true}, "typeCode": {"const": 7}}, "required": ["complete", "typeCode"]}, "then": {"required": ["reference"]}},
+        {"if": {"properties": {"complete": {"const": true}, "typeCode": {"enum": [3, 8, 10, 16]}}, "required": ["complete", "typeCode"]}, "then": {"required": ["count"]}},
+        {"if": {"properties": {"complete": {"const": true}, "typeCode": {"const": 11}}, "required": ["complete", "typeCode"]}, "then": {"required": ["date"]}},
+        {"if": {"properties": {"complete": {"const": true}, "typeCode": {"const": 16}}, "required": ["complete", "typeCode"]}, "then": {"required": ["className"]}}
+      ]
+    },
+    "property": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "parentNodeId", "span", "name"],
+      "properties": {
+        "id": {"$ref": "#/$defs/uint32"},
+        "parentNodeId": {"$ref": "#/$defs/uint32"},
+        "valueNodeId": {"$ref": "#/$defs/uint32"},
+        "span": {"$ref": "#/$defs/span"},
+        "name": {"$ref": "#/$defs/stringValue"}
+      }
+    },
+    "detail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "span", "bytesConsumed", "complete", "roots", "nodes", "properties", "stringBytes"],
+      "properties": {
+        "kind": {"const": "amf0ScriptData"},
+        "span": {"$ref": "#/$defs/span"},
+        "bytesConsumed": {"$ref": "#/$defs/uint24"},
+        "complete": {"type": "boolean"},
+        "eventName": {"type": "string"},
+        "eventNameNodeId": {"$ref": "#/$defs/uint32"},
+        "valueNodeId": {"$ref": "#/$defs/uint32"},
+        "roots": {"type": "array", "maxItems": 65536, "items": {"$ref": "#/$defs/uint32"}},
+        "nodes": {"type": "array", "maxItems": 65536, "items": {"$ref": "#/$defs/node"}},
+        "properties": {"type": "array", "maxItems": 65536, "items": {"$ref": "#/$defs/property"}},
+        "stringBytes": {"$ref": "#/$defs/uint24"}
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "severity", "offset", "bitOffset", "message"],
+      "properties": {
+        "code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+        "severity": {"enum": ["warning", "error"]},
+        "offset": {"$ref": "#/$defs/uint64"},
+        "bitOffset": {"type": "integer", "minimum": 0, "maximum": 7},
+        "message": {"type": "string", "minLength": 1},
+        "expected": {"$ref": "#/$defs/uint64"},
+        "actual": {"$ref": "#/$defs/uint64"},
+        "recoveryOffset": {"$ref": "#/$defs/uint64"}
+      }
+    }
+  }
+}

@@ -38,12 +38,23 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+          cache: pip
+          cache-dependency-path: tools/requirements-schema.txt
+      - name: Install schema validator
+        run: python -m pip install --disable-pip-version-check -r tools/requirements-schema.txt
+      - name: Validate JSON contracts
+        run: python tools/validate_contracts.py
       - name: Race detector
         run: go test -race ./...
       - name: Fuzz byte cursor
         run: go test ./internal/cursor -run=^$ -fuzz=FuzzByteReader -fuzztime=30s
       - name: Fuzz bit cursor
         run: go test ./internal/cursor -run=^$ -fuzz=FuzzBitReader -fuzztime=30s
+      - name: Fuzz AMF0
+        run: go test ./internal/amf0 -run=^$ -fuzz=FuzzAMF0 -fuzztime=30s
       - name: Fuzz FLV header
         run: go test ./internal/flv -run=^$ -fuzz=FuzzFLVHeader -fuzztime=30s
       - name: Fuzz FLV tag
