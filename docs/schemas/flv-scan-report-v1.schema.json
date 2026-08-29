@@ -1,0 +1,476 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "flv-scan-report-v1.schema.json",
+  "title": "MuxRay FLV scan report v1",
+  "description": "Deterministic, path-free container scan report emitted with schemaVersion 1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "source",
+    "scan",
+    "header",
+    "tags",
+    "diagnostics"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "scan": {
+      "$ref": "#/$defs/scan"
+    },
+    "header": {
+      "$ref": "#/$defs/header"
+    },
+    "tags": {
+      "type": "array",
+      "description": "Compact tag records in source order; id is the zero-based array position.",
+      "items": {
+        "$ref": "#/$defs/tag"
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "description": "Diagnostics in deterministic discovery order.",
+      "items": {
+        "$ref": "#/$defs/diagnostic"
+      }
+    }
+  },
+  "$defs": {
+    "uint8": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255
+    },
+    "uint24": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 16777215
+    },
+    "uint32": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "uint64": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615
+    },
+    "span": {
+      "type": "object",
+      "description": "A source bit range. bitOffset zero is the most-significant bit of byteOffset; bitLength zero is a point location.",
+      "additionalProperties": false,
+      "required": [
+        "byteOffset",
+        "bitOffset",
+        "bitLength"
+      ],
+      "properties": {
+        "byteOffset": {
+          "$ref": "#/$defs/uint64"
+        },
+        "bitOffset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7
+        },
+        "bitLength": {
+          "$ref": "#/$defs/uint32"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "description": "Input facts that cannot disclose a path. v1 deliberately does not hash the input.",
+      "additionalProperties": false,
+      "required": [
+        "sizeBytes"
+      ],
+      "properties": {
+        "sizeBytes": {
+          "$ref": "#/$defs/uint64"
+        }
+      }
+    },
+    "scan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bytesScanned",
+        "complete"
+      ],
+      "properties": {
+        "bytesScanned": {
+          "$ref": "#/$defs/uint64",
+          "description": "Final sequential scanner cursor, in bytes; never greater than source.sizeBytes."
+        },
+        "complete": {
+          "type": "boolean",
+          "description": "True only when the scanner reaches source EOF after complete FLV framing. Warnings do not by themselves make it false."
+        }
+      }
+    },
+    "header": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "present",
+        "version",
+        "typeFlags",
+        "hasAudio",
+        "hasVideo",
+        "dataOffset",
+        "extraDataSize",
+        "previousTagSize0"
+      ],
+      "properties": {
+        "present": {
+          "type": "boolean",
+          "description": "Whether the complete nine-byte fixed header was available and decoded."
+        },
+        "span": {
+          "description": "The nine-byte fixed header only; declared extension bytes are represented by extraDataSize.",
+          "allOf": [
+            {
+              "$ref": "#/$defs/span"
+            },
+            {
+              "properties": {
+                "byteOffset": {
+                  "const": 0
+                },
+                "bitOffset": {
+                  "const": 0
+                },
+                "bitLength": {
+                  "const": 72
+                }
+              }
+            }
+          ]
+        },
+        "version": {
+          "$ref": "#/$defs/uint8"
+        },
+        "typeFlags": {
+          "$ref": "#/$defs/uint8"
+        },
+        "hasAudio": {
+          "type": "boolean"
+        },
+        "hasVideo": {
+          "type": "boolean"
+        },
+        "dataOffset": {
+          "$ref": "#/$defs/uint32"
+        },
+        "extraDataSize": {
+          "$ref": "#/$defs/uint64",
+          "description": "dataOffset minus nine after dataOffset validation; zero otherwise."
+        },
+        "previousTagSize0": {
+          "$ref": "#/$defs/uint32",
+          "description": "The initial PreviousTagSize value, or zero if it could not be read. Diagnostics disambiguate absence from a valid zero."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "present": {
+                "const": true
+              }
+            },
+            "required": [
+              "present"
+            ]
+          },
+          "then": {
+            "required": [
+              "span"
+            ]
+          },
+          "else": {
+            "properties": {
+              "version": {
+                "const": 0
+              },
+              "typeFlags": {
+                "const": 0
+              },
+              "hasAudio": {
+                "const": false
+              },
+              "hasVideo": {
+                "const": false
+              },
+              "dataOffset": {
+                "const": 0
+              },
+              "extraDataSize": {
+                "const": 0
+              },
+              "previousTagSize0": {
+                "const": 0
+              }
+            },
+            "not": {
+              "required": [
+                "span"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "tag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "typeCode",
+        "typeName",
+        "offset",
+        "span",
+        "headerSpan",
+        "payloadSpan",
+        "rawTypeFlags",
+        "filter",
+        "dataSize",
+        "availableDataSize",
+        "dts",
+        "streamId",
+        "payloadComplete",
+        "previousTagSize"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/uint64",
+          "description": "Stable zero-based scan-order identifier."
+        },
+        "typeCode": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 31,
+          "description": "Low five bits of rawTypeFlags."
+        },
+        "typeName": {
+          "enum": [
+            "audio",
+            "video",
+            "script",
+            "unknown"
+          ]
+        },
+        "offset": {
+          "$ref": "#/$defs/uint64",
+          "description": "Tag header byte offset; equal to span.byteOffset and headerSpan.byteOffset."
+        },
+        "span": {
+          "description": "Tag header plus available payload bytes; excludes the following PreviousTagSize.",
+          "allOf": [
+            {
+              "$ref": "#/$defs/span"
+            },
+            {
+              "properties": {
+                "bitOffset": {
+                  "const": 0
+                }
+              }
+            }
+          ]
+        },
+        "headerSpan": {
+          "description": "The complete eleven-byte FLV tag header.",
+          "allOf": [
+            {
+              "$ref": "#/$defs/span"
+            },
+            {
+              "properties": {
+                "bitOffset": {
+                  "const": 0
+                },
+                "bitLength": {
+                  "const": 88
+                }
+              }
+            }
+          ]
+        },
+        "payloadSpan": {
+          "description": "Available payload bytes. Its bit length is availableDataSize times eight.",
+          "allOf": [
+            {
+              "$ref": "#/$defs/span"
+            },
+            {
+              "properties": {
+                "bitOffset": {
+                  "const": 0
+                }
+              }
+            }
+          ]
+        },
+        "rawTypeFlags": {
+          "$ref": "#/$defs/uint8"
+        },
+        "filter": {
+          "type": "boolean",
+          "description": "Bit 5 of rawTypeFlags."
+        },
+        "dataSize": {
+          "$ref": "#/$defs/uint24",
+          "description": "Payload size declared by the tag header."
+        },
+        "availableDataSize": {
+          "$ref": "#/$defs/uint24",
+          "description": "Payload bytes available in the source, never greater than dataSize."
+        },
+        "dts": {
+          "$ref": "#/$defs/uint32",
+          "description": "Unsigned 32-bit FLV timestamp in milliseconds."
+        },
+        "streamId": {
+          "$ref": "#/$defs/uint24"
+        },
+        "payloadComplete": {
+          "type": "boolean"
+        },
+        "previousTagSize": {
+          "$ref": "#/$defs/previousTagSize"
+        }
+      }
+    },
+    "previousTagSize": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "present",
+        "value",
+        "expected",
+        "valid"
+      ],
+      "properties": {
+        "present": {
+          "type": "boolean"
+        },
+        "span": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/span"
+            },
+            {
+              "properties": {
+                "bitOffset": {
+                  "const": 0
+                },
+                "bitLength": {
+                  "const": 32
+                }
+              }
+            }
+          ]
+        },
+        "value": {
+          "$ref": "#/$defs/uint32"
+        },
+        "expected": {
+          "$ref": "#/$defs/uint32",
+          "description": "Eleven plus the declared dataSize."
+        },
+        "valid": {
+          "type": "boolean",
+          "description": "True only when a present value equals expected."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "present": {
+                "const": true
+              }
+            },
+            "required": [
+              "present"
+            ]
+          },
+          "then": {
+            "required": [
+              "span"
+            ]
+          },
+          "else": {
+            "properties": {
+              "value": {
+                "const": 0
+              },
+              "valid": {
+                "const": false
+              }
+            },
+            "not": {
+              "required": [
+                "span"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "severity",
+        "offset",
+        "bitOffset",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]*$",
+          "description": "Stable code registered in docs/diagnostics-v1.md."
+        },
+        "severity": {
+          "enum": [
+            "warning",
+            "error"
+          ]
+        },
+        "offset": {
+          "$ref": "#/$defs/uint64",
+          "description": "Source-byte anchor."
+        },
+        "bitOffset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7,
+          "description": "Bit anchor within offset; zero is the most-significant bit."
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable English explanation. Consumers branch on code, not message."
+        },
+        "expected": {
+          "$ref": "#/$defs/uint64"
+        },
+        "actual": {
+          "$ref": "#/$defs/uint64"
+        }
+      }
+    }
+  }
+}

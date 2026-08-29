@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "sizeBytes": 31
+  },
+  "scan": {
+    "bytesScanned": 31,
+    "complete": true
+  },
+  "header": {
+    "present": true,
+    "span": {
+      "byteOffset": 0,
+      "bitOffset": 0,
+      "bitLength": 72
+    },
+    "version": 1,
+    "typeFlags": 5,
+    "hasAudio": true,
+    "hasVideo": true,
+    "dataOffset": 9,
+    "extraDataSize": 0,
+    "previousTagSize0": 0
+  },
+  "tags": [
+    {
+      "id": 0,
+      "typeCode": 18,
+      "typeName": "script",
+      "offset": 13,
+      "span": {
+        "byteOffset": 13,
+        "bitOffset": 0,
+        "bitLength": 112
+      },
+      "headerSpan": {
+        "byteOffset": 13,
+        "bitOffset": 0,
+        "bitLength": 88
+      },
+      "payloadSpan": {
+        "byteOffset": 24,
+        "bitOffset": 0,
+        "bitLength": 24
+      },
+      "rawTypeFlags": 18,
+      "filter": false,
+      "dataSize": 3,
+      "availableDataSize": 3,
+      "dts": 16777218,
+      "streamId": 0,
+      "payloadComplete": true,
+      "previousTagSize": {
+        "present": true,
+        "span": {
+          "byteOffset": 27,
+          "bitOffset": 0,
+          "bitLength": 32
+        },
+        "value": 14,
+        "expected": 14,
+        "valid": true
+      }
+    }
+  ],
+  "diagnostics": []
+}

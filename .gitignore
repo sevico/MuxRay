@@ -1,0 +1,32 @@
+# Go build and test output
+/bin/
+/dist/
+/build/
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# Wails/frontend output
+/frontend/node_modules/
+/frontend/dist/
+/desktop/build/bin/
+
+# Local analysis artifacts and media corpus
+/.cache/
+/.tmp/
+/testdata/private/
+/testdata/artifacts/
+*.flv
+*.264
+*.265
+*.h264
+*.h265
+*.aac
+*.mp3
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

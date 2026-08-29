@@ -1,0 +1,50 @@
+{
+  "manifestVersion": 1,
+  "id": "example-minimal-header-only",
+  "description": "Illustrative 13-byte FLV v1 header with no audio/video flags, a data offset of 9, PreviousTagSize0 equal to zero, and no tags.",
+  "format": "flv",
+  "originClass": "generated",
+  "validity": "valid",
+  "storage": "metadata-only",
+  "file": {
+    "name": "minimal-header-only.flv",
+    "sizeBytes": 13,
+    "sha256": "d4e2266394fdae000fc44f82c54a8bc9f0d4ecc529820c6523b5982dc4642a71"
+  },
+  "provenance": {
+    "method": "generated",
+    "sourceReference": "Bytes specified directly as FLV, version 1, flags 0, data offset 9, and PreviousTagSize0 0.",
+    "generator": {
+      "name": "manual byte fixture",
+      "version": "1",
+      "recipe": "46 4c 56 01 00 00 00 00 09 00 00 00 00"
+    }
+  },
+  "rights": {
+    "redistribution": "unreviewed"
+  },
+  "privacy": {
+    "reviewStatus": "no-sensitive-data"
+  },
+  "features": [
+    "header-only",
+    "no-declared-streams",
+    "zero-previous-tag-size"
+  ],
+  "expected": {
+    "reportSchemaVersion": 1,
+    "scanComplete": true,
+    "header": {
+      "present": true,
+      "version": 1,
+      "typeFlags": 0,
+      "hasAudio": false,
+      "hasVideo": false,
+      "dataOffset": 9,
+      "previousTagSize0": 0
+    },
+    "tagCount": 0,
+    "diagnostics": []
+  },
+  "notes": "Example only: the media bytes are intentionally not committed and this file does not count toward corpus totals."
+}

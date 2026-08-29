@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Format
+        run: |
+          gofmt -w .
+          git diff --exit-code
+      - name: Test
+        run: go test ./...
+      - name: Vet
+        run: go vet ./...
+
+  race-and-fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Race detector
+        run: go test -race ./...
+      - name: Fuzz byte cursor
+        run: go test ./internal/cursor -run=^$ -fuzz=FuzzByteReader -fuzztime=30s
+      - name: Fuzz bit cursor
+        run: go test ./internal/cursor -run=^$ -fuzz=FuzzBitReader -fuzztime=30s
+      - name: Fuzz FLV header
+        run: go test ./internal/flv -run=^$ -fuzz=FuzzFLVHeader -fuzztime=30s
+      - name: Fuzz FLV tag
+        run: go test ./internal/flv -run=^$ -fuzz=FuzzTag -fuzztime=30s

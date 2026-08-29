@@ -1,0 +1,19 @@
+* text=auto
+
+.gitattributes text eol=lf
+.gitignore text eol=lf
+*.go text eol=lf
+go.mod text eol=lf
+go.sum text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+*.flv binary
+*.264 binary
+*.265 binary
+*.h264 binary
+*.h265 binary
+*.aac binary
+*.mp3 binary
