@@ -186,6 +186,10 @@ func NewScriptTagDetail(sourceSize uint64, tag flv.TagRecord, detail flv.ScriptD
 // WriteTagDetailJSON writes exactly one tag-detail document followed by a
 // newline. Struct-only DTOs make both compact and pretty output deterministic.
 func WriteTagDetailJSON(output io.Writer, document TagDetailDocument, pretty bool) error {
+	return writeTagDetailJSON(output, document, pretty)
+}
+
+func writeTagDetailJSON(output io.Writer, document any, pretty bool) error {
 	encoder := json.NewEncoder(output)
 	encoder.SetEscapeHTML(false)
 	if pretty {

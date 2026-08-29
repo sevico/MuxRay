@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 1,
+  "documentType": "flv-aac-tag-detail",
+  "source": {
+    "sizeBytes": 32
+  },
+  "tag": {
+    "id": 0,
+    "typeCode": 8,
+    "typeName": "audio",
+    "offset": 13,
+    "span": {
+      "byteOffset": 13,
+      "bitOffset": 0,
+      "bitLength": 120
+    },
+    "headerSpan": {
+      "byteOffset": 13,
+      "bitOffset": 0,
+      "bitLength": 88
+    },
+    "payloadSpan": {
+      "byteOffset": 24,
+      "bitOffset": 0,
+      "bitLength": 32
+    },
+    "rawTypeFlags": 8,
+    "filter": false,
+    "dataSize": 4,
+    "availableDataSize": 4,
+    "dts": 0,
+    "streamId": 0,
+    "payloadComplete": true,
+    "previousTagSize": {
+      "present": true,
+      "span": {
+        "byteOffset": 28,
+        "bitOffset": 0,
+        "bitLength": 32
+      },
+      "value": 15,
+      "expected": 15,
+      "valid": true
+    }
+  },
+  "detail": {
+    "kind": "aacAudio",
+    "span": {
+      "byteOffset": 24,
+      "bitOffset": 0,
+      "bitLength": 32
+    },
+    "bitsConsumed": 16,
+    "complete": true,
+    "audioTagHeader": {
+      "raw": 175,
+      "span": {
+        "byteOffset": 24,
+        "bitOffset": 0,
+        "bitLength": 8
+      },
+      "soundFormat": {
+        "value": 10,
+        "name": "AAC",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 0,
+          "bitLength": 4
+        }
+      },
+      "soundRate": {
+        "value": 3,
+        "name": "44kHz",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 4,
+          "bitLength": 2
+        }
+      },
+      "soundSize": {
+        "value": 1,
+        "name": "16-bit",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 6,
+          "bitLength": 1
+        }
+      },
+      "soundType": {
+        "value": 1,
+        "name": "stereo",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 7,
+          "bitLength": 1
+        }
+      }
+    },
+    "packetType": {
+      "value": 1,
+      "name": "raw",
+      "span": {
+        "byteOffset": 25,
+        "bitOffset": 0,
+        "bitLength": 8
+      }
+    },
+    "dataSpan": {
+      "byteOffset": 26,
+      "bitOffset": 0,
+      "bitLength": 16
+    },
+    "rawDataSpan": {
+      "byteOffset": 26,
+      "bitOffset": 0,
+      "bitLength": 16
+    }
+  },
+  "diagnostics": []
+}

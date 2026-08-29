@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"math"
 	"os"
 	"path/filepath"
@@ -104,17 +105,31 @@ func TestRunDetailMalformedAMFStillWritesReport(t *testing.T) {
 }
 
 func TestRunDetailRejectsSelectionAndUnsafeLimits(t *testing.T) {
-	t.Run("non-script tag", func(t *testing.T) {
-		path := filepath.Join(t.TempDir(), "audio.flv")
-		if err := os.WriteFile(path, makeSingleTagFLV(0x08, []byte{0xaf, 0x01}), 0o600); err != nil {
+	t.Run("non-AAC audio tag", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "mp3.flv")
+		if err := os.WriteFile(path, makeSingleTagFLV(0x08, []byte{0x2f, 0x01}), 0o600); err != nil {
 			t.Fatalf("WriteFile: %v", err)
 		}
 		var stdout, stderr bytes.Buffer
 		if exit := run([]string{"detail", "--tag", "0", path}, &stdout, &stderr); exit != exitDiagnostics {
 			t.Fatalf("exit = %d, want %d", exit, exitDiagnostics)
 		}
-		if !strings.Contains(stderr.String(), "not script data") {
+		if stdout.Len() != 0 || !strings.Contains(stderr.String(), "not AAC") {
 			t.Fatalf("stderr = %q", stderr.String())
+		}
+	})
+
+	t.Run("video tag", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "video.flv")
+		if err := os.WriteFile(path, makeSingleTagFLV(0x09, []byte{0x17, 0x01}), 0o600); err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
+		var stdout, stderr bytes.Buffer
+		if exit := run([]string{"detail", "--tag", "0", path}, &stdout, &stderr); exit != exitDiagnostics {
+			t.Fatalf("exit = %d, want %d", exit, exitDiagnostics)
+		}
+		if stdout.Len() != 0 || !strings.Contains(stderr.String(), "unsupported") {
+			t.Fatalf("stdout=%q stderr=%q", stdout.String(), stderr.String())
 		}
 	})
 
@@ -122,12 +137,118 @@ func TestRunDetailRejectsSelectionAndUnsafeLimits(t *testing.T) {
 		{"detail", "does-not-exist.flv"},
 		{"detail", "--tag", "0", "--max-amf-depth", "257", "does-not-exist.flv"},
 		{"detail", "--tag", "0", "--max-amf-diagnostics", "1", "does-not-exist.flv"},
+		{"detail", "--tag", "0", "--max-aac-diagnostics", "1", "does-not-exist.flv"},
 	} {
 		var stdout, stderr bytes.Buffer
 		if exit := run(args, &stdout, &stderr); exit != exitUsage {
 			t.Fatalf("args=%v exit=%d, want %d; stderr=%s", args, exit, exitUsage, stderr.String())
 		}
 	}
+}
+
+func TestRunDetailAACSequenceHeader(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "AAC 璇︽儏馃幍.flv")
+	if err := os.WriteFile(path, makeSingleTagFLV(0x08, []byte{0xaf, 0x00, 0x12, 0x10}), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if exit := run([]string{"detail", "--pretty", "--tag", "0", path}, &stdout, &stderr); exit != exitOK {
+		t.Fatalf("exit = %d, stderr=%s", exit, stderr.String())
+	}
+	var document map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &document); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if document["schemaVersion"] != float64(1) || document["documentType"] != "flv-aac-tag-detail" {
+		t.Fatalf("unexpected document identity: %+v", document)
+	}
+	detail := document["detail"].(map[string]any)
+	if detail["kind"] != "aacAudio" || detail["complete"] != true {
+		t.Fatalf("unexpected AAC detail: %+v", detail)
+	}
+	config := detail["audioSpecificConfig"].(map[string]any)
+	frequency := config["samplingFrequency"].(map[string]any)
+	channel := config["channelConfiguration"].(map[string]any)
+	if frequency["hertz"] != float64(44100) || channel["channelCount"] != float64(2) {
+		t.Fatalf("unexpected ASC summary: frequency=%+v channel=%+v", frequency, channel)
+	}
+	if strings.Contains(stdout.String(), path) {
+		t.Fatal("AAC detail report leaked the absolute input path")
+	}
+}
+
+func TestRunDetailAACRawAndMalformed(t *testing.T) {
+	tests := []struct {
+		name      string
+		payload   []byte
+		wantExit  int
+		wantField string
+		wantCode  string
+	}{
+		{name: "raw", payload: []byte{0xaf, 0x01, 0xde, 0xad}, wantExit: exitOK, wantField: "rawDataSpan"},
+		{name: "truncated ASC", payload: []byte{0xaf, 0x00, 0x12}, wantExit: exitDiagnostics, wantField: "audioSpecificConfig", wantCode: "AAC_SAMPLING_FREQUENCY_INDEX_TRUNCATED"},
+		{name: "missing packet type", payload: []byte{0xaf}, wantExit: exitDiagnostics, wantCode: "AAC_FLV_PACKET_TYPE_TRUNCATED"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "aac.flv")
+			if err := os.WriteFile(path, makeSingleTagFLV(0x08, test.payload), 0o600); err != nil {
+				t.Fatalf("WriteFile: %v", err)
+			}
+			var stdout, stderr bytes.Buffer
+			if exit := run([]string{"detail", "--tag", "0", path}, &stdout, &stderr); exit != test.wantExit {
+				t.Fatalf("exit = %d, want %d; stderr=%s", exit, test.wantExit, stderr.String())
+			}
+			var document map[string]any
+			if err := json.Unmarshal(stdout.Bytes(), &document); err != nil {
+				t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+			}
+			detail := document["detail"].(map[string]any)
+			if test.wantField != "" {
+				if _, ok := detail[test.wantField]; !ok {
+					t.Fatalf("detail lacks %q: %+v", test.wantField, detail)
+				}
+			}
+			if test.wantCode != "" {
+				diagnostics := document["diagnostics"].([]any)
+				found := false
+				for _, item := range diagnostics {
+					if item.(map[string]any)["code"] == test.wantCode {
+						found = true
+					}
+				}
+				if !found || detail["complete"] != false {
+					t.Fatalf("missing fatal %q or complete state: %+v", test.wantCode, document)
+				}
+			}
+		})
+	}
+}
+
+func TestRunDetailOperationalFailuresExitOne(t *testing.T) {
+	t.Run("open", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+		exit := run([]string{"detail", "--tag", "0", filepath.Join(t.TempDir(), "missing.flv")}, &stdout, &stderr)
+		if exit != exitFailure || stdout.Len() != 0 || !strings.Contains(stderr.String(), "open input") {
+			t.Fatalf("exit=%d stdout=%q stderr=%q", exit, stdout.String(), stderr.String())
+		}
+	})
+
+	t.Run("write", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "aac.flv")
+		if err := os.WriteFile(path, makeSingleTagFLV(0x08, []byte{0xaf, 0x01}), 0o600); err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
+		writeErr := errors.New("CLI detail writer failed")
+		stdout := cliFailingWriter{err: writeErr}
+		var stderr bytes.Buffer
+		exit := run([]string{"detail", "--tag", "0", path}, stdout, &stderr)
+		if exit != exitFailure || !strings.Contains(stderr.String(), "write detail report") {
+			t.Fatalf("exit=%d stderr=%q", exit, stderr.String())
+		}
+	})
 }
 
 func TestRunDetailRequiresCompleteContainerIndex(t *testing.T) {
@@ -195,6 +316,10 @@ func appendFLVTag(data []byte, tagType byte, payload []byte) []byte {
 	binary.BigEndian.PutUint32(previous[:], uint32(11+len(payload)))
 	return append(data, previous[:]...)
 }
+
+type cliFailingWriter struct{ err error }
+
+func (w cliFailingWriter) Write([]byte) (int, error) { return 0, w.err }
 
 func TestRunInspect(t *testing.T) {
 	data := []byte{

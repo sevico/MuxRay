@@ -25,6 +25,18 @@ CONTRACTS = (
         "testdata/golden/flv-amf0-detail-malformed-v1.json",
     ),
     (
+        "docs/schemas/flv-aac-tag-detail-v1.schema.json",
+        "testdata/golden/flv-aac-detail-v1.json",
+    ),
+    (
+        "docs/schemas/flv-aac-tag-detail-v1.schema.json",
+        "testdata/golden/flv-aac-detail-raw-v1.json",
+    ),
+    (
+        "docs/schemas/flv-aac-tag-detail-v1.schema.json",
+        "testdata/golden/flv-aac-detail-malformed-v1.json",
+    ),
+    (
         "testdata/manifests/sample-manifest-v1.schema.json",
         "testdata/manifests/example-minimal-header-only.sample.json",
     ),
@@ -95,8 +107,133 @@ def validate_detail_edge_cases(validator: Draft202012Validator) -> None:
     require_invalid(validator, missing_complete_field, "complete AMF0 node without syntax")
 
 
+def validate_aac_detail_edge_cases(validator: Draft202012Validator) -> None:
+    sequence = load_json("testdata/golden/flv-aac-detail-v1.json")
+    raw = load_json("testdata/golden/flv-aac-detail-raw-v1.json")
+    malformed = load_json("testdata/golden/flv-aac-detail-malformed-v1.json")
+
+    wrong_identity = deepcopy(sequence)
+    wrong_identity["documentType"] = "flv-tag-detail"
+    require_invalid(validator, wrong_identity, "AAC detail with AMF0 document identity")
+
+    wrong_tag = deepcopy(sequence)
+    wrong_tag["tag"]["typeCode"] = 18
+    wrong_tag["tag"]["typeName"] = "script"
+    require_invalid(validator, wrong_tag, "AAC detail attached to ScriptData tag")
+
+    sequence_without_config = deepcopy(sequence)
+    del sequence_without_config["detail"]["audioSpecificConfig"]
+    require_invalid(validator, sequence_without_config, "AAC sequence header without ASC")
+
+    sequence_with_raw_span = deepcopy(sequence)
+    sequence_with_raw_span["detail"]["rawDataSpan"] = deepcopy(
+        sequence_with_raw_span["detail"]["dataSpan"]
+    )
+    require_invalid(validator, sequence_with_raw_span, "AAC sequence header with raw span")
+
+    raw_with_config = deepcopy(raw)
+    raw_with_config["detail"]["audioSpecificConfig"] = deepcopy(
+        sequence["detail"]["audioSpecificConfig"]
+    )
+    require_invalid(validator, raw_with_config, "raw AAC packet with ASC")
+
+    malformed_claims_complete = deepcopy(malformed)
+    malformed_claims_complete["detail"]["complete"] = True
+    require_invalid(validator, malformed_claims_complete, "malformed AAC marked complete")
+
+    warning_with_recovery = deepcopy(raw)
+    warning_with_recovery["diagnostics"] = [
+        {
+            "code": "AAC_FLV_SOUND_RATE_UNEXPECTED",
+            "severity": "warning",
+            "offset": 24,
+            "bitOffset": 4,
+            "message": "synthetic warning",
+            "expected": 3,
+            "actual": 2,
+            "recoveryOffset": 28,
+        }
+    ]
+    require_invalid(validator, warning_with_recovery, "AAC warning with recovery offset")
+
+    warning = deepcopy(raw)
+    warning["diagnostics"] = [
+        {
+            "code": "AAC_FLV_SOUND_TYPE_UNEXPECTED",
+            "severity": "warning",
+            "offset": 24,
+            "bitOffset": 7,
+            "message": "synthetic warning",
+            "expected": 1,
+            "actual": 0,
+        }
+    ]
+    require_valid(validator, warning, "complete AAC with framing warning")
+
+    header_missing = deepcopy(raw)
+    header_missing["detail"] = {
+        "kind": "aacAudio",
+        "span": deepcopy(raw["detail"]["span"]),
+        "bitsConsumed": 0,
+        "complete": False,
+    }
+    header_missing["diagnostics"] = [
+        {
+            "code": "AAC_FLV_AUDIO_HEADER_TRUNCATED",
+            "severity": "error",
+            "offset": 24,
+            "bitOffset": 0,
+            "message": "synthetic missing audio header",
+            "expected": 1,
+            "actual": 0,
+            "recoveryOffset": 24,
+        }
+    ]
+    require_valid(validator, header_missing, "empty complete Audio Tag payload")
+
+    packet_type_missing = deepcopy(raw)
+    packet_type_missing["detail"].pop("packetType")
+    packet_type_missing["detail"].pop("dataSpan")
+    packet_type_missing["detail"].pop("rawDataSpan")
+    packet_type_missing["detail"]["bitsConsumed"] = 8
+    packet_type_missing["detail"]["complete"] = False
+    packet_type_missing["diagnostics"] = [
+        {
+            "code": "AAC_FLV_PACKET_TYPE_TRUNCATED",
+            "severity": "error",
+            "offset": 25,
+            "bitOffset": 0,
+            "message": "synthetic missing packet type",
+            "expected": 2,
+            "actual": 1,
+            "recoveryOffset": 25,
+        }
+    ]
+    require_valid(validator, packet_type_missing, "AAC packet-type truncation")
+
+    unknown_packet_type = deepcopy(raw)
+    unknown_packet_type["detail"]["packetType"]["value"] = 2
+    unknown_packet_type["detail"]["packetType"]["name"] = "unknown"
+    unknown_packet_type["detail"].pop("rawDataSpan")
+    unknown_packet_type["detail"]["bitsConsumed"] = 16
+    unknown_packet_type["detail"]["complete"] = False
+    unknown_packet_type["diagnostics"] = [
+        {
+            "code": "AAC_FLV_PACKET_TYPE_UNKNOWN",
+            "severity": "error",
+            "offset": 25,
+            "bitOffset": 0,
+            "message": "synthetic unknown packet type",
+            "actual": 2,
+            "recoveryOffset": 28,
+        }
+    ]
+    require_valid(validator, unknown_packet_type, "unknown AAC packet type")
+
+
 def main() -> None:
     detail_validator = None
+    aac_detail_validator = None
     for schema_path, instance_path in CONTRACTS:
         schema = load_json(schema_path)
         Draft202012Validator.check_schema(schema)
@@ -105,11 +242,17 @@ def main() -> None:
         print(f"validated {instance_path} against {schema_path}")
         if schema_path == "docs/schemas/flv-tag-detail-v1.schema.json":
             detail_validator = validator
+        if schema_path == "docs/schemas/flv-aac-tag-detail-v1.schema.json":
+            aac_detail_validator = validator
 
     if detail_validator is None:
         raise SystemExit("detail schema was not validated")
     validate_detail_edge_cases(detail_validator)
     print("validated tag-detail IEEE-754, UTF-8 replacement, and negative contract cases")
+    if aac_detail_validator is None:
+        raise SystemExit("AAC detail schema was not validated")
+    validate_aac_detail_edge_cases(aac_detail_validator)
+    print("validated AAC packet variants, recovery semantics, and negative contract cases")
 
 
 if __name__ == "__main__":

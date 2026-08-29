@@ -1,0 +1,708 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "flv-aac-tag-detail-v1.schema.json",
+  "title": "MuxRay FLV AAC tag detail v1",
+  "description": "Deterministic, path-free, on-demand syntax detail for one complete, unfiltered FLV AAC audio tag.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "documentType", "source", "tag", "detail", "diagnostics"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "documentType": {"const": "flv-aac-tag-detail"},
+    "source": {"$ref": "#/$defs/source"},
+    "tag": {
+      "allOf": [
+        {"$ref": "#/$defs/tag"},
+        {
+          "properties": {
+            "typeCode": {"const": 8},
+            "typeName": {"const": "audio"},
+            "filter": {"const": false},
+            "payloadComplete": {"const": true}
+          }
+        }
+      ]
+    },
+    "detail": {"$ref": "#/$defs/aacAudioDetail"},
+    "diagnostics": {
+      "type": "array",
+      "description": "FLV AAC framing and AudioSpecificConfig diagnostics in deterministic discovery order.",
+      "maxItems": 1024,
+      "items": {"$ref": "#/$defs/diagnostic"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "detail": {
+            "properties": {"complete": {"const": false}},
+            "required": ["complete"]
+          }
+        },
+        "required": ["detail"]
+      },
+      "then": {
+        "properties": {
+          "diagnostics": {
+            "contains": {
+              "properties": {"severity": {"const": "error"}},
+              "required": ["severity"]
+            },
+            "minContains": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "detail": {
+            "properties": {"complete": {"const": true}},
+            "required": ["complete"]
+          }
+        },
+        "required": ["detail"]
+      },
+      "then": {
+        "properties": {
+          "diagnostics": {
+            "not": {
+              "contains": {
+                "properties": {"severity": {"const": "error"}},
+                "required": ["severity"]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "uint8": {"type": "integer", "minimum": 0, "maximum": 255},
+    "uint16": {"type": "integer", "minimum": 0, "maximum": 65535},
+    "uint24": {"type": "integer", "minimum": 0, "maximum": 16777215},
+    "uint32": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+    "uint64": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615},
+    "payloadBits": {"type": "integer", "minimum": 0, "maximum": 134217720},
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["byteOffset", "bitOffset", "bitLength"],
+      "properties": {
+        "byteOffset": {"$ref": "#/$defs/uint64"},
+        "bitOffset": {"type": "integer", "minimum": 0, "maximum": 7},
+        "bitLength": {"$ref": "#/$defs/uint32"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sizeBytes"],
+      "properties": {"sizeBytes": {"$ref": "#/$defs/uint64"}}
+    },
+    "previousTagSize": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["present", "value", "expected", "valid"],
+      "properties": {
+        "present": {"type": "boolean"},
+        "span": {"$ref": "#/$defs/span"},
+        "value": {"$ref": "#/$defs/uint32"},
+        "expected": {"$ref": "#/$defs/uint32"},
+        "valid": {"type": "boolean"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"present": {"const": true}}, "required": ["present"]},
+          "then": {"required": ["span"]},
+          "else": {
+            "properties": {"value": {"const": 0}, "valid": {"const": false}},
+            "not": {"required": ["span"]}
+          }
+        }
+      ]
+    },
+    "tag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "typeCode", "typeName", "offset", "span", "headerSpan", "payloadSpan",
+        "rawTypeFlags", "filter", "dataSize", "availableDataSize", "dts", "streamId",
+        "payloadComplete", "previousTagSize"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/uint64"},
+        "typeCode": {"type": "integer", "minimum": 0, "maximum": 31},
+        "typeName": {"enum": ["audio", "video", "script", "unknown"]},
+        "offset": {"$ref": "#/$defs/uint64"},
+        "span": {"$ref": "#/$defs/span"},
+        "headerSpan": {"$ref": "#/$defs/span"},
+        "payloadSpan": {"$ref": "#/$defs/span"},
+        "rawTypeFlags": {"$ref": "#/$defs/uint8"},
+        "filter": {"type": "boolean"},
+        "dataSize": {"$ref": "#/$defs/uint24"},
+        "availableDataSize": {"$ref": "#/$defs/uint24"},
+        "dts": {"$ref": "#/$defs/uint32"},
+        "streamId": {"$ref": "#/$defs/uint24"},
+        "payloadComplete": {"type": "boolean"},
+        "previousTagSize": {"$ref": "#/$defs/previousTagSize"}
+      }
+    },
+    "namedField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "name", "span"],
+      "properties": {
+        "value": {"$ref": "#/$defs/uint8"},
+        "name": {"type": "string", "minLength": 1},
+        "span": {"$ref": "#/$defs/span"}
+      }
+    },
+    "soundFormatField": {
+      "allOf": [
+        {"$ref": "#/$defs/namedField"},
+        {"properties": {"value": {"const": 10}, "name": {"const": "AAC"}}}
+      ]
+    },
+    "soundRateField": {
+      "allOf": [
+        {"$ref": "#/$defs/namedField"},
+        {
+          "oneOf": [
+            {"properties": {"value": {"const": 0}, "name": {"const": "5.5kHz"}}},
+            {"properties": {"value": {"const": 1}, "name": {"const": "11kHz"}}},
+            {"properties": {"value": {"const": 2}, "name": {"const": "22kHz"}}},
+            {"properties": {"value": {"const": 3}, "name": {"const": "44kHz"}}}
+          ]
+        }
+      ]
+    },
+    "soundSizeField": {
+      "allOf": [
+        {"$ref": "#/$defs/namedField"},
+        {
+          "oneOf": [
+            {"properties": {"value": {"const": 0}, "name": {"const": "8-bit"}}},
+            {"properties": {"value": {"const": 1}, "name": {"const": "16-bit"}}}
+          ]
+        }
+      ]
+    },
+    "soundTypeField": {
+      "allOf": [
+        {"$ref": "#/$defs/namedField"},
+        {
+          "oneOf": [
+            {"properties": {"value": {"const": 0}, "name": {"const": "mono"}}},
+            {"properties": {"value": {"const": 1}, "name": {"const": "stereo"}}}
+          ]
+        }
+      ]
+    },
+    "audioTagHeader": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw", "span", "soundFormat", "soundRate", "soundSize", "soundType"],
+      "properties": {
+        "raw": {"$ref": "#/$defs/uint8"},
+        "span": {"$ref": "#/$defs/span"},
+        "soundFormat": {"$ref": "#/$defs/soundFormatField"},
+        "soundRate": {"$ref": "#/$defs/soundRateField"},
+        "soundSize": {"$ref": "#/$defs/soundSizeField"},
+        "soundType": {"$ref": "#/$defs/soundTypeField"}
+      }
+    },
+    "packetType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "name", "span"],
+      "properties": {
+        "value": {"$ref": "#/$defs/uint8"},
+        "name": {"enum": ["sequenceHeader", "raw", "unknown"]},
+        "span": {"$ref": "#/$defs/span"}
+      },
+      "oneOf": [
+        {"properties": {"value": {"const": 0}, "name": {"const": "sequenceHeader"}}},
+        {"properties": {"value": {"const": 1}, "name": {"const": "raw"}}},
+        {"properties": {"value": {"minimum": 2}, "name": {"const": "unknown"}}}
+      ]
+    },
+    "unsignedField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "span"],
+      "properties": {
+        "value": {"$ref": "#/$defs/uint64"},
+        "span": {"$ref": "#/$defs/span"}
+      }
+    },
+    "fiveBitField": {
+      "allOf": [
+        {"$ref": "#/$defs/unsignedField"},
+        {"properties": {"value": {"maximum": 31}}}
+      ]
+    },
+    "sixBitField": {
+      "allOf": [
+        {"$ref": "#/$defs/unsignedField"},
+        {"properties": {"value": {"maximum": 63}}}
+      ]
+    },
+    "fourBitField": {
+      "allOf": [
+        {"$ref": "#/$defs/unsignedField"},
+        {"properties": {"value": {"maximum": 15}}}
+      ]
+    },
+    "booleanField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "span"],
+      "properties": {
+        "value": {"type": "boolean"},
+        "span": {"$ref": "#/$defs/span"}
+      }
+    },
+    "objectTypeField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw", "escaped", "span", "complete"],
+      "properties": {
+        "raw": {"$ref": "#/$defs/fiveBitField"},
+        "escaped": {"type": "boolean"},
+        "escape": {"$ref": "#/$defs/sixBitField"},
+        "value": {"type": "integer", "minimum": 0, "maximum": 95},
+        "name": {"type": "string", "minLength": 1},
+        "span": {"$ref": "#/$defs/span"},
+        "complete": {"type": "boolean"}
+      },
+      "oneOf": [
+        {
+          "properties": {"escaped": {"const": false}, "complete": {"const": true}},
+          "required": ["value", "name"],
+          "not": {"required": ["escape"]}
+        },
+        {
+          "properties": {"escaped": {"const": true}, "complete": {"const": false}},
+          "not": {"anyOf": [{"required": ["escape"]}, {"required": ["value"]}, {"required": ["name"]}]}
+        },
+        {
+          "properties": {"escaped": {"const": true}, "complete": {"const": true}},
+          "required": ["escape", "value", "name"]
+        }
+      ]
+    },
+    "frequencyField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "explicit", "complete"],
+      "properties": {
+        "index": {"$ref": "#/$defs/fourBitField"},
+        "explicit": {"type": "boolean"},
+        "explicitValue": {"$ref": "#/$defs/uint24"},
+        "explicitSpan": {"$ref": "#/$defs/span"},
+        "hertz": {"$ref": "#/$defs/uint32"},
+        "complete": {"type": "boolean"}
+      },
+      "oneOf": [
+        {
+          "properties": {"explicit": {"const": false}, "complete": {"const": true}},
+          "not": {"anyOf": [{"required": ["explicitValue"]}, {"required": ["explicitSpan"]}]},
+          "oneOf": [
+            {"properties": {"index": {"properties": {"value": {"const": 0}}}, "hertz": {"const": 96000}}, "required": ["hertz"]},
+            {"properties": {"index": {"properties": {"value": {"const": 1}}}, "hertz": {"const": 88200}}, "required": ["hertz"]},
+            {"properties": {"index": {"properties": {"value": {"const": 2}}}, "hertz": {"const": 64000}}, "required": ["hertz"]},
+            {"properties": {"index": {"properties": {"value": {"const": 3}}}, "hertz": {"const": 48000}}, "required": ["hertz"]},
+            {"properties": {"index": {"properties": {"value": {"const": 4}}}, "hertz": {"const": 44100}}, "required": ["hertz"]},
+            {"properties": {"index": {"properties": {"value": {"const": 5}}}, "hertz": {"const": 32000}}, "required": ["hertz"]},
+            {"properties": {"index": {"properties": {"value": {"const": 6}}}, "hertz": {"const": 24000}}, "required": ["hertz"]},
+            {"properties": {"index": {"properties": {"value": {"const": 7}}}, "hertz": {"const": 22050}}, "required": ["hertz"]},
+            {"properties": {"index": {"properties": {"value": {"const": 8}}}, "hertz": {"const": 16000}}, "required": ["hertz"]},
+            {"properties": {"index": {"properties": {"value": {"const": 9}}}, "hertz": {"const": 12000}}, "required": ["hertz"]},
+            {"properties": {"index": {"properties": {"value": {"const": 10}}}, "hertz": {"const": 11025}}, "required": ["hertz"]},
+            {"properties": {"index": {"properties": {"value": {"const": 11}}}, "hertz": {"const": 8000}}, "required": ["hertz"]},
+            {"properties": {"index": {"properties": {"value": {"const": 12}}}, "hertz": {"const": 7350}}, "required": ["hertz"]},
+            {
+              "properties": {"index": {"properties": {"value": {"enum": [13, 14]}}}},
+              "not": {"required": ["hertz"]}
+            }
+          ]
+        },
+        {
+          "properties": {
+            "index": {"properties": {"value": {"const": 15}}},
+            "explicit": {"const": true},
+            "complete": {"const": false}
+          },
+          "not": {"anyOf": [{"required": ["explicitValue"]}, {"required": ["explicitSpan"]}, {"required": ["hertz"]}]}
+        },
+        {
+          "properties": {
+            "index": {"properties": {"value": {"const": 15}}},
+            "explicit": {"const": true},
+            "complete": {"const": true},
+            "explicitValue": {"const": 0}
+          },
+          "required": ["explicitValue", "explicitSpan"],
+          "not": {"required": ["hertz"]}
+        },
+        {
+          "properties": {
+            "index": {"properties": {"value": {"const": 15}}},
+            "explicit": {"const": true},
+            "complete": {"const": true},
+            "explicitValue": {"minimum": 1}
+          },
+          "required": ["explicitValue", "explicitSpan", "hertz"]
+        }
+      ]
+    },
+    "channelConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "name", "span"],
+      "properties": {
+        "value": {"type": "integer", "minimum": 0, "maximum": 15},
+        "name": {"type": "string", "minLength": 1},
+        "span": {"$ref": "#/$defs/span"},
+        "channelCount": {"type": "integer", "minimum": 1, "maximum": 8}
+      },
+      "oneOf": [
+        {"properties": {"value": {"const": 0}, "name": {"const": "programConfigElement"}}, "not": {"required": ["channelCount"]}},
+        {"properties": {"value": {"const": 1}, "name": {"const": "mono"}, "channelCount": {"const": 1}}, "required": ["channelCount"]},
+        {"properties": {"value": {"const": 2}, "name": {"const": "stereo"}, "channelCount": {"const": 2}}, "required": ["channelCount"]},
+        {"properties": {"value": {"const": 3}, "name": {"const": "3.0"}, "channelCount": {"const": 3}}, "required": ["channelCount"]},
+        {"properties": {"value": {"const": 4}, "name": {"const": "4.0"}, "channelCount": {"const": 4}}, "required": ["channelCount"]},
+        {"properties": {"value": {"const": 5}, "name": {"const": "5.0"}, "channelCount": {"const": 5}}, "required": ["channelCount"]},
+        {"properties": {"value": {"const": 6}, "name": {"const": "5.1"}, "channelCount": {"const": 6}}, "required": ["channelCount"]},
+        {"properties": {"value": {"const": 7}, "name": {"const": "7.1"}, "channelCount": {"const": 8}}, "required": ["channelCount"]},
+        {"properties": {"value": {"minimum": 8}, "name": {"const": "reserved"}}, "not": {"required": ["channelCount"]}}
+      ]
+    },
+    "namedValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "name"],
+      "properties": {
+        "value": {"$ref": "#/$defs/uint8"},
+        "name": {"type": "string", "minLength": 1}
+      }
+    },
+    "gaSpecificConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["span", "complete"],
+      "properties": {
+        "span": {"$ref": "#/$defs/span"},
+        "complete": {"type": "boolean"},
+        "frameLengthFlag": {"$ref": "#/$defs/booleanField"},
+        "dependsOnCoreCoder": {"$ref": "#/$defs/booleanField"},
+        "coreCoderDelay": {"$ref": "#/$defs/unsignedField"},
+        "extensionFlag": {"$ref": "#/$defs/booleanField"},
+        "layerNr": {"$ref": "#/$defs/unsignedField"},
+        "numOfSubFrame": {"$ref": "#/$defs/unsignedField"},
+        "layerLength": {"$ref": "#/$defs/unsignedField"},
+        "sectionDataResilienceFlag": {"$ref": "#/$defs/booleanField"},
+        "scalefactorDataResilienceFlag": {"$ref": "#/$defs/booleanField"},
+        "spectralDataResilienceFlag": {"$ref": "#/$defs/booleanField"},
+        "extensionFlag3": {"$ref": "#/$defs/booleanField"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"complete": {"const": true}}, "required": ["complete"]},
+          "then": {"required": ["frameLengthFlag", "dependsOnCoreCoder", "extensionFlag"]}
+        },
+        {
+          "if": {
+            "properties": {
+              "dependsOnCoreCoder": {
+                "properties": {"value": {"const": false}},
+                "required": ["value"]
+              }
+            },
+            "required": ["dependsOnCoreCoder"]
+          },
+          "then": {"not": {"required": ["coreCoderDelay"]}}
+        },
+        {
+          "if": {
+            "properties": {
+              "complete": {"const": true},
+              "dependsOnCoreCoder": {
+                "properties": {"value": {"const": true}},
+                "required": ["value"]
+              }
+            },
+            "required": ["complete", "dependsOnCoreCoder"]
+          },
+          "then": {"required": ["coreCoderDelay"]}
+        },
+        {
+          "if": {
+            "properties": {
+              "extensionFlag": {
+                "properties": {"value": {"const": false}},
+                "required": ["value"]
+              }
+            },
+            "required": ["extensionFlag"]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {"required": ["numOfSubFrame"]},
+                {"required": ["layerLength"]},
+                {"required": ["sectionDataResilienceFlag"]},
+                {"required": ["scalefactorDataResilienceFlag"]},
+                {"required": ["spectralDataResilienceFlag"]},
+                {"required": ["extensionFlag3"]}
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "complete": {"const": true},
+              "extensionFlag": {
+                "properties": {"value": {"const": true}},
+                "required": ["value"]
+              }
+            },
+            "required": ["complete", "extensionFlag"]
+          },
+          "then": {"required": ["extensionFlag3"]}
+        },
+        {
+          "if": {"required": ["layerLength"]},
+          "then": {"required": ["numOfSubFrame"]}
+        },
+        {
+          "if": {"properties": {"complete": {"const": true}}, "required": ["complete", "numOfSubFrame"]},
+          "then": {"required": ["layerLength"]}
+        }
+      ]
+    },
+    "audioSpecificConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "span", "syntaxSpan", "trailingSpan", "bitsConsumed", "trailingBits",
+        "complete", "explicitSbr", "explicitPs"
+      ],
+      "properties": {
+        "span": {"$ref": "#/$defs/span"},
+        "syntaxSpan": {"$ref": "#/$defs/span"},
+        "trailingSpan": {"$ref": "#/$defs/span"},
+        "bitsConsumed": {"$ref": "#/$defs/payloadBits"},
+        "trailingBits": {"$ref": "#/$defs/payloadBits"},
+        "complete": {"type": "boolean"},
+        "initialAudioObjectType": {"$ref": "#/$defs/objectTypeField"},
+        "audioObjectType": {"$ref": "#/$defs/objectTypeField"},
+        "samplingFrequency": {"$ref": "#/$defs/frequencyField"},
+        "channelConfiguration": {"$ref": "#/$defs/channelConfiguration"},
+        "explicitSbr": {"type": "boolean"},
+        "explicitPs": {"type": "boolean"},
+        "extensionAudioObjectType": {
+          "allOf": [
+            {"$ref": "#/$defs/namedValue"},
+            {"properties": {"value": {"const": 5}, "name": {"const": "sbr"}}}
+          ]
+        },
+        "extensionSamplingFrequency": {"$ref": "#/$defs/frequencyField"},
+        "extensionChannelConfiguration": {"$ref": "#/$defs/channelConfiguration"},
+        "gaSpecificConfig": {"$ref": "#/$defs/gaSpecificConfig"},
+        "epConfig": {
+          "allOf": [
+            {"$ref": "#/$defs/unsignedField"},
+            {"properties": {"value": {"maximum": 3}}}
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"explicitPs": {"const": true}}, "required": ["explicitPs"]},
+          "then": {"properties": {"explicitSbr": {"const": true}}}
+        },
+        {
+          "if": {"properties": {"explicitSbr": {"const": false}}, "required": ["explicitSbr"]},
+          "then": {
+            "properties": {"explicitPs": {"const": false}},
+            "not": {
+              "anyOf": [
+                {"required": ["extensionAudioObjectType"]},
+                {"required": ["extensionSamplingFrequency"]},
+                {"required": ["extensionChannelConfiguration"]}
+              ]
+            }
+          },
+          "else": {"required": ["extensionAudioObjectType"]}
+        },
+        {
+          "if": {"properties": {"complete": {"const": true}}, "required": ["complete"]},
+          "then": {
+            "required": [
+              "initialAudioObjectType", "audioObjectType", "samplingFrequency",
+              "channelConfiguration", "gaSpecificConfig"
+            ],
+            "properties": {
+              "initialAudioObjectType": {"properties": {"complete": {"const": true}}},
+              "audioObjectType": {"properties": {"complete": {"const": true}}},
+              "samplingFrequency": {"properties": {"complete": {"const": true}}},
+              "gaSpecificConfig": {"properties": {"complete": {"const": true}}}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"complete": {"const": true}, "explicitSbr": {"const": true}},
+            "required": ["complete", "explicitSbr"]
+          },
+          "then": {
+            "required": ["extensionSamplingFrequency"],
+            "properties": {"extensionSamplingFrequency": {"properties": {"complete": {"const": true}}}}
+          }
+        }
+      ]
+    },
+    "aacAudioDetail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "span", "bitsConsumed", "complete"],
+      "properties": {
+        "kind": {"const": "aacAudio"},
+        "span": {"$ref": "#/$defs/span"},
+        "bitsConsumed": {"$ref": "#/$defs/payloadBits"},
+        "complete": {"type": "boolean"},
+        "audioTagHeader": {"$ref": "#/$defs/audioTagHeader"},
+        "packetType": {"$ref": "#/$defs/packetType"},
+        "dataSpan": {"$ref": "#/$defs/span"},
+        "rawDataSpan": {"$ref": "#/$defs/span"},
+        "audioSpecificConfig": {"$ref": "#/$defs/audioSpecificConfig"}
+      },
+      "oneOf": [
+        {
+          "properties": {"bitsConsumed": {"const": 0}, "complete": {"const": false}},
+          "not": {
+            "anyOf": [
+              {"required": ["audioTagHeader"]}, {"required": ["packetType"]},
+              {"required": ["dataSpan"]}, {"required": ["rawDataSpan"]},
+              {"required": ["audioSpecificConfig"]}
+            ]
+          }
+        },
+        {
+          "properties": {"bitsConsumed": {"const": 8}, "complete": {"const": false}},
+          "required": ["audioTagHeader"],
+          "not": {
+            "anyOf": [
+              {"required": ["packetType"]}, {"required": ["dataSpan"]},
+              {"required": ["rawDataSpan"]}, {"required": ["audioSpecificConfig"]}
+            ]
+          }
+        },
+        {
+          "properties": {
+            "packetType": {"properties": {"value": {"const": 0}}}
+          },
+          "required": ["audioTagHeader", "packetType", "dataSpan", "audioSpecificConfig"],
+          "not": {"required": ["rawDataSpan"]},
+          "allOf": [
+            {
+              "if": {"properties": {"complete": {"const": true}}, "required": ["complete"]},
+              "then": {"properties": {"audioSpecificConfig": {"properties": {"complete": {"const": true}}}}},
+              "else": {"properties": {"audioSpecificConfig": {"properties": {"complete": {"const": false}}}}}
+            }
+          ]
+        },
+        {
+          "properties": {
+            "packetType": {"properties": {"value": {"const": 1}}},
+            "bitsConsumed": {"const": 16},
+            "complete": {"const": true}
+          },
+          "required": ["audioTagHeader", "packetType", "dataSpan", "rawDataSpan"],
+          "not": {"required": ["audioSpecificConfig"]}
+        },
+        {
+          "properties": {
+            "bitsConsumed": {"const": 16},
+            "packetType": {"properties": {"value": {"minimum": 2}}},
+            "complete": {"const": false}
+          },
+          "required": ["audioTagHeader", "packetType", "dataSpan"],
+          "not": {"anyOf": [{"required": ["rawDataSpan"]}, {"required": ["audioSpecificConfig"]}]}
+        }
+      ]
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "severity", "offset", "bitOffset", "message"],
+      "properties": {
+        "code": {
+          "enum": [
+            "AAC_FLV_AUDIO_HEADER_TRUNCATED",
+            "AAC_FLV_PACKET_TYPE_TRUNCATED",
+            "AAC_FLV_PACKET_TYPE_UNKNOWN",
+            "AAC_FLV_SOUND_RATE_UNEXPECTED",
+            "AAC_FLV_SOUND_TYPE_UNEXPECTED",
+            "AAC_AUDIO_OBJECT_TYPE_TRUNCATED",
+            "AAC_AUDIO_OBJECT_TYPE_ESCAPE_TRUNCATED",
+            "AAC_AUDIO_OBJECT_TYPE_RESERVED",
+            "AAC_AUDIO_OBJECT_TYPE_UNSUPPORTED",
+            "AAC_SAMPLING_FREQUENCY_INDEX_TRUNCATED",
+            "AAC_SAMPLING_FREQUENCY_INDEX_RESERVED",
+            "AAC_SAMPLING_FREQUENCY_TRUNCATED",
+            "AAC_SAMPLING_FREQUENCY_ZERO",
+            "AAC_CHANNEL_CONFIGURATION_TRUNCATED",
+            "AAC_CHANNEL_CONFIGURATION_RESERVED",
+            "AAC_PROGRAM_CONFIG_ELEMENT_UNSUPPORTED",
+            "AAC_FRAME_LENGTH_FLAG_TRUNCATED",
+            "AAC_DEPENDS_ON_CORE_CODER_TRUNCATED",
+            "AAC_CORE_CODER_DELAY_TRUNCATED",
+            "AAC_EXTENSION_FLAG_TRUNCATED",
+            "AAC_LAYER_NR_TRUNCATED",
+            "AAC_NUM_OF_SUB_FRAME_TRUNCATED",
+            "AAC_LAYER_LENGTH_TRUNCATED",
+            "AAC_SECTION_DATA_RESILIENCE_FLAG_TRUNCATED",
+            "AAC_SCALEFACTOR_DATA_RESILIENCE_FLAG_TRUNCATED",
+            "AAC_SPECTRAL_DATA_RESILIENCE_FLAG_TRUNCATED",
+            "AAC_EXTENSION_FLAG3_TRUNCATED",
+            "AAC_EXTENSION_FLAG3_UNSUPPORTED",
+            "AAC_EP_CONFIG_TRUNCATED",
+            "AAC_ERROR_PROTECTION_CONFIG_UNSUPPORTED",
+            "AAC_DIAGNOSTIC_LIMIT_REACHED"
+          ]
+        },
+        "severity": {"enum": ["warning", "error"]},
+        "offset": {"$ref": "#/$defs/uint64"},
+        "bitOffset": {"type": "integer", "minimum": 0, "maximum": 7},
+        "message": {"type": "string", "minLength": 1},
+        "expected": {"$ref": "#/$defs/uint64"},
+        "actual": {"$ref": "#/$defs/uint64"},
+        "recoveryOffset": {"$ref": "#/$defs/uint64"}
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "code": {"enum": ["AAC_FLV_SOUND_RATE_UNEXPECTED", "AAC_FLV_SOUND_TYPE_UNEXPECTED"]},
+            "severity": {"const": "warning"}
+          },
+          "required": ["expected", "actual"],
+          "not": {"required": ["recoveryOffset"]}
+        },
+        {
+          "properties": {
+            "code": {
+              "not": {"enum": ["AAC_FLV_SOUND_RATE_UNEXPECTED", "AAC_FLV_SOUND_TYPE_UNEXPECTED"]}
+            },
+            "severity": {"const": "error"}
+          },
+          "required": ["recoveryOffset"]
+        }
+      ]
+    }
+  }
+}
