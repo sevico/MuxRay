@@ -3,14 +3,17 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/sevico/muxray/internal/flv"
 	"github.com/sevico/muxray/internal/report"
 )
 
@@ -119,16 +122,16 @@ func TestRunDetailRejectsSelectionAndUnsafeLimits(t *testing.T) {
 		}
 	})
 
-	t.Run("video tag", func(t *testing.T) {
+	t.Run("non-AVC video tag", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "video.flv")
-		if err := os.WriteFile(path, makeSingleTagFLV(0x09, []byte{0x17, 0x01}), 0o600); err != nil {
+		if err := os.WriteFile(path, makeSingleTagFLV(0x09, []byte{0x12, 0x01}), 0o600); err != nil {
 			t.Fatalf("WriteFile: %v", err)
 		}
 		var stdout, stderr bytes.Buffer
 		if exit := run([]string{"detail", "--tag", "0", path}, &stdout, &stderr); exit != exitDiagnostics {
 			t.Fatalf("exit = %d, want %d", exit, exitDiagnostics)
 		}
-		if stdout.Len() != 0 || !strings.Contains(stderr.String(), "unsupported") {
+		if stdout.Len() != 0 || !strings.Contains(stderr.String(), "not AVC") {
 			t.Fatalf("stdout=%q stderr=%q", stdout.String(), stderr.String())
 		}
 	})
@@ -138,6 +141,12 @@ func TestRunDetailRejectsSelectionAndUnsafeLimits(t *testing.T) {
 		{"detail", "--tag", "0", "--max-amf-depth", "257", "does-not-exist.flv"},
 		{"detail", "--tag", "0", "--max-amf-diagnostics", "1", "does-not-exist.flv"},
 		{"detail", "--tag", "0", "--max-aac-diagnostics", "1", "does-not-exist.flv"},
+		{"detail", "--tag", "0", "--max-avc-diagnostics", "1", "does-not-exist.flv"},
+		{"detail", "--tag", "0", "--max-avc-parameter-sets", "542", "does-not-exist.flv"},
+		{"detail", "--tag", "0", "--max-avc-nal-units", "16385", "does-not-exist.flv"},
+		{"detail", "--tag", "0", "--max-avc-parameter-set-bytes", "1048577", "does-not-exist.flv"},
+		{"detail", "--tag", "0", "--max-avc-rbsp-mapping-entries", "65537", "does-not-exist.flv"},
+		{"detail", "--tag", "0", "--avc-nal-length-size", "3", "does-not-exist.flv"},
 	} {
 		var stdout, stderr bytes.Buffer
 		if exit := run(args, &stdout, &stderr); exit != exitUsage {
@@ -224,6 +233,126 @@ func TestRunDetailAACRawAndMalformed(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestRunDetailAVCSequenceHeader(t *testing.T) {
+	avcc := decodeTestHex(t, "0164000cffe1001a6764000cacd941419f9f011000000300100000030320f142996001000668ebe3cb22c0fdf8f800")
+	payload := append([]byte{0x17, 0x00, 0, 0, 0}, avcc...)
+	path := filepath.Join(t.TempDir(), "AVC sequence header.flv")
+	if err := os.WriteFile(path, makeSingleTagFLV(0x09, payload), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if exit := run([]string{"detail", "--pretty", "--tag", "0", path}, &stdout, &stderr); exit != exitOK {
+		t.Fatalf("exit = %d, stderr=%s", exit, stderr.String())
+	}
+	var document map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &document); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if document["documentType"] != "flv-avc-tag-detail" {
+		t.Fatalf("unexpected document identity: %+v", document)
+	}
+	detail := document["detail"].(map[string]any)
+	config := detail["avcDecoderConfigurationRecord"].(map[string]any)
+	sps := config["sequenceParameterSets"].([]any)[0].(map[string]any)["sequenceParameterSet"].(map[string]any)
+	if detail["complete"] != true || config["lengthSize"] != float64(4) || sps["displayWidth"] != float64(320) || sps["displayHeight"] != float64(180) {
+		t.Fatalf("unexpected AVC detail: %+v", detail)
+	}
+	if strings.Contains(stdout.String(), path) {
+		t.Fatal("AVC detail report leaked the absolute input path")
+	}
+}
+
+func TestRunDetailAVCNALUExplicitAndAutoContext(t *testing.T) {
+	avcc := decodeTestHex(t, "0164000cffe1001a6764000cacd941419f9f011000000300100000030320f142996001000668ebe3cb22c0fdf8f800")
+	sequenceHeader := append([]byte{0x17, 0x00, 0, 0, 0}, avcc...)
+	nalu := []byte{0x27, 0x01, 0xff, 0xff, 0xfe, 0, 0, 0, 2, 0x65, 0x88}
+
+	for _, test := range []struct {
+		name string
+		data []byte
+		tag  string
+		args []string
+	}{
+		{name: "explicit", data: makeSingleTagFLV(0x09, nalu), tag: "0", args: []string{"--avc-nal-length-size", "4"}},
+		{name: "automatic preceding sequence header", data: appendFLVTag(makeSingleTagFLV(0x09, sequenceHeader), 0x09, nalu), tag: "1"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "avc-nalu.flv")
+			if err := os.WriteFile(path, test.data, 0o600); err != nil {
+				t.Fatalf("WriteFile: %v", err)
+			}
+			args := []string{"detail", "--tag", test.tag}
+			args = append(args, test.args...)
+			args = append(args, path)
+			var stdout, stderr bytes.Buffer
+			if exit := run(args, &stdout, &stderr); exit != exitOK {
+				t.Fatalf("exit = %d, stderr=%s", exit, stderr.String())
+			}
+			var document map[string]any
+			if err := json.Unmarshal(stdout.Bytes(), &document); err != nil {
+				t.Fatalf("invalid JSON: %v", err)
+			}
+			detail := document["detail"].(map[string]any)
+			sequence := detail["nalUnitSequence"].(map[string]any)
+			if detail["complete"] != true || detail["compositionTime"].(map[string]any)["value"] != float64(-2) || sequence["lengthSize"] != float64(4) || len(sequence["nalUnits"].([]any)) != 1 {
+				t.Fatalf("unexpected NALU detail: %+v", detail)
+			}
+		})
+	}
+}
+
+func TestRunDetailAVCNALUWithoutUsableContext(t *testing.T) {
+	nalu := []byte{0x27, 0x01, 0, 0, 0, 0, 0, 0, 0, 2, 0x65, 0x88}
+	truncatedConfig := []byte{0x17, 0x00, 0, 0, 0, 1, 100, 0, 12, 0xff}
+	for _, test := range []struct {
+		name string
+		data []byte
+		tag  string
+	}{
+		{name: "no preceding sequence header", data: makeSingleTagFLV(0x09, nalu), tag: "0"},
+		{name: "truncated preceding sequence header", data: appendFLVTag(makeSingleTagFLV(0x09, truncatedConfig), 0x09, nalu), tag: "1"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "avc-no-context.flv")
+			if err := os.WriteFile(path, test.data, 0o600); err != nil {
+				t.Fatalf("WriteFile: %v", err)
+			}
+			var stdout, stderr bytes.Buffer
+			if exit := run([]string{"detail", "--tag", test.tag, path}, &stdout, &stderr); exit != exitDiagnostics {
+				t.Fatalf("exit = %d, want %d; stderr=%s", exit, exitDiagnostics, stderr.String())
+			}
+			var document map[string]any
+			if err := json.Unmarshal(stdout.Bytes(), &document); err != nil {
+				t.Fatalf("invalid JSON: %v", err)
+			}
+			detail := document["detail"].(map[string]any)
+			if detail["complete"] != false {
+				t.Fatalf("detail unexpectedly complete: %+v", detail)
+			}
+			if _, present := detail["nalUnitSequence"]; present {
+				t.Fatalf("NAL boundaries were guessed: %+v", detail)
+			}
+			diagnostic := document["diagnostics"].([]any)[0].(map[string]any)
+			if diagnostic["code"] != "AVC_NAL_LENGTH_SIZE_UNAVAILABLE" {
+				t.Fatalf("unexpected diagnostic: %+v", diagnostic)
+			}
+		})
+	}
+}
+
+func TestReadAVCFramingPrefixAcceptsFullReadWithEOF(t *testing.T) {
+	data := makeSingleTagFLV(0x09, []byte{0x27, 0x01, 0, 0, 0})
+	scan, err := flv.Scan(bytes.NewReader(data), uint64(len(data)), flv.Options{})
+	if err != nil || len(scan.Tags) != 1 {
+		t.Fatalf("Scan: err=%v tags=%d", err, len(scan.Tags))
+	}
+	header, packetType, present, err := readAVCFramingPrefix(fullReadEOFReaderAt{data: data}, scan.Tags[0])
+	if err != nil || !present || header != 0x27 || packetType != 1 {
+		t.Fatalf("prefix=(%#x,%d,%v), err=%v", header, packetType, present, err)
 	}
 }
 
@@ -320,6 +449,25 @@ func appendFLVTag(data []byte, tagType byte, payload []byte) []byte {
 type cliFailingWriter struct{ err error }
 
 func (w cliFailingWriter) Write([]byte) (int, error) { return 0, w.err }
+
+type fullReadEOFReaderAt struct{ data []byte }
+
+func (reader fullReadEOFReaderAt) ReadAt(output []byte, offset int64) (int, error) {
+	if offset < 0 || offset >= int64(len(reader.data)) {
+		return 0, io.EOF
+	}
+	n := copy(output, reader.data[offset:])
+	return n, io.EOF
+}
+
+func decodeTestHex(t testing.TB, value string) []byte {
+	t.Helper()
+	decoded, err := hex.DecodeString(value)
+	if err != nil {
+		t.Fatalf("hex.DecodeString: %v", err)
+	}
+	return decoded
+}
 
 func TestRunInspect(t *testing.T) {
 	data := []byte{

@@ -57,9 +57,15 @@ jobs:
         run: go test ./internal/amf0 -run=^$ -fuzz=FuzzAMF0 -fuzztime=30s
       - name: Fuzz AAC AudioSpecificConfig
         run: go test ./internal/aac -run=^$ -fuzz=FuzzAudioSpecificConfig -fuzztime=30s
+      - name: Fuzz AVCDecoderConfigurationRecord
+        run: go test ./internal/avc -run=^$ -fuzz=FuzzDecoderConfigurationRecord -fuzztime=30s
+      - name: Fuzz AVC length-prefixed NAL units
+        run: go test ./internal/avc -run=^$ -fuzz=FuzzLengthPrefixedNALUnits -fuzztime=30s
       - name: Fuzz FLV header
         run: go test ./internal/flv -run=^$ -fuzz=FuzzFLVHeader -fuzztime=30s
       - name: Fuzz FLV tag
         run: go test ./internal/flv -run=^$ -fuzz=FuzzTag -fuzztime=30s
       - name: Fuzz FLV AAC detail
         run: go test ./internal/flv -run=^$ -fuzz=FuzzAACAudio -fuzztime=30s
+      - name: Fuzz FLV AVC detail
+        run: go test ./internal/flv -run=^$ -fuzz=FuzzAVCVideo -fuzztime=30s

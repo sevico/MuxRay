@@ -15,6 +15,7 @@ type DetailKind string
 const (
 	DetailKindAMF0ScriptData DetailKind = "amf0ScriptData"
 	DetailKindAACAudio       DetailKind = "aacAudio"
+	DetailKindAVCVideo       DetailKind = "avcVideo"
 )
 
 // ErrTagDetailUnsupported identifies a tag for which no on-demand detail
@@ -34,6 +35,7 @@ type ParsedTagDetail interface {
 type DetailOptions struct {
 	AMF0 amf0.Options
 	AAC  aac.Options
+	AVC  AVCVideoOptions
 }
 
 // ParseTagDetail dispatches one indexed tag to its syntax parser without
@@ -46,6 +48,9 @@ func ParseTagDetail(source io.ReaderAt, tag TagRecord, options DetailOptions) (P
 		return detail, err
 	case TagTypeAudio:
 		detail, err := ParseAACAudio(source, tag, options.AAC)
+		return detail, err
+	case TagTypeVideo:
+		detail, err := ParseAVCVideo(source, tag, options.AVC)
 		return detail, err
 	default:
 		return nil, fmt.Errorf("%w: tag type %s (%d)", ErrTagDetailUnsupported, tag.Type(), tag.Type())
@@ -60,7 +65,12 @@ func (AACAudio) DetailKind() DetailKind { return DetailKindAACAudio }
 
 func (detail AACAudio) IsComplete() bool { return detail.Complete }
 
+func (AVCVideo) DetailKind() DetailKind { return DetailKindAVCVideo }
+
+func (detail AVCVideo) IsComplete() bool { return detail.Complete }
+
 var (
 	_ ParsedTagDetail = ScriptData{}
 	_ ParsedTagDetail = AACAudio{}
+	_ ParsedTagDetail = AVCVideo{}
 )

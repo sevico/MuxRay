@@ -48,6 +48,25 @@ func TestParseTagDetailDispatchesAACAudio(t *testing.T) {
 	}
 }
 
+func TestParseTagDetailDispatchesAVCVideo(t *testing.T) {
+	data, tag := scriptDataFixture(t, byte(TagTypeVideo), []byte{0x17, 0x02, 0, 0, 0})
+
+	parsed, err := ParseTagDetail(bytes.NewReader(data), tag, DetailOptions{})
+	if err != nil {
+		t.Fatalf("ParseTagDetail: %v", err)
+	}
+	detail, ok := parsed.(AVCVideo)
+	if !ok {
+		t.Fatalf("detail type = %T, want flv.AVCVideo", parsed)
+	}
+	if parsed.DetailKind() != DetailKindAVCVideo || !parsed.IsComplete() {
+		t.Fatalf("generic detail state: kind=%q complete=%v", parsed.DetailKind(), parsed.IsComplete())
+	}
+	if detail.PacketType != AVCPacketTypeEndOfSequence || !detail.EndOfSequencePresent {
+		t.Fatalf("AVC detail was not preserved: %+v", detail)
+	}
+}
+
 func TestParseTagDetailRejectsUnsupportedAudioCodec(t *testing.T) {
 	data, tag := scriptDataFixture(t, byte(TagTypeAudio), []byte{0x2f, 0x01})
 	parsed, err := ParseTagDetail(bytes.NewReader(data), tag, DetailOptions{})
@@ -59,13 +78,34 @@ func TestParseTagDetailRejectsUnsupportedAudioCodec(t *testing.T) {
 	}
 }
 
+func TestParseTagDetailRejectsUnsupportedVideoSelection(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		payload []byte
+		wantErr error
+	}{
+		{name: "non AVC codec", payload: []byte{0x12, 0, 0, 0, 0}, wantErr: ErrAVCVideoWrongCodecID},
+		{name: "command frame", payload: []byte{0x57, 0}, wantErr: ErrAVCVideoCommandFrame},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			data, tag := scriptDataFixture(t, byte(TagTypeVideo), test.payload)
+			parsed, err := ParseTagDetail(bytes.NewReader(data), tag, DetailOptions{})
+			if _, ok := parsed.(AVCVideo); !ok {
+				t.Fatalf("partial detail = %T, want flv.AVCVideo", parsed)
+			}
+			if !errors.Is(err, test.wantErr) {
+				t.Fatalf("error = %v, want errors.Is(_, %v)", err, test.wantErr)
+			}
+		})
+	}
+}
+
 func TestParseTagDetailRejectsUnsupportedTagTypesWithoutReading(t *testing.T) {
 	for _, test := range []struct {
 		name     string
 		tagType  TagType
 		typeName string
 	}{
-		{name: "video", tagType: TagTypeVideo, typeName: "video"},
 		{name: "unknown", tagType: 7, typeName: "unknown"},
 	} {
 		t.Run(test.name, func(t *testing.T) {

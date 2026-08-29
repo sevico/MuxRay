@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 1,
+  "documentType": "flv-avc-tag-detail",
+  "source": {
+    "sizeBytes": 39
+  },
+  "tag": {
+    "id": 0,
+    "typeCode": 9,
+    "typeName": "video",
+    "offset": 13,
+    "span": {
+      "byteOffset": 13,
+      "bitOffset": 0,
+      "bitLength": 176
+    },
+    "headerSpan": {
+      "byteOffset": 13,
+      "bitOffset": 0,
+      "bitLength": 88
+    },
+    "payloadSpan": {
+      "byteOffset": 24,
+      "bitOffset": 0,
+      "bitLength": 88
+    },
+    "rawTypeFlags": 9,
+    "filter": false,
+    "dataSize": 11,
+    "availableDataSize": 11,
+    "dts": 0,
+    "streamId": 0,
+    "payloadComplete": true,
+    "previousTagSize": {
+      "present": true,
+      "span": {
+        "byteOffset": 35,
+        "bitOffset": 0,
+        "bitLength": 32
+      },
+      "value": 22,
+      "expected": 22,
+      "valid": true
+    }
+  },
+  "detail": {
+    "kind": "avcVideo",
+    "span": {
+      "byteOffset": 24,
+      "bitOffset": 0,
+      "bitLength": 88
+    },
+    "bitsConsumed": 88,
+    "complete": true,
+    "videoTagHeader": {
+      "raw": 39,
+      "span": {
+        "byteOffset": 24,
+        "bitOffset": 0,
+        "bitLength": 8
+      },
+      "frameType": {
+        "value": 2,
+        "name": "interFrame",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 0,
+          "bitLength": 4
+        }
+      },
+      "codecId": {
+        "value": 7,
+        "name": "AVC",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 4,
+          "bitLength": 4
+        }
+      }
+    },
+    "packetType": {
+      "value": 1,
+      "name": "nalu",
+      "span": {
+        "byteOffset": 25,
+        "bitOffset": 0,
+        "bitLength": 8
+      }
+    },
+    "compositionTime": {
+      "raw": 16777214,
+      "value": -2,
+      "span": {
+        "byteOffset": 26,
+        "bitOffset": 0,
+        "bitLength": 24
+      }
+    },
+    "dataSpan": {
+      "byteOffset": 29,
+      "bitOffset": 0,
+      "bitLength": 48
+    },
+    "nalUnitSequence": {
+      "span": {
+        "byteOffset": 29,
+        "bitOffset": 0,
+        "bitLength": 48
+      },
+      "syntaxSpan": {
+        "byteOffset": 29,
+        "bitOffset": 0,
+        "bitLength": 48
+      },
+      "trailingSpan": {
+        "byteOffset": 35,
+        "bitOffset": 0,
+        "bitLength": 0
+      },
+      "bytesConsumed": 6,
+      "lengthSize": 4,
+      "nalUnits": [
+        {
+          "index": 0,
+          "length": 2,
+          "lengthSpan": {
+            "byteOffset": 29,
+            "bitOffset": 0,
+            "bitLength": 32
+          },
+          "span": {
+            "byteOffset": 33,
+            "bitOffset": 0,
+            "bitLength": 16
+          },
+          "header": {
+            "raw": 101,
+            "span": {
+              "byteOffset": 33,
+              "bitOffset": 0,
+              "bitLength": 8
+            },
+            "forbiddenZeroBit": {
+              "value": false,
+              "span": {
+                "byteOffset": 33,
+                "bitOffset": 0,
+                "bitLength": 1
+              }
+            },
+            "nalRefIdc": {
+              "value": 3,
+              "span": {
+                "byteOffset": 33,
+                "bitOffset": 1,
+                "bitLength": 2
+              }
+            },
+            "nalUnitType": {
+              "value": 5,
+              "name": "idrSlice",
+              "span": {
+                "byteOffset": 33,
+                "bitOffset": 3,
+                "bitLength": 5
+              }
+            },
+            "complete": true
+          },
+          "summaryComplete": true
+        }
+      ],
+      "framingComplete": true,
+      "complete": true
+    }
+  },
+  "diagnostics": []
+}

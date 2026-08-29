@@ -9,6 +9,7 @@ import (
 
 	"github.com/sevico/muxray/internal/aac"
 	"github.com/sevico/muxray/internal/amf0"
+	"github.com/sevico/muxray/internal/avc"
 	"github.com/sevico/muxray/internal/flv"
 	"github.com/sevico/muxray/internal/report"
 )
@@ -64,6 +65,12 @@ func runDetail(args []string, stdout, stderr io.Writer) int {
 	maxAMFTotalStringBytes := flags.Uint64("max-amf-total-string-bytes", 0, fmt.Sprintf("maximum retained AMF0 string bytes (0 uses %d; hard maximum %d)", amf0.DefaultMaxTotalStringBytes, amf0.HardMaxTotalStringBytes))
 	maxAMFDiagnostics := flags.Uint64("max-amf-diagnostics", 0, fmt.Sprintf("maximum AMF0 diagnostics (0 uses %d; range %d-%d)", amf0.DefaultMaxDiagnostics, amf0.MinDiagnostics, amf0.HardMaxDiagnostics))
 	maxAACDiagnostics := flags.Uint64("max-aac-diagnostics", 0, fmt.Sprintf("maximum AAC diagnostics (0 uses %d; range %d-%d)", aac.DefaultMaxDiagnostics, aac.MinDiagnostics, aac.HardMaxDiagnostics))
+	maxAVCDiagnostics := flags.Uint64("max-avc-diagnostics", 0, fmt.Sprintf("maximum AVC diagnostics (0 uses %d; range %d-%d)", avc.DefaultMaxDiagnostics, avc.MinDiagnostics, avc.HardMaxDiagnostics))
+	maxAVCParameterSets := flags.Uint64("max-avc-parameter-sets", 0, fmt.Sprintf("maximum AVC parameter sets (0 uses %d; hard maximum %d)", avc.DefaultMaxParameterSets, avc.HardMaxParameterSets))
+	maxAVCNALUnits := flags.Uint64("max-avc-nal-units", 0, fmt.Sprintf("maximum AVC NAL units (0 uses %d; hard maximum %d)", avc.DefaultMaxNALUnits, avc.HardMaxNALUnits))
+	maxAVCParameterSetBytes := flags.Uint64("max-avc-parameter-set-bytes", 0, fmt.Sprintf("maximum bytes summarized for one AVC parameter-set NAL (0 uses %d; hard maximum %d)", avc.DefaultMaxParameterSetBytes, avc.HardMaxParameterSetBytes))
+	maxAVCRBSPMappingEntries := flags.Uint64("max-avc-rbsp-mapping-entries", 0, fmt.Sprintf("maximum cumulative AVC RBSP source-map entries (0 uses %d; hard maximum %d)", avc.DefaultMaxRBSPMappingEntries, avc.HardMaxRBSPMappingEntries))
+	avcNALLengthSize := flags.Uint64("avc-nal-length-size", 0, "AVC NAL length field bytes (0 auto; allowed 1, 2, or 4)")
 	flags.Usage = func() {
 		_, _ = fmt.Fprintln(stderr, "Usage: muxray detail --tag <id> [options] <file.flv>")
 		flags.PrintDefaults()
@@ -113,6 +120,11 @@ func runDetail(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stderr, "muxray: invalid AAC options: %v\n", err)
 		return exitUsage
 	}
+	avcOptions, err := makeAVCOptions(*maxAVCDiagnostics, *maxAVCParameterSets, *maxAVCNALUnits, *maxAVCParameterSetBytes, *maxAVCRBSPMappingEntries, *avcNALLengthSize)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "muxray: invalid AVC options: %v\n", err)
+		return exitUsage
+	}
 
 	path := flags.Arg(0)
 	file, err := os.Open(path)
@@ -149,7 +161,15 @@ func runDetail(args []string, stdout, stderr io.Writer) int {
 	}
 
 	tag := result.Tags[*tagID]
-	detail, err := flv.ParseTagDetail(file, tag, flv.DetailOptions{AMF0: amfOptions, AAC: aacOptions})
+	if tag.Type() == flv.TagTypeVideo && avcOptions.NALLengthSize == 0 {
+		resolved, resolveErr := resolveAVCNALLengthSize(file, result.Tags, *tagID, avcOptions)
+		if resolveErr != nil {
+			_, _ = fmt.Fprintf(stderr, "muxray: resolve AVC NAL length size: %v\n", resolveErr)
+			return exitFailure
+		}
+		avcOptions.NALLengthSize = resolved
+	}
+	detail, err := flv.ParseTagDetail(file, tag, flv.DetailOptions{AMF0: amfOptions, AAC: aacOptions, AVC: avcOptions})
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "muxray: parse tag %d detail: %v\n", *tagID, err)
 		if isDetailSelectionError(err) {
@@ -179,6 +199,82 @@ func makeAACOptions(diagnostics uint64) (aac.Options, error) {
 	return (aac.Options{MaxDiagnostics: uint32(diagnostics)}).Normalized()
 }
 
+func makeAVCOptions(diagnostics, parameterSets, nalUnits, parameterSetBytes, rbspMappingEntries, nalLengthSize uint64) (flv.AVCVideoOptions, error) {
+	if diagnostics > uint64(avc.HardMaxDiagnostics) || parameterSets > uint64(avc.HardMaxParameterSets) ||
+		nalUnits > uint64(avc.HardMaxNALUnits) || parameterSetBytes > uint64(avc.HardMaxParameterSetBytes) ||
+		rbspMappingEntries > uint64(avc.HardMaxRBSPMappingEntries) {
+		return flv.AVCVideoOptions{}, fmt.Errorf("one or more values exceed package hard limits")
+	}
+	if nalLengthSize != 0 && nalLengthSize != 1 && nalLengthSize != 2 && nalLengthSize != 4 {
+		return flv.AVCVideoOptions{}, fmt.Errorf("NAL length size must be 0, 1, 2, or 4 bytes")
+	}
+	options, err := (avc.Options{
+		MaxDiagnostics:        uint32(diagnostics),
+		MaxParameterSets:      uint32(parameterSets),
+		MaxNALUnits:           uint32(nalUnits),
+		MaxParameterSetBytes:  uint32(parameterSetBytes),
+		MaxRBSPMappingEntries: uint32(rbspMappingEntries),
+	}).Normalized()
+	if err != nil {
+		return flv.AVCVideoOptions{}, err
+	}
+	return flv.AVCVideoOptions{AVC: options, NALLengthSize: uint8(nalLengthSize)}, nil
+}
+
+// resolveAVCNALLengthSize supplies the stream context omitted by an isolated
+// AVC NALU Tag. It only parses sequence-header candidates and never guesses a
+// default when no usable declaration exists.
+func resolveAVCNALLengthSize(source io.ReaderAt, tags []flv.TagRecord, selected uint64, options flv.AVCVideoOptions) (uint8, error) {
+	if selected >= uint64(len(tags)) {
+		return 0, nil
+	}
+	header, packetType, present, err := readAVCFramingPrefix(source, tags[selected])
+	if err != nil {
+		return 0, err
+	}
+	if !present || header&0x0f != flv.CodecIDAVC || header>>4 == 5 || packetType != uint8(flv.AVCPacketTypeNALU) {
+		return 0, nil
+	}
+
+	options.NALLengthSize = 0
+	for index := int64(selected) - 1; index >= 0; index-- {
+		candidate := tags[index]
+		header, candidateType, candidatePresent, readErr := readAVCFramingPrefix(source, candidate)
+		if readErr != nil {
+			return 0, readErr
+		}
+		if !candidatePresent || header&0x0f != flv.CodecIDAVC || header>>4 == 5 || candidateType != uint8(flv.AVCPacketTypeSequenceHeader) {
+			continue
+		}
+		parsed, parseErr := flv.ParseAVCVideo(source, candidate, options)
+		if parseErr != nil {
+			if isDetailSelectionError(parseErr) {
+				continue
+			}
+			return 0, parseErr
+		}
+		if parsed.ConfigPresent && parsed.Config.FramingComplete && (parsed.Config.LengthSize == 1 || parsed.Config.LengthSize == 2 || parsed.Config.LengthSize == 4) {
+			return parsed.Config.LengthSize, nil
+		}
+	}
+	return 0, nil
+}
+
+func readAVCFramingPrefix(source io.ReaderAt, tag flv.TagRecord) (header uint8, packetType uint8, present bool, err error) {
+	if tag.Type() != flv.TagTypeVideo || tag.Filter() || !tag.PayloadComplete() || tag.DataSize < 2 {
+		return 0, 0, false, nil
+	}
+	var prefix [2]byte
+	n, readErr := source.ReadAt(prefix[:], int64(tag.PayloadSpan().ByteOffset))
+	if n == len(prefix) {
+		return prefix[0], prefix[1], true, nil
+	}
+	if readErr != nil {
+		return 0, 0, false, readErr
+	}
+	return 0, 0, false, io.ErrUnexpectedEOF
+}
+
 func isDetailSelectionError(err error) bool {
 	return errors.Is(err, flv.ErrTagDetailUnsupported) ||
 		errors.Is(err, flv.ErrScriptDataWrongTagType) ||
@@ -187,7 +283,12 @@ func isDetailSelectionError(err error) bool {
 		errors.Is(err, flv.ErrAACAudioWrongTagType) ||
 		errors.Is(err, flv.ErrAACAudioFiltered) ||
 		errors.Is(err, flv.ErrAACAudioPayloadIncomplete) ||
-		errors.Is(err, flv.ErrAACAudioWrongSoundFormat)
+		errors.Is(err, flv.ErrAACAudioWrongSoundFormat) ||
+		errors.Is(err, flv.ErrAVCVideoWrongTagType) ||
+		errors.Is(err, flv.ErrAVCVideoFiltered) ||
+		errors.Is(err, flv.ErrAVCVideoPayloadIncomplete) ||
+		errors.Is(err, flv.ErrAVCVideoWrongCodecID) ||
+		errors.Is(err, flv.ErrAVCVideoCommandFrame)
 }
 
 func makeAMFOptions(depth, nodes, entries, stringBytes, totalStringBytes, diagnostics uint64) (amf0.Options, error) {

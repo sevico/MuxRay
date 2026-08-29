@@ -5,18 +5,20 @@ The public Draft 2020-12 contracts are:
 - [`flv-scan-report-v1.schema.json`](./flv-scan-report-v1.schema.json) for `muxray inspect`;
 - [`flv-tag-detail-v1.schema.json`](./flv-tag-detail-v1.schema.json) for one bounded AMF0 ScriptData `muxray detail --tag <id>` result;
 - [`flv-aac-tag-detail-v1.schema.json`](./flv-aac-tag-detail-v1.schema.json) for one bounded FLV AAC `muxray detail --tag <id>` result.
+- [`flv-avc-tag-detail-v1.schema.json`](./flv-avc-tag-detail-v1.schema.json) for one bounded FLV AVC/H.264 `muxray detail --tag <id>` result.
 
 All use `schemaVersion: 1`, but they are independent contracts. The scan report
 is selected by the `inspect` command. Detail consumers must select the validator
 using both `documentType` and `schemaVersion`: AMF0 uses
 `documentType: "flv-tag-detail"`, while AAC uses
-`documentType: "flv-aac-tag-detail"`. Adding members to a closed Schema or
+`documentType: "flv-aac-tag-detail"`, and AVC uses
+`documentType: "flv-avc-tag-detail"`. Adding members to a closed Schema or
 emitting another detail shape under an existing document identity is not a
 compatible extension.
 
 ## Deterministic encoding
 
-For the same bytes, scanner options, selected AMF0 or AAC detail options, and MuxRay build, repeated reports must be byte-identical within the same output mode:
+For the same bytes, scanner options, selected AMF0, AAC, or AVC detail options, and MuxRay build, repeated reports must be byte-identical within the same output mode:
 
 - the default is one compact UTF-8 JSON object followed by one LF;
 - `--pretty` uses two-space indentation and one trailing LF;
@@ -25,6 +27,7 @@ For the same bytes, scanner options, selected AMF0 or AAC detail options, and Mu
 - diagnostics are in scanner discovery order;
 - AMF0 roots, flat arena nodes, and properties are in parser discovery/source order;
 - AAC framing diagnostics precede AudioSpecificConfig diagnostics, and AAC fields remain in parser/DTO order;
+- AVC framing diagnostics precede avcC or NAL-unit diagnostics; parameter sets and NAL units remain in source order;
 - HTML escaping is disabled, and integer fields use base-10 JSON syntax;
 - AMF0 Number and Date milliseconds preserve their exact 64-bit IEEE-754 payload as lowercase hexadecimal `bits`; finite values also emit a JSON number (including `-0`), while NaN and infinities emit only their class and bits;
 - paths, base names, wall-clock timestamps, durations, host information, random IDs, and map-order-dependent values are absent.
@@ -49,5 +52,10 @@ JSON numbers used for offsets and sizes are unsigned 64-bit integers. Consumers 
 - AAC `bitsConsumed` counts syntax actually inspected. `audioSpecificConfig.syntaxSpan` covers those bits and `trailingSpan` preserves the remaining bounded payload without treating it as parsed syntax.
 - `packetType: sequenceHeader` requires `audioSpecificConfig`; `packetType: raw` requires `rawDataSpan`. Unknown or truncated packet types are incomplete and expose neither member.
 - Every AAC detail error has `recoveryOffset` equal to the exclusive end of the selected FLV Tag payload. Warnings have no recovery offset and can coexist with `detail.complete: true`.
+- In an AVC document, `detail.complete` means FLV AVC framing was classified and the selected sequence header, NALU packet, or end-of-sequence packet satisfied its bounded phase-one syntax contract.
+- AVC NALU packet boundaries require a one-, two-, or four-byte NAL length size. The CLI resolves it from an explicit option or the nearest usable preceding sequence header; missing context is reported and never replaced by a guessed four-byte width.
+- AVC parameter-set and NAL-unit payloads are represented by source spans. Their bytes are not copied into JSON and slice-layer H.264 syntax is outside the phase-one contract.
+- Every AVC detail error has `recoveryOffset` equal to the exclusive end of the selected FLV Tag payload. Warnings have no recovery offset and can coexist with `detail.complete: true`.
+- For `complete: false` AVC objects, the Schema validates the permitted partial data shape and branch dependencies; it is not a byte-for-byte proof of every parser prefix. Producer tests separately validate the actual emitted truncation prefixes.
 
 The constraints between duplicated compact fields—such as `tag.offset == tag.span.byteOffset`, `availableDataSize <= dataSize`, and `scan.bytesScanned <= source.sizeBytes`—are semantic invariants tested by MuxRay even where JSON Schema cannot express them portably.

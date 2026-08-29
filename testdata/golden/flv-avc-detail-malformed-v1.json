@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "documentType": "flv-avc-tag-detail",
+  "source": {
+    "sizeBytes": 35
+  },
+  "tag": {
+    "id": 0,
+    "typeCode": 9,
+    "typeName": "video",
+    "offset": 13,
+    "span": {
+      "byteOffset": 13,
+      "bitOffset": 0,
+      "bitLength": 144
+    },
+    "headerSpan": {
+      "byteOffset": 13,
+      "bitOffset": 0,
+      "bitLength": 88
+    },
+    "payloadSpan": {
+      "byteOffset": 24,
+      "bitOffset": 0,
+      "bitLength": 56
+    },
+    "rawTypeFlags": 9,
+    "filter": false,
+    "dataSize": 7,
+    "availableDataSize": 7,
+    "dts": 0,
+    "streamId": 0,
+    "payloadComplete": true,
+    "previousTagSize": {
+      "present": true,
+      "span": {
+        "byteOffset": 31,
+        "bitOffset": 0,
+        "bitLength": 32
+      },
+      "value": 18,
+      "expected": 18,
+      "valid": true
+    }
+  },
+  "detail": {
+    "kind": "avcVideo",
+    "span": {
+      "byteOffset": 24,
+      "bitOffset": 0,
+      "bitLength": 56
+    },
+    "bitsConsumed": 56,
+    "complete": false,
+    "videoTagHeader": {
+      "raw": 23,
+      "span": {
+        "byteOffset": 24,
+        "bitOffset": 0,
+        "bitLength": 8
+      },
+      "frameType": {
+        "value": 1,
+        "name": "keyFrame",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 0,
+          "bitLength": 4
+        }
+      },
+      "codecId": {
+        "value": 7,
+        "name": "AVC",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 4,
+          "bitLength": 4
+        }
+      }
+    },
+    "packetType": {
+      "value": 0,
+      "name": "sequenceHeader",
+      "span": {
+        "byteOffset": 25,
+        "bitOffset": 0,
+        "bitLength": 8
+      }
+    },
+    "compositionTime": {
+      "raw": 0,
+      "value": 0,
+      "span": {
+        "byteOffset": 26,
+        "bitOffset": 0,
+        "bitLength": 24
+      }
+    },
+    "dataSpan": {
+      "byteOffset": 29,
+      "bitOffset": 0,
+      "bitLength": 16
+    },
+    "avcDecoderConfigurationRecord": {
+      "span": {
+        "byteOffset": 29,
+        "bitOffset": 0,
+        "bitLength": 16
+      },
+      "syntaxSpan": {
+        "byteOffset": 29,
+        "bitOffset": 0,
+        "bitLength": 16
+      },
+      "trailingSpan": {
+        "byteOffset": 31,
+        "bitOffset": 0,
+        "bitLength": 0
+      },
+      "bytesConsumed": 2,
+      "framingComplete": false,
+      "complete": false,
+      "configurationVersion": {
+        "value": 1,
+        "span": {
+          "byteOffset": 29,
+          "bitOffset": 0,
+          "bitLength": 8
+        }
+      },
+      "avcProfileIndication": {
+        "value": 100,
+        "span": {
+          "byteOffset": 30,
+          "bitOffset": 0,
+          "bitLength": 8
+        }
+      },
+      "sequenceParameterSets": [],
+      "pictureParameterSets": []
+    }
+  },
+  "diagnostics": [
+    {
+      "code": "AVC_CONFIGURATION_RECORD_HEADER_TRUNCATED",
+      "severity": "error",
+      "offset": 31,
+      "bitOffset": 0,
+      "message": "profile_compatibility is truncated",
+      "expected": 1,
+      "actual": 0,
+      "recoveryOffset": 31
+    }
+  ]
+}
