@@ -6,6 +6,7 @@ The public Draft 2020-12 contracts are:
 - [`flv-tag-detail-v1.schema.json`](./flv-tag-detail-v1.schema.json) for one bounded AMF0 ScriptData `muxray detail --tag <id>` result;
 - [`flv-aac-tag-detail-v1.schema.json`](./flv-aac-tag-detail-v1.schema.json) for one bounded FLV AAC `muxray detail --tag <id>` result.
 - [`flv-avc-tag-detail-v1.schema.json`](./flv-avc-tag-detail-v1.schema.json) for one bounded FLV AVC/H.264 `muxray detail --tag <id>` result.
+- [`flv-media-summary-v1.schema.json`](./flv-media-summary-v1.schema.json) for bounded cross-tag AAC/AVC `muxray summary` analysis.
 
 All use `schemaVersion: 1`, but they are independent contracts. The scan report
 is selected by the `inspect` command. Detail consumers must select the validator
@@ -15,6 +16,10 @@ using both `documentType` and `schemaVersion`: AMF0 uses
 `documentType: "flv-avc-tag-detail"`. Adding members to a closed Schema or
 emitting another detail shape under an existing document identity is not a
 compatible extension.
+
+The media summary is selected with `documentType: "flv-media-summary"` and its
+own schemaVersion. Its independently bounded entry lists do not extend any
+scan or detail v1 document.
 
 ## Deterministic encoding
 
@@ -28,6 +33,7 @@ For the same bytes, scanner options, selected AMF0, AAC, or AVC detail options, 
 - AMF0 roots, flat arena nodes, and properties are in parser discovery/source order;
 - AAC framing diagnostics precede AudioSpecificConfig diagnostics, and AAC fields remain in parser/DTO order;
 - AVC framing diagnostics precede avcC or NAL-unit diagnostics; parameter sets and NAL units remain in source order;
+- media-summary keyframes and configuration events remain in source order; their `truncated` flags make retained-prefix limits explicit;
 - HTML escaping is disabled, and integer fields use base-10 JSON syntax;
 - AMF0 Number and Date milliseconds preserve their exact 64-bit IEEE-754 payload as lowercase hexadecimal `bits`; finite values also emit a JSON number (including `-0`), while NaN and infinities emit only their class and bits;
 - paths, base names, wall-clock timestamps, durations, host information, random IDs, and map-order-dependent values are absent.
@@ -57,5 +63,11 @@ JSON numbers used for offsets and sizes are unsigned 64-bit integers. Consumers 
 - AVC parameter-set and NAL-unit payloads are represented by source spans. Their bytes are not copied into JSON and slice-layer H.264 syntax is outside the phase-one contract.
 - Every AVC detail error has `recoveryOffset` equal to the exclusive end of the selected FLV Tag payload. Warnings have no recovery offset and can coexist with `detail.complete: true`.
 - For `complete: false` AVC objects, the Schema validates the permitted partial data shape and branch dependencies; it is not a byte-for-byte proof of every parser prefix. Producer tests separately validate the actual emitted truncation prefixes.
+- In a media summary, only AAC raw and AVC NALU Tags are supported media samples. Track `timing` values are raw, unwrapped unsigned 32-bit FLV DTS values. `videoPts` adds signed 24-bit CompositionTime exactly, so each value is in `-8388608..4303355902`. `rangeMs` is numeric `max-min`, while `forwardDeltaTotalMs` sums only strictly positive source-order deltas, never crosses a regression edge, and is not a wall-clock elapsed duration.
+- Media bitrate uses `flvMediaTagCoveredDataSizeOverForwardDtsIntervals`: a same-DTS byte group is included only when a later, greater DTS closes its interval in the same segment. `coveredIntervalMs` sums only those intervals; segment-tail bytes are excluded because their duration is unknown.
+- AVC `pts` is `dts + signed compositionTime`. Declared keyframes come from FLV `FrameType=1`; they are not proof of an IDR NAL. GOP durations never cross DTS regressions, codec/end-of-sequence boundaries, or an actual complete AVC configuration change.
+- Configuration fingerprints cover only raw ASC/avcC bytes. `changedFromPrevious` appears only when the current complete configuration was compared with a preceding complete configuration in the same codec epoch; absence means no comparison was made. `changeCount` counts changed comparisons across all source events even when the retained event prefix is truncated. Malformed configurations do not replace the baseline. Leaving AAC/AVC, or losing a trustworthy codec identity at an unusable media Tag, clears that codec's baseline; AVC end-of-sequence also clears it. First, malformed, and budget-skipped AVC configurations conservatively break GOP continuity; the first complete AVC configuration after malformed/skipped uncertainty is also a recovery barrier, while a repeated identical complete configuration in a known state is not. AVC dimensions are the first complete SPS summary and do not claim that slices reference that SPS.
+- `avSync` uses signed video-PTS-extrema-minus-audio-DTS-extrema values and reports whether the sample-start ranges overlap. It is present only in a complete summary with audio DTS, video DTS, and video PTS timelines and no DTS regression on either track. When `rangesOverlap` is false, `overlapMs` is zero. It does not model decoder delay or decoded sample duration.
+- `summary.complete: true` excludes error-severity entries from both `scanDiagnostics` and `analysisDiagnostics`; warnings may still coexist with a complete summary when they do not make classification incomplete.
 
 The constraints between duplicated compact fields—such as `tag.offset == tag.span.byteOffset`, `availableDataSize <= dataSize`, and `scan.bytesScanned <= source.sizeBytes`—are semantic invariants tested by MuxRay even where JSON Schema cannot express them portably.

@@ -10,10 +10,11 @@ MuxRay 是一个面向 FLV 和音视频码流的跨平台诊断工具。项目�
 - AMF0 ScriptData 详情解析；
 - FLV AAC AudioTagHeader、AACPacketType 与 MPEG-4 AudioSpecificConfig 详情解析；
 - FLV AVC VideoTagHeader、AVCPacketType、有符号 CompositionTime、AVCDecoderConfigurationRecord，以及 SPS/PPS 和 length-prefixed NAL 边界解析；
+- AAC/AVC 跨 Tag 时间线、配置变化、声明关键帧/GOP、有覆盖区间定义的平均码率与基础 A/V 时间范围偏差；
 - 稳定、版本化的 JSON 输出和诊断代码；
 - 正常、边界、损坏样本的 unit、Golden 与 fuzz 测试。
 
-Wails 桌面界面、完整 VUI/PPS/slice 等深层 H.264 语义、MP3 详情、跨 Tag 音视频摘要和实时 RTMP/HTTP-FLV 将在后续阶段加入。
+Wails 桌面界面、完整 VUI/PPS/slice 等深层 H.264 语义、MP3 详情、分页帧级曲线和实时 RTMP/HTTP-FLV 将在后续阶段加入。
 
 ## 开发
 
@@ -22,10 +23,15 @@ go test ./...
 go vet ./...
 go test -race ./...
 go run ./cmd/muxray inspect sample.flv
+go run ./cmd/muxray summary --pretty sample.flv
 go run ./cmd/muxray detail --tag 0 --pretty sample.flv
 ```
 
 `inspect` 默认输出单行、确定性的 `schemaVersion: 1` JSON；加入 `--pretty` 可获得两空格缩进格式。扫描发现结构错误时仍会输出报告并以状态码 2 退出。公开字段定义见 [`docs/schemas/flv-scan-report-v1.schema.json`](docs/schemas/flv-scan-report-v1.schema.json)，诊断码见 [`docs/diagnostics-v1.md`](docs/diagnostics-v1.md)。
+
+`summary` 输出独立的 [`flv-media-summary-v1.schema.json`](docs/schemas/flv-media-summary-v1.schema.json) 文档，分析 AAC raw 与 AVC NALU 的 DTS/PTS、CompositionTime、声明关键帧/GOP、配置变化、平均 payload 码率和基础 A/V 时间范围偏差。它不自动展开 32 位 DTS，也不把最后一帧猜成具有已知时长；码率只使用同一连续段内已被下一更大 DTS 覆盖的字节组。关键帧是 FLV `FrameType=1` 声明，不等同于已验证 IDR；A/V 偏差也不包含 codec delay 或解码后唇音同步。MP3 和其他 codec 在本阶段会明确报告为未分类。完整语义见 [`ADR-005`](docs/decisions/005-bounded-media-summary.md)，新增诊断码见 [`media-summary-diagnostics-v1.md`](docs/media-summary-diagnostics-v1.md)。
+
+`summary` 的退出码为：`0` 表示成功且没有 diagnostics 状态（不影响完整性的 warning 可以共存）；`2` 表示扫描或分析不完整/有 error，或 unsupported、filtered 等 warning 使摘要无法完整分类，此时仍会先输出 JSON；`1` 表示打开、读取、分析或写出等运行失败；`64` 表示参数或用法错误。
 
 `detail --tag <id>` 在容器索引完整时，按 Tag 类型分发到对应的有界解析器，不改变默认扫描结果，也不会把所有 payload 或递归对象树保留在内存。ScriptData、AAC Audio 与 AVC Video 分别使用 [`flv-tag-detail-v1.schema.json`](docs/schemas/flv-tag-detail-v1.schema.json)、[`flv-aac-tag-detail-v1.schema.json`](docs/schemas/flv-aac-tag-detail-v1.schema.json) 和 [`flv-avc-tag-detail-v1.schema.json`](docs/schemas/flv-avc-tag-detail-v1.schema.json)，由 `documentType` 区分，现有 AMF0/AAC v1 输出保持不变。AAC sequence header 会解析 AudioSpecificConfig，raw AAC 只报告源 Span。AVC sequence header 会解析 avcC 与 SPS/PPS 基础摘要；raw NALU 的长度字段宽度由 `--avc-nal-length-size 1|2|4` 明确指定，或在默认值 0 时从最近的有效 sequence header 自动取得，不会猜测四字节宽度。
 

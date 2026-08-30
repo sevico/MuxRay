@@ -49,6 +49,10 @@ CONTRACTS = (
         "testdata/golden/flv-avc-detail-malformed-v1.json",
     ),
     (
+        "docs/schemas/flv-media-summary-v1.schema.json",
+        "testdata/golden/flv-media-summary-v1.json",
+    ),
+    (
         "testdata/manifests/sample-manifest-v1.schema.json",
         "testdata/manifests/example-minimal-header-only.sample.json",
     ),
@@ -78,6 +82,272 @@ def require_valid(validator: Draft202012Validator, instance: object, label: str)
 def require_invalid(validator: Draft202012Validator, instance: object, label: str) -> None:
     if not validation_errors(validator, instance):
         raise SystemExit(f"{label}: invalid contract mutation was accepted")
+
+
+def validate_media_summary_edge_cases(validator: Draft202012Validator) -> None:
+    summary = load_json("testdata/golden/flv-media-summary-v1.json")
+
+    unsupported = deepcopy(summary)
+    unsupported["source"]["sizeBytes"] = 232
+    unsupported["scan"]["bytesScanned"] = 232
+    unsupported["scan"]["indexedTagCount"] = 9
+    unsupported["summary"]["complete"] = False
+    unsupported["summary"]["tags"]["total"] = 9
+    unsupported["summary"]["tags"]["audio"] = 4
+    unsupported["summary"]["tags"]["dataSizeBytes"] = 84
+    unsupported["summary"]["audio"]["tagCount"] = 4
+    unsupported["summary"]["audio"]["indexedDataSizeBytes"] = 13
+    unsupported["summary"]["audio"]["unclassifiedTagCount"] = 1
+    del unsupported["summary"]["avSync"]
+    unsupported["analysisDiagnostics"] = [
+        {
+            "code": "MEDIA_AUDIO_CODEC_UNSUPPORTED",
+            "severity": "warning",
+            "tagId": 8,
+            "offset": 226,
+            "bitOffset": 0,
+            "message": "synthetic unsupported MP3 tag",
+            "actual": 2,
+        }
+    ]
+    require_valid(validator, unsupported, "incomplete AAC/AVC-only summary with unsupported audio")
+
+    wrong_identity = deepcopy(summary)
+    wrong_identity["documentType"] = "flv-summary"
+    require_invalid(validator, wrong_identity, "media summary wrong document identity")
+
+    extra_field = deepcopy(summary)
+    extra_field["summary"]["audio"]["mystery"] = 1
+    require_invalid(validator, extra_field, "media summary additional field")
+
+    negative_count = deepcopy(summary)
+    negative_count["summary"]["tags"]["total"] = -1
+    require_invalid(validator, negative_count, "media summary negative count")
+
+    bad_fingerprint = deepcopy(summary)
+    bad_fingerprint["summary"]["aacConfigurations"]["events"][0][
+        "fingerprintSha256"
+    ] = "not-a-sha256"
+    require_invalid(validator, bad_fingerprint, "media summary invalid fingerprint")
+
+    bad_bitrate_basis = deepcopy(summary)
+    bad_bitrate_basis["summary"]["video"]["bitrate"]["basis"] = "timestampRange"
+    require_invalid(validator, bad_bitrate_basis, "media summary ambiguous bitrate basis")
+
+    incomplete_scan = deepcopy(summary)
+    incomplete_scan["scan"]["complete"] = False
+    require_invalid(validator, incomplete_scan, "complete media summary with incomplete scan")
+
+    classified_false = deepcopy(summary)
+    classified_false["summary"]["audio"]["unclassifiedTagCount"] = 1
+    require_invalid(validator, classified_false, "complete media summary with unclassified tag")
+
+    skipped_configuration = deepcopy(summary)
+    skipped_configuration["summary"]["avcConfigurations"]["skippedByBudgetCount"] = 1
+    require_invalid(validator, skipped_configuration, "complete media summary with skipped configuration")
+
+    incomplete_configuration = deepcopy(summary)
+    incomplete_configuration["summary"]["aacConfigurations"]["events"][0]["complete"] = False
+    require_invalid(validator, incomplete_configuration, "complete media summary with incomplete configuration")
+
+    analysis_error = deepcopy(summary)
+    analysis_error["analysisDiagnostics"] = [
+        {
+            "code": "MEDIA_VIDEO_HEADER_TRUNCATED",
+            "severity": "error",
+            "tagId": 1,
+            "offset": 20,
+            "bitOffset": 0,
+            "message": "synthetic error",
+            "recoveryOffset": 20,
+        }
+    ]
+    require_invalid(validator, analysis_error, "complete media summary with analysis error")
+
+    scan_error = deepcopy(summary)
+    scan_error["scanDiagnostics"] = [
+        {
+            "code": "FLV_DIAGNOSTIC_LIMIT_REACHED",
+            "severity": "error",
+            "offset": 20,
+            "bitOffset": 0,
+            "message": "synthetic scan error",
+        }
+    ]
+    require_invalid(validator, scan_error, "complete media summary with scan error")
+
+    negative_audio_dts = deepcopy(summary)
+    negative_audio_dts["summary"]["audio"]["timing"]["firstMs"] = -1
+    negative_audio_dts["summary"]["audio"]["timing"]["minMs"] = -1
+    require_invalid(validator, negative_audio_dts, "negative raw audio DTS")
+
+    for field in ("rangeMs", "largestForwardGapMs"):
+        dts_delta_out_of_range = deepcopy(summary)
+        dts_delta_out_of_range["summary"]["audio"]["timing"][field] = 4294967296
+        require_invalid(
+            validator,
+            dts_delta_out_of_range,
+            f"raw DTS {field} outside uint32 range",
+        )
+
+    for value in (-8388609, 4303355903):
+        pts_out_of_range = deepcopy(summary)
+        pts_out_of_range["summary"]["videoPts"]["firstMs"] = value
+        require_invalid(
+            validator,
+            pts_out_of_range,
+            f"video PTS outside uint32 DTS plus signedInt24 range: {value}",
+        )
+
+        keyframe_pts_out_of_range = deepcopy(summary)
+        keyframe_pts_out_of_range["summary"]["keyframes"]["entries"][0][
+            "pts"
+        ] = value
+        require_invalid(
+            validator,
+            keyframe_pts_out_of_range,
+            f"keyframe PTS outside uint32 DTS plus signedInt24 range: {value}",
+        )
+
+    for field in ("rangeMs", "largestForwardGapMs"):
+        pts_delta_out_of_range = deepcopy(summary)
+        pts_delta_out_of_range["summary"]["videoPts"][field] = 4311744511
+        require_invalid(
+            validator,
+            pts_delta_out_of_range,
+            f"video PTS {field} outside exact PTS domain span",
+        )
+
+    av_sync_in_incomplete_summary = deepcopy(summary)
+    av_sync_in_incomplete_summary["summary"]["complete"] = False
+    require_invalid(
+        validator,
+        av_sync_in_incomplete_summary,
+        "A/V relationship in incomplete media summary",
+    )
+
+    for track in ("audio", "video"):
+        av_sync_without_timing = deepcopy(summary)
+        del av_sync_without_timing["summary"][track]["timing"]
+        require_invalid(
+            validator,
+            av_sync_without_timing,
+            f"A/V relationship without {track} timing",
+        )
+
+    av_sync_without_video_pts = deepcopy(summary)
+    del av_sync_without_video_pts["summary"]["videoPts"]
+    require_invalid(
+        validator,
+        av_sync_without_video_pts,
+        "A/V relationship without video PTS",
+    )
+
+    for track in ("audio", "video"):
+        av_sync_across_regression = deepcopy(summary)
+        av_sync_across_regression["summary"][track]["timing"][
+            "regressionCount"
+        ] = 1
+        require_invalid(
+            validator,
+            av_sync_across_regression,
+            f"A/V relationship across {track} DTS regression",
+        )
+
+    disjoint_with_overlap = deepcopy(summary)
+    disjoint_with_overlap["summary"]["avSync"]["rangesOverlap"] = False
+    disjoint_with_overlap["summary"]["avSync"]["overlapMs"] = 1
+    require_invalid(
+        validator,
+        disjoint_with_overlap,
+        "disjoint A/V ranges with non-zero overlap",
+    )
+
+    for field in ("startExtremaSkewMs", "endExtremaSkewMs"):
+        for value in (-4303355904, 4303355903):
+            av_sync_skew_out_of_range = deepcopy(summary)
+            av_sync_skew_out_of_range["summary"]["avSync"][field] = value
+            require_invalid(
+                validator,
+                av_sync_skew_out_of_range,
+                f"A/V {field} outside exact PTS-minus-DTS range: {value}",
+            )
+
+    av_sync_overlap_out_of_range = deepcopy(summary)
+    av_sync_overlap_out_of_range["summary"]["avSync"]["overlapMs"] = 4294967296
+    require_invalid(
+        validator,
+        av_sync_overlap_out_of_range,
+        "A/V overlap outside raw audio DTS range",
+    )
+
+    for field in ("audioObjectType", "samplingFrequencyHz", "channelConfiguration"):
+        incomplete_complete_aac = deepcopy(summary)
+        del incomplete_complete_aac["summary"]["aacConfigurations"]["events"][0][
+            field
+        ]
+        require_invalid(
+            validator,
+            incomplete_complete_aac,
+            f"complete AAC configuration without {field}",
+        )
+
+    for field in ("profile", "lengthSize"):
+        incomplete_complete_avc = deepcopy(summary)
+        del incomplete_complete_avc["summary"]["avcConfigurations"]["events"][0][
+            field
+        ]
+        require_invalid(
+            validator,
+            incomplete_complete_avc,
+            f"complete AVC configuration without {field}",
+        )
+
+    for codec in ("aacConfigurations", "avcConfigurations"):
+        changed_incomplete_configuration = deepcopy(summary)
+        changed_incomplete_configuration["summary"]["complete"] = False
+        del changed_incomplete_configuration["summary"]["avSync"]
+        event = changed_incomplete_configuration["summary"][codec]["events"][0]
+        event["complete"] = False
+        event["changedFromPrevious"] = True
+        require_invalid(
+            validator,
+            changed_incomplete_configuration,
+            f"incomplete {codec} event with a comparison result",
+        )
+
+    non_avc_keyframe = deepcopy(summary)
+    non_avc_keyframe["summary"]["keyframes"]["entries"][0]["codecId"] = 2
+    require_invalid(validator, non_avc_keyframe, "non-AVC media-summary keyframe")
+
+    keyframe_without_pts = deepcopy(summary)
+    del keyframe_without_pts["summary"]["keyframes"]["entries"][0]["pts"]
+    require_invalid(validator, keyframe_without_pts, "media-summary keyframe without PTS")
+
+    oversized_keyframe_payload = deepcopy(summary)
+    oversized_keyframe_payload["summary"]["keyframes"]["entries"][0][
+        "dataSizeBytes"
+    ] = 16777216
+    require_invalid(
+        validator,
+        oversized_keyframe_payload,
+        "media-summary keyframe DataSize outside unsigned 24-bit range",
+    )
+
+    for value in (0, 4294967296):
+        gop_duration_out_of_range = deepcopy(summary)
+        gop_duration_out_of_range["summary"]["keyframes"]["entries"][0][
+            "gopDurationMs"
+        ] = value
+        require_invalid(
+            validator,
+            gop_duration_out_of_range,
+            f"media-summary GOP duration outside positive uint32 range: {value}",
+        )
+
+    signed_24_overflow = deepcopy(summary)
+    signed_24_overflow["summary"]["compositionTime"]["maxMs"] = 8388608
+    require_invalid(validator, signed_24_overflow, "composition time outside signed 24-bit range")
 
 
 def validate_detail_edge_cases(validator: Draft202012Validator) -> None:
@@ -798,6 +1068,7 @@ def main() -> None:
     detail_validator = None
     aac_detail_validator = None
     avc_detail_validator = None
+    media_summary_validator = None
     for schema_path, instance_path in CONTRACTS:
         schema = load_json(schema_path)
         Draft202012Validator.check_schema(schema)
@@ -810,6 +1081,8 @@ def main() -> None:
             aac_detail_validator = validator
         if schema_path == "docs/schemas/flv-avc-tag-detail-v1.schema.json":
             avc_detail_validator = validator
+        if schema_path == "docs/schemas/flv-media-summary-v1.schema.json":
+            media_summary_validator = validator
 
     if detail_validator is None:
         raise SystemExit("detail schema was not validated")
@@ -823,6 +1096,10 @@ def main() -> None:
         raise SystemExit("AVC detail schema was not validated")
     validate_avc_detail_edge_cases(avc_detail_validator)
     print("validated AVC packet variants, RBSP mappings, recovery semantics, and negative contract cases")
+    if media_summary_validator is None:
+        raise SystemExit("media summary schema was not validated")
+    validate_media_summary_edge_cases(media_summary_validator)
+    print("validated media-summary identity, bounds, completeness, and negative contract cases")
 
 
 if __name__ == "__main__":

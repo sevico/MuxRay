@@ -1,0 +1,193 @@
+{
+  "schemaVersion": 1,
+  "documentType": "flv-media-summary",
+  "source": {
+    "sizeBytes": 215
+  },
+  "scan": {
+    "bytesScanned": 215,
+    "complete": true,
+    "indexedTagCount": 8
+  },
+  "summary": {
+    "complete": true,
+    "tags": {
+      "total": 8,
+      "audio": 3,
+      "video": 4,
+      "script": 1,
+      "other": 0,
+      "dataSizeBytes": 82
+    },
+    "audio": {
+      "tagCount": 3,
+      "indexedDataSizeBytes": 11,
+      "mediaTagCount": 2,
+      "mediaDataSizeBytes": 7,
+      "excludedTagCount": 1,
+      "unclassifiedTagCount": 0,
+      "timing": {
+        "sampleCount": 2,
+        "firstMs": 100,
+        "lastMs": 1100,
+        "minMs": 100,
+        "maxMs": 1100,
+        "rangeMs": 1000,
+        "forwardDeltaTotalMs": 1000,
+        "regressionCount": 0,
+        "duplicateCount": 0,
+        "largestForwardGapMs": 1000
+      },
+      "bitrate": {
+        "basis": "flvMediaTagCoveredDataSizeOverForwardDtsIntervals",
+        "bytes": 4,
+        "coveredIntervalMs": 1000,
+        "averageBitsPerSecond": 32
+      }
+    },
+    "video": {
+      "tagCount": 4,
+      "indexedDataSizeBytes": 70,
+      "mediaTagCount": 3,
+      "mediaDataSizeBytes": 18,
+      "excludedTagCount": 1,
+      "unclassifiedTagCount": 0,
+      "timing": {
+        "sampleCount": 3,
+        "firstMs": 120,
+        "lastMs": 1120,
+        "minMs": 120,
+        "maxMs": 1120,
+        "rangeMs": 1000,
+        "forwardDeltaTotalMs": 1000,
+        "regressionCount": 0,
+        "duplicateCount": 0,
+        "largestForwardGapMs": 620
+      },
+      "bitrate": {
+        "basis": "flvMediaTagCoveredDataSizeOverForwardDtsIntervals",
+        "bytes": 12,
+        "coveredIntervalMs": 1000,
+        "averageBitsPerSecond": 96
+      }
+    },
+    "videoPts": {
+      "sampleCount": 3,
+      "firstMs": 100,
+      "lastMs": 1150,
+      "minMs": 100,
+      "maxMs": 1150,
+      "rangeMs": 1050,
+      "forwardDeltaTotalMs": 1050,
+      "regressionCount": 0,
+      "duplicateCount": 0,
+      "largestForwardGapMs": 650
+    },
+    "compositionTime": {
+      "sampleCount": 3,
+      "negativeCount": 1,
+      "zeroCount": 1,
+      "positiveCount": 1,
+      "minMs": -20,
+      "maxMs": 30
+    },
+    "keyframes": {
+      "declaredCount": 2,
+      "entries": [
+        {
+          "tagId": 4,
+          "offset": 136,
+          "dts": 120,
+          "pts": 100,
+          "dataSizeBytes": 6,
+          "codecId": 7,
+          "gopDurationMs": 1000
+        },
+        {
+          "tagId": 6,
+          "offset": 178,
+          "dts": 1120,
+          "pts": 1150,
+          "dataSizeBytes": 6,
+          "codecId": 7
+        }
+      ],
+      "truncated": false
+    },
+    "gop": {
+      "count": 2,
+      "closedDurationCount": 1,
+      "nonPositiveDurationCount": 0,
+      "minDurationMs": 1000,
+      "maxDurationMs": 1000,
+      "averageDurationMs": 1000
+    },
+    "aacConfigurations": {
+      "eventCount": 1,
+      "analyzedCount": 1,
+      "skippedByBudgetCount": 0,
+      "changeCount": 0,
+      "events": [
+        {
+          "tagId": 0,
+          "offset": 13,
+          "dts": 0,
+          "fingerprintSha256": "ba3d722a88cacce18f22962612eda4d50e7a61cd9b7db60694043efed2a61448",
+          "complete": true,
+          "audioObjectType": {
+            "value": 2,
+            "name": "aacLC"
+          },
+          "samplingFrequencyHz": 44100,
+          "channelConfiguration": {
+            "value": 2,
+            "name": "stereo",
+            "channelCount": 2
+          }
+        }
+      ],
+      "truncated": false
+    },
+    "avcConfigurations": {
+      "eventCount": 1,
+      "analyzedCount": 1,
+      "skippedByBudgetCount": 0,
+      "changeCount": 0,
+      "events": [
+        {
+          "tagId": 3,
+          "offset": 69,
+          "dts": 0,
+          "fingerprintSha256": "b5de69512a54017a60b7770a2b69f80f82163837515d51e5f43837e3ece73e28",
+          "complete": true,
+          "profile": {
+            "profileIdc": 100,
+            "profileCompatibility": 0,
+            "levelIdc": 12
+          },
+          "lengthSize": 4,
+          "completeSpsCount": 1,
+          "distinctSpsDimensions": 1,
+          "firstCompleteSps": {
+            "index": 0,
+            "spsId": 0,
+            "codedWidth": 320,
+            "codedHeight": 192,
+            "displayWidth": 320,
+            "displayHeight": 180
+          }
+        }
+      ],
+      "truncated": false
+    },
+    "avSync": {
+      "basis": "videoPtsExtremaMinusAudioDtsExtrema",
+      "startExtremaSkewMs": 0,
+      "endExtremaSkewMs": 50,
+      "rangesOverlap": true,
+      "overlapMs": 1000
+    }
+  },
+  "scanDiagnostics": [],
+  "analysisDiagnostics": []
+}

@@ -42,6 +42,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return exitOK
 	case "inspect":
 		return runInspect(args[1:], stdout, stderr)
+	case "summary":
+		return runSummary(args[1:], stdout, stderr)
 	case "detail":
 		return runDetail(args[1:], stdout, stderr)
 	default:
@@ -382,6 +384,7 @@ func writeUsage(output io.Writer) {
 	_, _ = fmt.Fprintln(output, "")
 	_, _ = fmt.Fprintln(output, "Commands:")
 	_, _ = fmt.Fprintln(output, "  inspect    scan an FLV file and emit schemaVersion 1 JSON")
+	_, _ = fmt.Fprintln(output, "  summary    derive bounded cross-tag media timing and codec summaries")
 	_, _ = fmt.Fprintln(output, "  detail     parse one supported indexed tag and emit versioned detail JSON")
 	_, _ = fmt.Fprintln(output, "  version    print the build version")
 }
