@@ -170,6 +170,13 @@ func NewTagDetail(sourceSize uint64, tag flv.TagRecord, detail flv.ParsedTagDeta
 			return nil, fmt.Errorf("%w: nil *flv.AACAudio", ErrUnsupportedTagDetail)
 		}
 		return NewAACTagDetail(sourceSize, tag, *parsed), nil
+	case flv.MP3Audio:
+		return NewMP3TagDetail(sourceSize, tag, parsed), nil
+	case *flv.MP3Audio:
+		if parsed == nil {
+			return nil, fmt.Errorf("%w: nil *flv.MP3Audio", ErrUnsupportedTagDetail)
+		}
+		return NewMP3TagDetail(sourceSize, tag, *parsed), nil
 	case flv.AVCVideo:
 		return NewAVCTagDetail(sourceSize, tag, parsed), nil
 	case *flv.AVCVideo:

@@ -3,9 +3,12 @@ package flv
 import (
 	"bytes"
 	"errors"
+	"io"
 	"testing"
 
+	"github.com/sevico/muxray/internal/aac"
 	"github.com/sevico/muxray/internal/amf0"
+	"github.com/sevico/muxray/internal/mp3"
 )
 
 func TestParseTagDetailDispatchesScriptData(t *testing.T) {
@@ -48,6 +51,65 @@ func TestParseTagDetailDispatchesAACAudio(t *testing.T) {
 	}
 }
 
+func TestParseTagDetailDispatchesMP3Audio(t *testing.T) {
+	data, tag := scriptDataFixture(t, byte(TagTypeAudio), []byte{0x2f, 0xff, 0xfb, 0x90, 0x64})
+
+	parsed, err := ParseTagDetail(bytes.NewReader(data), tag, DetailOptions{})
+	if err != nil {
+		t.Fatalf("ParseTagDetail: %v", err)
+	}
+	detail, ok := parsed.(MP3Audio)
+	if !ok {
+		t.Fatalf("detail type = %T, want flv.MP3Audio", parsed)
+	}
+	if parsed.DetailKind() != DetailKindMP3Audio || !parsed.IsComplete() || detail.FrameHeader.Header.BitrateKbps != 128 {
+		t.Fatalf("generic MP3 detail state: %+v", detail)
+	}
+}
+
+func TestParseTagDetailAudioDispatchConsumesOnlySelectedOptions(t *testing.T) {
+	mp3Data, mp3Tag := scriptDataFixture(t, byte(TagTypeAudio), []byte{0x2f, 0xff, 0xfb, 0x90, 0x64})
+	parsed, err := ParseTagDetail(bytes.NewReader(mp3Data), mp3Tag, DetailOptions{AAC: aac.Options{MaxDiagnostics: 1}})
+	if err != nil {
+		t.Fatalf("MP3 dispatch consumed invalid AAC options: %v", err)
+	}
+	if _, ok := parsed.(MP3Audio); !ok {
+		t.Fatalf("MP3 detail type = %T", parsed)
+	}
+
+	aacData, aacTag := scriptDataFixture(t, byte(TagTypeAudio), []byte{0xaf, 0x01})
+	parsed, err = ParseTagDetail(bytes.NewReader(aacData), aacTag, DetailOptions{MP3: mp3.Options{MaxDiagnostics: 1}})
+	if err != nil {
+		t.Fatalf("AAC dispatch consumed invalid MP3 options: %v", err)
+	}
+	if _, ok := parsed.(AACAudio); !ok {
+		t.Fatalf("AAC detail type = %T", parsed)
+	}
+}
+
+func TestParseTagDetailMP3ProbeAcceptsFullReadWithEOF(t *testing.T) {
+	data, tag := scriptDataFixture(t, byte(TagTypeAudio), []byte{0x2f, 0xff, 0xfb, 0x90, 0x64})
+	parsed, err := ParseTagDetail(fullReadEOFDetailReaderAt{data: data}, tag, DetailOptions{})
+	if err != nil {
+		t.Fatalf("ParseTagDetail: %v", err)
+	}
+	if _, ok := parsed.(MP3Audio); !ok || !parsed.IsComplete() {
+		t.Fatalf("full-read EOF probe failed: %+v", parsed)
+	}
+}
+
+func TestParseTagDetailPreservesEmptyAudioAACContract(t *testing.T) {
+	data, tag := scriptDataFixture(t, byte(TagTypeAudio), nil)
+	parsed, err := ParseTagDetail(bytes.NewReader(data), tag, DetailOptions{})
+	if err != nil {
+		t.Fatalf("ParseTagDetail: %v", err)
+	}
+	detail, ok := parsed.(AACAudio)
+	if !ok || detail.Complete || !hasAACDiagnostic(detail.Diagnostics, CodeAACAudioHeaderTruncated) {
+		t.Fatalf("empty audio compatibility changed: %+v", parsed)
+	}
+}
+
 func TestParseTagDetailDispatchesAVCVideo(t *testing.T) {
 	data, tag := scriptDataFixture(t, byte(TagTypeVideo), []byte{0x17, 0x02, 0, 0, 0})
 
@@ -67,8 +129,17 @@ func TestParseTagDetailDispatchesAVCVideo(t *testing.T) {
 	}
 }
 
+type fullReadEOFDetailReaderAt struct{ data []byte }
+
+func (reader fullReadEOFDetailReaderAt) ReadAt(output []byte, offset int64) (int, error) {
+	if offset < 0 || offset >= int64(len(reader.data)) {
+		return 0, io.EOF
+	}
+	return copy(output, reader.data[offset:]), io.EOF
+}
+
 func TestParseTagDetailRejectsUnsupportedAudioCodec(t *testing.T) {
-	data, tag := scriptDataFixture(t, byte(TagTypeAudio), []byte{0x2f, 0x01})
+	data, tag := scriptDataFixture(t, byte(TagTypeAudio), []byte{0xbf, 0x01})
 	parsed, err := ParseTagDetail(bytes.NewReader(data), tag, DetailOptions{})
 	if _, ok := parsed.(AACAudio); !ok {
 		t.Fatalf("partial detail = %T, want flv.AACAudio", parsed)

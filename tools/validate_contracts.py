@@ -49,6 +49,22 @@ CONTRACTS = (
         "testdata/golden/flv-avc-detail-malformed-v1.json",
     ),
     (
+        "docs/schemas/flv-mp3-tag-detail-v1.schema.json",
+        "testdata/golden/flv-mp3-detail-v1.json",
+    ),
+    (
+        "docs/schemas/flv-mp3-tag-detail-v1.schema.json",
+        "testdata/golden/flv-mp3-detail-free-v1.json",
+    ),
+    (
+        "docs/schemas/flv-mp3-tag-detail-v1.schema.json",
+        "testdata/golden/flv-mp3-detail-malformed-v1.json",
+    ),
+    (
+        "docs/schemas/flv-mp3-tag-detail-v1.schema.json",
+        "testdata/golden/flv-mp3-detail-truncated-v1.json",
+    ),
+    (
         "docs/schemas/flv-media-summary-v1.schema.json",
         "testdata/golden/flv-media-summary-v1.json",
     ),
@@ -511,6 +527,127 @@ def validate_aac_detail_edge_cases(validator: Draft202012Validator) -> None:
         }
     ]
     require_valid(validator, unknown_packet_type, "unknown AAC packet type")
+
+
+def validate_mp3_detail_edge_cases(validator: Draft202012Validator) -> None:
+    indexed = load_json("testdata/golden/flv-mp3-detail-v1.json")
+    free = load_json("testdata/golden/flv-mp3-detail-free-v1.json")
+    malformed = load_json("testdata/golden/flv-mp3-detail-malformed-v1.json")
+    truncated = load_json("testdata/golden/flv-mp3-detail-truncated-v1.json")
+
+    require_valid(validator, indexed, "indexed MP3 first-frame header")
+    require_valid(validator, free, "free-format MP3 first-frame header")
+    require_valid(validator, malformed, "malformed MP3 first-frame header")
+    require_valid(validator, truncated, "truncated MP3 first-frame header")
+
+    wrong_identity = deepcopy(indexed)
+    wrong_identity["documentType"] = "flv-aac-tag-detail"
+    require_invalid(validator, wrong_identity, "MP3 detail with AAC document identity")
+
+    wrong_tag = deepcopy(indexed)
+    wrong_tag["tag"]["typeCode"] = 9
+    wrong_tag["tag"]["typeName"] = "video"
+    require_invalid(validator, wrong_tag, "MP3 detail attached to video tag")
+
+    filtered_tag = deepcopy(indexed)
+    filtered_tag["tag"]["filter"] = True
+    require_invalid(validator, filtered_tag, "MP3 detail attached to filtered tag")
+
+    incomplete_tag = deepcopy(indexed)
+    incomplete_tag["tag"]["payloadComplete"] = False
+    require_invalid(validator, incomplete_tag, "MP3 detail attached to incomplete tag")
+
+    wrong_sound_format = deepcopy(indexed)
+    wrong_sound_format["detail"]["audioTagHeader"]["soundFormat"]["value"] = 10
+    wrong_sound_format["detail"]["audioTagHeader"]["soundFormat"]["name"] = "AAC"
+    require_invalid(validator, wrong_sound_format, "MP3 detail with non-MP3 SoundFormat")
+
+    missing_bitrate = deepcopy(indexed)
+    del missing_bitrate["detail"]["firstFrameHeader"]["bitrateKbps"]
+    require_invalid(validator, missing_bitrate, "indexed MP3 without derived bitrate")
+
+    missing_frame_length = deepcopy(indexed)
+    del missing_frame_length["detail"]["firstFrameHeader"]["frameLengthBytes"]
+    require_invalid(validator, missing_frame_length, "indexed MP3 without frame length")
+
+    wrong_indexed_bitrate = deepcopy(indexed)
+    wrong_indexed_bitrate["detail"]["firstFrameHeader"]["bitrateKbps"] = 129
+    require_invalid(validator, wrong_indexed_bitrate, "indexed MP3 with wrong bitrate")
+
+    wrong_sampling_frequency = deepcopy(indexed)
+    wrong_sampling_frequency["detail"]["firstFrameHeader"][
+        "samplingFrequencyHz"
+    ] = 48000
+    require_invalid(
+        validator,
+        wrong_sampling_frequency,
+        "MP3 header with wrong derived sampling frequency",
+    )
+
+    mismatched_channel_count = deepcopy(indexed)
+    mismatched_channel_count["detail"]["firstFrameHeader"]["channels"] = 1
+    require_invalid(
+        validator,
+        mismatched_channel_count,
+        "stereo MP3 channel mode with mono channel count",
+    )
+
+    mismatched_crc_flag = deepcopy(indexed)
+    mismatched_crc_flag["detail"]["firstFrameHeader"]["crcProtected"] = True
+    require_invalid(
+        validator,
+        mismatched_crc_flag,
+        "unprotected MP3 header marked CRC protected",
+    )
+
+    indexed_claims_free = deepcopy(indexed)
+    indexed_claims_free["detail"]["firstFrameHeader"]["bitrateMode"] = "free"
+    require_invalid(validator, indexed_claims_free, "indexed MP3 marked free-format")
+
+    free_with_bitrate = deepcopy(free)
+    free_with_bitrate["detail"]["firstFrameHeader"]["bitrateKbps"] = 128
+    require_invalid(validator, free_with_bitrate, "free-format MP3 with bitrate")
+
+    free_with_frame_length = deepcopy(free)
+    free_with_frame_length["detail"]["firstFrameHeader"]["frameLengthBytes"] = 417
+    require_invalid(validator, free_with_frame_length, "free-format MP3 with frame length")
+
+    free_without_warning = deepcopy(free)
+    free_without_warning["diagnostics"] = []
+    require_invalid(validator, free_without_warning, "free-format MP3 without warning")
+
+    malformed_claims_complete = deepcopy(malformed)
+    malformed_claims_complete["detail"]["complete"] = True
+    malformed_claims_complete["detail"]["firstFrameHeader"]["complete"] = True
+    require_invalid(validator, malformed_claims_complete, "malformed MP3 marked complete")
+
+    mismatched_header_complete = deepcopy(indexed)
+    mismatched_header_complete["detail"]["firstFrameHeader"]["complete"] = False
+    require_invalid(
+        validator,
+        mismatched_header_complete,
+        "complete MP3 detail with incomplete first header",
+    )
+
+    incomplete_without_error = deepcopy(truncated)
+    incomplete_without_error["diagnostics"] = []
+    require_invalid(validator, incomplete_without_error, "incomplete MP3 without error")
+
+    error_without_recovery = deepcopy(malformed)
+    del error_without_recovery["diagnostics"][0]["recoveryOffset"]
+    require_invalid(validator, error_without_recovery, "MP3 error without recovery")
+
+    warning_with_recovery = deepcopy(free)
+    warning_with_recovery["diagnostics"][0]["recoveryOffset"] = 30
+    require_invalid(validator, warning_with_recovery, "MP3 warning with recovery offset")
+
+    complete_with_error = deepcopy(indexed)
+    complete_with_error["diagnostics"] = deepcopy(malformed["diagnostics"])
+    require_invalid(validator, complete_with_error, "complete MP3 with error")
+
+    extra_field = deepcopy(indexed)
+    extra_field["detail"]["firstFrameHeader"]["mystery"] = 1
+    require_invalid(validator, extra_field, "MP3 detail additional field")
 
 
 def validate_avc_detail_edge_cases(validator: Draft202012Validator) -> None:
@@ -1068,6 +1205,7 @@ def main() -> None:
     detail_validator = None
     aac_detail_validator = None
     avc_detail_validator = None
+    mp3_detail_validator = None
     media_summary_validator = None
     for schema_path, instance_path in CONTRACTS:
         schema = load_json(schema_path)
@@ -1081,6 +1219,8 @@ def main() -> None:
             aac_detail_validator = validator
         if schema_path == "docs/schemas/flv-avc-tag-detail-v1.schema.json":
             avc_detail_validator = validator
+        if schema_path == "docs/schemas/flv-mp3-tag-detail-v1.schema.json":
+            mp3_detail_validator = validator
         if schema_path == "docs/schemas/flv-media-summary-v1.schema.json":
             media_summary_validator = validator
 
@@ -1096,6 +1236,10 @@ def main() -> None:
         raise SystemExit("AVC detail schema was not validated")
     validate_avc_detail_edge_cases(avc_detail_validator)
     print("validated AVC packet variants, RBSP mappings, recovery semantics, and negative contract cases")
+    if mp3_detail_validator is None:
+        raise SystemExit("MP3 detail schema was not validated")
+    validate_mp3_detail_edge_cases(mp3_detail_validator)
+    print("validated MP3 identity, tag, completeness, bitrate modes, malformed, and recovery contract cases")
     if media_summary_validator is None:
         raise SystemExit("media summary schema was not validated")
     validate_media_summary_edge_cases(media_summary_validator)

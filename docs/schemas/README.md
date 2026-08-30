@@ -6,6 +6,7 @@ The public Draft 2020-12 contracts are:
 - [`flv-tag-detail-v1.schema.json`](./flv-tag-detail-v1.schema.json) for one bounded AMF0 ScriptData `muxray detail --tag <id>` result;
 - [`flv-aac-tag-detail-v1.schema.json`](./flv-aac-tag-detail-v1.schema.json) for one bounded FLV AAC `muxray detail --tag <id>` result.
 - [`flv-avc-tag-detail-v1.schema.json`](./flv-avc-tag-detail-v1.schema.json) for one bounded FLV AVC/H.264 `muxray detail --tag <id>` result.
+- [`flv-mp3-tag-detail-v1.schema.json`](./flv-mp3-tag-detail-v1.schema.json) for the bounded first MPEG Audio Layer III frame header in one FLV MP3 `muxray detail --tag <id>` result.
 - [`flv-media-summary-v1.schema.json`](./flv-media-summary-v1.schema.json) for bounded cross-tag AAC/AVC `muxray summary` analysis.
 
 All use `schemaVersion: 1`, but they are independent contracts. The scan report
@@ -13,17 +14,20 @@ is selected by the `inspect` command. Detail consumers must select the validator
 using both `documentType` and `schemaVersion`: AMF0 uses
 `documentType: "flv-tag-detail"`, while AAC uses
 `documentType: "flv-aac-tag-detail"`, and AVC uses
-`documentType: "flv-avc-tag-detail"`. Adding members to a closed Schema or
+`documentType: "flv-avc-tag-detail"`; MP3 uses
+`documentType: "flv-mp3-tag-detail"`. Adding members to a closed Schema or
 emitting another detail shape under an existing document identity is not a
 compatible extension.
 
 The media summary is selected with `documentType: "flv-media-summary"` and its
 own schemaVersion. Its independently bounded entry lists do not extend any
-scan or detail v1 document.
+scan or detail v1 document. Media-summary v1 remains frozen to AAC/AVC: MP3
+Tags remain unsupported/unclassified even though an independent MP3 detail
+document now exists.
 
 ## Deterministic encoding
 
-For the same bytes, scanner options, selected AMF0, AAC, or AVC detail options, and MuxRay build, repeated reports must be byte-identical within the same output mode:
+For the same bytes, scanner options, selected AMF0, AAC, AVC, or MP3 detail options, and MuxRay build, repeated reports must be byte-identical within the same output mode:
 
 - the default is one compact UTF-8 JSON object followed by one LF;
 - `--pretty` uses two-space indentation and one trailing LF;
@@ -33,6 +37,7 @@ For the same bytes, scanner options, selected AMF0, AAC, or AVC detail options, 
 - AMF0 roots, flat arena nodes, and properties are in parser discovery/source order;
 - AAC framing diagnostics precede AudioSpecificConfig diagnostics, and AAC fields remain in parser/DTO order;
 - AVC framing diagnostics precede avcC or NAL-unit diagnostics; parameter sets and NAL units remain in source order;
+- MP3 framing diagnostics precede first-frame-header diagnostics; fixed header fields remain in source-bit order;
 - media-summary keyframes and configuration events remain in source order; their `truncated` flags make retained-prefix limits explicit;
 - HTML escaping is disabled, and integer fields use base-10 JSON syntax;
 - AMF0 Number and Date milliseconds preserve their exact 64-bit IEEE-754 payload as lowercase hexadecimal `bits`; finite values also emit a JSON number (including `-0`), while NaN and infinities emit only their class and bits;
@@ -63,6 +68,10 @@ JSON numbers used for offsets and sizes are unsigned 64-bit integers. Consumers 
 - AVC parameter-set and NAL-unit payloads are represented by source spans. Their bytes are not copied into JSON and slice-layer H.264 syntax is outside the phase-one contract.
 - Every AVC detail error has `recoveryOffset` equal to the exclusive end of the selected FLV Tag payload. Warnings have no recovery offset and can coexist with `detail.complete: true`.
 - For `complete: false` AVC objects, the Schema validates the permitted partial data shape and branch dependencies; it is not a byte-for-byte proof of every parser prefix. Producer tests separately validate the actual emitted truncation prefixes.
+- In an MP3 document, parsing is bounded to the one-byte FLV AudioTagHeader and the first four-byte MPEG Audio header. `audioDataSpan` covers all SoundData and `unparsedDataSpan` covers bytes after the inspected fixed header; neither causes frame bodies to be copied into JSON.
+- MP3 `detail.complete: true` means the FLV header and one MPEG Layer III fixed header satisfy phase-one syntax checks. It does not prove that a complete compressed frame, CRC, VBR header, or later frame exists. `bitsConsumed` is therefore exactly 40 for any decoded frame header, independent of Tag payload size.
+- `bitrateMode: indexed` publishes table-derived bitrate and, when sampling frequency is also valid, frame length. `bitrateMode: free` is valid and complete with `MP3_FREE_FORMAT_UNRESOLVED`, but intentionally omits `bitrateKbps` and `frameLengthBytes` because one header cannot determine them.
+- Every MP3 detail error has `recoveryOffset` equal to the exclusive end of the selected FLV Tag payload. `MP3_FREE_FORMAT_UNRESOLVED` and `MP3_EMPHASIS_RESERVED` are warnings without a recovery offset and can coexist with `detail.complete: true`.
 - In a media summary, only AAC raw and AVC NALU Tags are supported media samples. Track `timing` values are raw, unwrapped unsigned 32-bit FLV DTS values. `videoPts` adds signed 24-bit CompositionTime exactly, so each value is in `-8388608..4303355902`. `rangeMs` is numeric `max-min`, while `forwardDeltaTotalMs` sums only strictly positive source-order deltas, never crosses a regression edge, and is not a wall-clock elapsed duration.
 - Media bitrate uses `flvMediaTagCoveredDataSizeOverForwardDtsIntervals`: a same-DTS byte group is included only when a later, greater DTS closes its interval in the same segment. `coveredIntervalMs` sums only those intervals; segment-tail bytes are excluded because their duration is unknown.
 - AVC `pts` is `dts + signed compositionTime`. Declared keyframes come from FLV `FrameType=1`; they are not proof of an IDR NAL. GOP durations never cross DTS regressions, codec/end-of-sequence boundaries, or an actual complete AVC configuration change.

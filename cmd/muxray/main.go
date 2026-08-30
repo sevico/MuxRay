@@ -11,6 +11,7 @@ import (
 	"github.com/sevico/muxray/internal/amf0"
 	"github.com/sevico/muxray/internal/avc"
 	"github.com/sevico/muxray/internal/flv"
+	"github.com/sevico/muxray/internal/mp3"
 	"github.com/sevico/muxray/internal/report"
 )
 
@@ -67,6 +68,7 @@ func runDetail(args []string, stdout, stderr io.Writer) int {
 	maxAMFTotalStringBytes := flags.Uint64("max-amf-total-string-bytes", 0, fmt.Sprintf("maximum retained AMF0 string bytes (0 uses %d; hard maximum %d)", amf0.DefaultMaxTotalStringBytes, amf0.HardMaxTotalStringBytes))
 	maxAMFDiagnostics := flags.Uint64("max-amf-diagnostics", 0, fmt.Sprintf("maximum AMF0 diagnostics (0 uses %d; range %d-%d)", amf0.DefaultMaxDiagnostics, amf0.MinDiagnostics, amf0.HardMaxDiagnostics))
 	maxAACDiagnostics := flags.Uint64("max-aac-diagnostics", 0, fmt.Sprintf("maximum AAC diagnostics (0 uses %d; range %d-%d)", aac.DefaultMaxDiagnostics, aac.MinDiagnostics, aac.HardMaxDiagnostics))
+	maxMP3Diagnostics := flags.Uint64("max-mp3-diagnostics", 0, fmt.Sprintf("maximum MP3 diagnostics (0 uses %d; range %d-%d)", mp3.DefaultMaxDiagnostics, mp3.MinDiagnostics, mp3.HardMaxDiagnostics))
 	maxAVCDiagnostics := flags.Uint64("max-avc-diagnostics", 0, fmt.Sprintf("maximum AVC diagnostics (0 uses %d; range %d-%d)", avc.DefaultMaxDiagnostics, avc.MinDiagnostics, avc.HardMaxDiagnostics))
 	maxAVCParameterSets := flags.Uint64("max-avc-parameter-sets", 0, fmt.Sprintf("maximum AVC parameter sets (0 uses %d; hard maximum %d)", avc.DefaultMaxParameterSets, avc.HardMaxParameterSets))
 	maxAVCNALUnits := flags.Uint64("max-avc-nal-units", 0, fmt.Sprintf("maximum AVC NAL units (0 uses %d; hard maximum %d)", avc.DefaultMaxNALUnits, avc.HardMaxNALUnits))
@@ -122,6 +124,11 @@ func runDetail(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stderr, "muxray: invalid AAC options: %v\n", err)
 		return exitUsage
 	}
+	mp3Options, err := makeMP3Options(*maxMP3Diagnostics)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "muxray: invalid MP3 options: %v\n", err)
+		return exitUsage
+	}
 	avcOptions, err := makeAVCOptions(*maxAVCDiagnostics, *maxAVCParameterSets, *maxAVCNALUnits, *maxAVCParameterSetBytes, *maxAVCRBSPMappingEntries, *avcNALLengthSize)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "muxray: invalid AVC options: %v\n", err)
@@ -171,7 +178,7 @@ func runDetail(args []string, stdout, stderr io.Writer) int {
 		}
 		avcOptions.NALLengthSize = resolved
 	}
-	detail, err := flv.ParseTagDetail(file, tag, flv.DetailOptions{AMF0: amfOptions, AAC: aacOptions, AVC: avcOptions})
+	detail, err := flv.ParseTagDetail(file, tag, flv.DetailOptions{AMF0: amfOptions, AAC: aacOptions, MP3: mp3Options, AVC: avcOptions})
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "muxray: parse tag %d detail: %v\n", *tagID, err)
 		if isDetailSelectionError(err) {
@@ -199,6 +206,13 @@ func makeAACOptions(diagnostics uint64) (aac.Options, error) {
 		return aac.Options{}, fmt.Errorf("max diagnostics exceeds package hard limit %d", aac.HardMaxDiagnostics)
 	}
 	return (aac.Options{MaxDiagnostics: uint32(diagnostics)}).Normalized()
+}
+
+func makeMP3Options(diagnostics uint64) (mp3.Options, error) {
+	if diagnostics > uint64(mp3.HardMaxDiagnostics) {
+		return mp3.Options{}, fmt.Errorf("max diagnostics exceeds package hard limit %d", mp3.HardMaxDiagnostics)
+	}
+	return (mp3.Options{MaxDiagnostics: uint32(diagnostics)}).Normalized()
 }
 
 func makeAVCOptions(diagnostics, parameterSets, nalUnits, parameterSetBytes, rbspMappingEntries, nalLengthSize uint64) (flv.AVCVideoOptions, error) {
@@ -286,6 +300,10 @@ func isDetailSelectionError(err error) bool {
 		errors.Is(err, flv.ErrAACAudioFiltered) ||
 		errors.Is(err, flv.ErrAACAudioPayloadIncomplete) ||
 		errors.Is(err, flv.ErrAACAudioWrongSoundFormat) ||
+		errors.Is(err, flv.ErrMP3AudioWrongTagType) ||
+		errors.Is(err, flv.ErrMP3AudioFiltered) ||
+		errors.Is(err, flv.ErrMP3AudioPayloadIncomplete) ||
+		errors.Is(err, flv.ErrMP3AudioWrongSoundFormat) ||
 		errors.Is(err, flv.ErrAVCVideoWrongTagType) ||
 		errors.Is(err, flv.ErrAVCVideoFiltered) ||
 		errors.Is(err, flv.ErrAVCVideoPayloadIncomplete) ||

@@ -108,9 +108,9 @@ func TestRunDetailMalformedAMFStillWritesReport(t *testing.T) {
 }
 
 func TestRunDetailRejectsSelectionAndUnsafeLimits(t *testing.T) {
-	t.Run("non-AAC audio tag", func(t *testing.T) {
-		path := filepath.Join(t.TempDir(), "mp3.flv")
-		if err := os.WriteFile(path, makeSingleTagFLV(0x08, []byte{0x2f, 0x01}), 0o600); err != nil {
+	t.Run("unsupported audio tag", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "speex.flv")
+		if err := os.WriteFile(path, makeSingleTagFLV(0x08, []byte{0xbf, 0x01}), 0o600); err != nil {
 			t.Fatalf("WriteFile: %v", err)
 		}
 		var stdout, stderr bytes.Buffer
@@ -141,6 +141,7 @@ func TestRunDetailRejectsSelectionAndUnsafeLimits(t *testing.T) {
 		{"detail", "--tag", "0", "--max-amf-depth", "257", "does-not-exist.flv"},
 		{"detail", "--tag", "0", "--max-amf-diagnostics", "1", "does-not-exist.flv"},
 		{"detail", "--tag", "0", "--max-aac-diagnostics", "1", "does-not-exist.flv"},
+		{"detail", "--tag", "0", "--max-mp3-diagnostics", "1", "does-not-exist.flv"},
 		{"detail", "--tag", "0", "--max-avc-diagnostics", "1", "does-not-exist.flv"},
 		{"detail", "--tag", "0", "--max-avc-parameter-sets", "542", "does-not-exist.flv"},
 		{"detail", "--tag", "0", "--max-avc-nal-units", "16385", "does-not-exist.flv"},
@@ -231,6 +232,68 @@ func TestRunDetailAACRawAndMalformed(t *testing.T) {
 				if !found || detail["complete"] != false {
 					t.Fatalf("missing fatal %q or complete state: %+v", test.wantCode, document)
 				}
+			}
+		})
+	}
+}
+
+func TestRunDetailMP3ValidFreeAndMalformed(t *testing.T) {
+	tests := []struct {
+		name        string
+		payload     []byte
+		wantExit    int
+		wantCode    string
+		wantMode    string
+		wantBitrate float64
+	}{
+		{name: "indexed", payload: []byte{0x2f, 0xff, 0xfb, 0x90, 0x64}, wantExit: exitOK, wantMode: "indexed", wantBitrate: 128},
+		{name: "free format", payload: []byte{0x2f, 0xff, 0xfb, 0x00, 0x64}, wantExit: exitOK, wantMode: "free", wantCode: "MP3_FREE_FORMAT_UNRESOLVED"},
+		{name: "truncated header", payload: []byte{0x2f, 0xff, 0xfb}, wantExit: exitDiagnostics, wantCode: "MP3_FRAME_HEADER_TRUNCATED"},
+		{name: "invalid sync", payload: []byte{0x2f, 0xfe, 0xfb, 0x90, 0x64}, wantExit: exitDiagnostics, wantCode: "MP3_SYNC_INVALID"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "mp3.flv")
+			if err := os.WriteFile(path, makeSingleTagFLV(0x08, test.payload), 0o600); err != nil {
+				t.Fatalf("WriteFile: %v", err)
+			}
+			var stdout, stderr bytes.Buffer
+			if exit := run([]string{"detail", "--pretty", "--tag", "0", path}, &stdout, &stderr); exit != test.wantExit {
+				t.Fatalf("exit = %d, want %d; stderr=%s", exit, test.wantExit, stderr.String())
+			}
+			var document map[string]any
+			if err := json.Unmarshal(stdout.Bytes(), &document); err != nil {
+				t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+			}
+			if document["documentType"] != "flv-mp3-tag-detail" {
+				t.Fatalf("unexpected document identity: %+v", document)
+			}
+			detail := document["detail"].(map[string]any)
+			if detail["kind"] != "mp3Audio" || detail["complete"] != (test.wantExit == exitOK) {
+				t.Fatalf("unexpected MP3 completion: %+v", detail)
+			}
+			if test.wantMode != "" {
+				header := detail["firstFrameHeader"].(map[string]any)
+				if header["bitrateMode"] != test.wantMode {
+					t.Fatalf("unexpected bitrate mode: %+v", header)
+				}
+				if test.wantBitrate != 0 && header["bitrateKbps"] != test.wantBitrate {
+					t.Fatalf("unexpected bitrate: %+v", header)
+				}
+			}
+			if test.wantCode != "" {
+				found := false
+				for _, item := range document["diagnostics"].([]any) {
+					if item.(map[string]any)["code"] == test.wantCode {
+						found = true
+					}
+				}
+				if !found {
+					t.Fatalf("missing diagnostic %q: %+v", test.wantCode, document)
+				}
+			}
+			if strings.Contains(stdout.String(), path) {
+				t.Fatal("MP3 detail report leaked the input path")
 			}
 		})
 	}

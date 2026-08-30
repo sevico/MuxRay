@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 
 	"github.com/sevico/muxray/internal/aac"
 	"github.com/sevico/muxray/internal/amf0"
+	"github.com/sevico/muxray/internal/mp3"
 )
 
 // DetailKind identifies the syntax contract returned for one selected FLV tag.
@@ -15,6 +17,7 @@ type DetailKind string
 const (
 	DetailKindAMF0ScriptData DetailKind = "amf0ScriptData"
 	DetailKindAACAudio       DetailKind = "aacAudio"
+	DetailKindMP3Audio       DetailKind = "mp3Audio"
 	DetailKindAVCVideo       DetailKind = "avcVideo"
 )
 
@@ -35,6 +38,7 @@ type ParsedTagDetail interface {
 type DetailOptions struct {
 	AMF0 amf0.Options
 	AAC  aac.Options
+	MP3  mp3.Options
 	AVC  AVCVideoOptions
 }
 
@@ -47,8 +51,7 @@ func ParseTagDetail(source io.ReaderAt, tag TagRecord, options DetailOptions) (P
 		detail, err := ParseScriptData(source, tag, options.AMF0)
 		return detail, err
 	case TagTypeAudio:
-		detail, err := ParseAACAudio(source, tag, options.AAC)
-		return detail, err
+		return parseAudioTagDetail(source, tag, options)
 	case TagTypeVideo:
 		detail, err := ParseAVCVideo(source, tag, options.AVC)
 		return detail, err
@@ -65,6 +68,10 @@ func (AACAudio) DetailKind() DetailKind { return DetailKindAACAudio }
 
 func (detail AACAudio) IsComplete() bool { return detail.Complete }
 
+func (MP3Audio) DetailKind() DetailKind { return DetailKindMP3Audio }
+
+func (detail MP3Audio) IsComplete() bool { return detail.Complete }
+
 func (AVCVideo) DetailKind() DetailKind { return DetailKindAVCVideo }
 
 func (detail AVCVideo) IsComplete() bool { return detail.Complete }
@@ -72,5 +79,24 @@ func (detail AVCVideo) IsComplete() bool { return detail.Complete }
 var (
 	_ ParsedTagDetail = ScriptData{}
 	_ ParsedTagDetail = AACAudio{}
+	_ ParsedTagDetail = MP3Audio{}
 	_ ParsedTagDetail = AVCVideo{}
 )
+
+// parseAudioTagDetail preserves all pre-MP3 AAC behavior unless a safe,
+// complete one-byte probe positively identifies SoundFormat 2. ReaderAt is
+// positional, so the selected parser still owns and validates its full input.
+func parseAudioTagDetail(source io.ReaderAt, tag TagRecord, options DetailOptions) (ParsedTagDetail, error) {
+	if source != nil && !tag.Filter() && tag.PayloadComplete() && tag.AvailableDataSize == tag.DataSize && tag.DataSize >= 1 {
+		payloadOffset := tag.PayloadSpan().ByteOffset
+		if payloadOffset <= math.MaxInt64 {
+			var header [1]byte
+			if read, _ := source.ReadAt(header[:], int64(payloadOffset)); read == len(header) && header[0]>>4 == SoundFormatMP3 {
+				detail, err := ParseMP3Audio(source, tag, options.MP3)
+				return detail, err
+			}
+		}
+	}
+	detail, err := ParseAACAudio(source, tag, options.AAC)
+	return detail, err
+}

@@ -1,0 +1,463 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "flv-mp3-tag-detail-v1.schema.json",
+  "title": "MuxRay FLV MP3 tag detail v1",
+  "description": "Deterministic, path-free, on-demand syntax detail for the FLV AudioTagHeader and first MPEG Audio Layer III frame header in one complete, unfiltered FLV MP3 audio tag.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "documentType", "source", "tag", "detail", "diagnostics"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "documentType": {"const": "flv-mp3-tag-detail"},
+    "source": {"$ref": "#/$defs/source"},
+    "tag": {
+      "allOf": [
+        {"$ref": "#/$defs/tag"},
+        {
+          "properties": {
+            "typeCode": {"const": 8},
+            "typeName": {"const": "audio"},
+            "filter": {"const": false},
+            "payloadComplete": {"const": true}
+          }
+        }
+      ]
+    },
+    "detail": {"$ref": "#/$defs/mp3AudioDetail"},
+    "diagnostics": {
+      "type": "array",
+      "description": "FLV MP3 framing and first-frame-header diagnostics in deterministic discovery order.",
+      "maxItems": 1024,
+      "items": {"$ref": "#/$defs/diagnostic"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"detail": {"properties": {"complete": {"const": false}}, "required": ["complete"]}}, "required": ["detail"]},
+      "then": {"properties": {"diagnostics": {"contains": {"properties": {"severity": {"const": "error"}}, "required": ["severity"]}, "minContains": 1}}}
+    },
+    {
+      "if": {"properties": {"detail": {"properties": {"complete": {"const": true}}, "required": ["complete"]}}, "required": ["detail"]},
+      "then": {"properties": {"diagnostics": {"not": {"contains": {"properties": {"severity": {"const": "error"}}, "required": ["severity"]}}}}}
+    },
+    {
+      "if": {"properties": {"detail": {"properties": {"firstFrameHeader": {"properties": {"bitrateMode": {"const": "free"}}, "required": ["bitrateMode"]}}, "required": ["firstFrameHeader"]}}, "required": ["detail"]},
+      "then": {"properties": {"diagnostics": {"contains": {"properties": {"code": {"const": "MP3_FREE_FORMAT_UNRESOLVED"}}, "required": ["code"]}, "minContains": 1}}},
+      "else": {"properties": {"diagnostics": {"not": {"contains": {"properties": {"code": {"const": "MP3_FREE_FORMAT_UNRESOLVED"}}, "required": ["code"]}}}}}
+    },
+    {
+      "if": {"properties": {"detail": {"properties": {"firstFrameHeader": {"properties": {"emphasis": {"properties": {"value": {"const": 2}}, "required": ["value"]}}, "required": ["emphasis"]}}, "required": ["firstFrameHeader"]}}, "required": ["detail"]},
+      "then": {"properties": {"diagnostics": {"contains": {"properties": {"code": {"const": "MP3_EMPHASIS_RESERVED"}}, "required": ["code"]}, "minContains": 1}}},
+      "else": {"properties": {"diagnostics": {"not": {"contains": {"properties": {"code": {"const": "MP3_EMPHASIS_RESERVED"}}, "required": ["code"]}}}}}
+    }
+  ],
+  "$defs": {
+    "uint8": {"type": "integer", "minimum": 0, "maximum": 255},
+    "uint16": {"type": "integer", "minimum": 0, "maximum": 65535},
+    "uint24": {"type": "integer", "minimum": 0, "maximum": 16777215},
+    "uint32": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+    "uint64": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615},
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["byteOffset", "bitOffset", "bitLength"],
+      "properties": {
+        "byteOffset": {"$ref": "#/$defs/uint64"},
+        "bitOffset": {"type": "integer", "minimum": 0, "maximum": 7},
+        "bitLength": {"$ref": "#/$defs/uint32"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sizeBytes"],
+      "properties": {"sizeBytes": {"$ref": "#/$defs/uint64"}}
+    },
+    "previousTagSize": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["present", "value", "expected", "valid"],
+      "properties": {
+        "present": {"type": "boolean"},
+        "span": {"$ref": "#/$defs/span"},
+        "value": {"$ref": "#/$defs/uint32"},
+        "expected": {"$ref": "#/$defs/uint32"},
+        "valid": {"type": "boolean"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"present": {"const": true}}, "required": ["present"]},
+          "then": {"required": ["span"]},
+          "else": {"properties": {"value": {"const": 0}, "valid": {"const": false}}, "not": {"required": ["span"]}}
+        }
+      ]
+    },
+    "tag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "typeCode", "typeName", "offset", "span", "headerSpan", "payloadSpan", "rawTypeFlags", "filter", "dataSize", "availableDataSize", "dts", "streamId", "payloadComplete", "previousTagSize"],
+      "properties": {
+        "id": {"$ref": "#/$defs/uint64"},
+        "typeCode": {"type": "integer", "minimum": 0, "maximum": 31},
+        "typeName": {"enum": ["audio", "video", "script", "unknown"]},
+        "offset": {"$ref": "#/$defs/uint64"},
+        "span": {"$ref": "#/$defs/span"},
+        "headerSpan": {"$ref": "#/$defs/span"},
+        "payloadSpan": {"$ref": "#/$defs/span"},
+        "rawTypeFlags": {"$ref": "#/$defs/uint8"},
+        "filter": {"type": "boolean"},
+        "dataSize": {"$ref": "#/$defs/uint24"},
+        "availableDataSize": {"$ref": "#/$defs/uint24"},
+        "dts": {"$ref": "#/$defs/uint32"},
+        "streamId": {"$ref": "#/$defs/uint24"},
+        "payloadComplete": {"type": "boolean"},
+        "previousTagSize": {"$ref": "#/$defs/previousTagSize"}
+      }
+    },
+    "fixedSpan1": {"allOf": [{"$ref": "#/$defs/span"}, {"properties": {"bitLength": {"const": 1}}}]},
+    "fixedSpan2": {"allOf": [{"$ref": "#/$defs/span"}, {"properties": {"bitLength": {"const": 2}}}]},
+    "fixedSpan4": {"allOf": [{"$ref": "#/$defs/span"}, {"properties": {"bitLength": {"const": 4}}}]},
+    "namedField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "name", "span"],
+      "properties": {
+        "value": {"$ref": "#/$defs/uint8"},
+        "name": {"type": "string", "minLength": 1},
+        "span": {"$ref": "#/$defs/span"}
+      }
+    },
+    "unsignedField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "span"],
+      "properties": {
+        "value": {"$ref": "#/$defs/uint64"},
+        "span": {"$ref": "#/$defs/span"}
+      }
+    },
+    "booleanField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "span"],
+      "properties": {
+        "value": {"type": "boolean"},
+        "span": {"$ref": "#/$defs/span"}
+      }
+    },
+    "soundFormatField": {
+      "allOf": [
+        {"$ref": "#/$defs/namedField"},
+        {"properties": {"value": {"const": 2}, "name": {"const": "MP3"}, "span": {"allOf": [{"$ref": "#/$defs/fixedSpan4"}, {"properties": {"bitOffset": {"const": 0}}}]}}}
+      ]
+    },
+    "soundRateField": {
+      "allOf": [
+        {"$ref": "#/$defs/namedField"},
+        {"properties": {"span": {"allOf": [{"$ref": "#/$defs/fixedSpan2"}, {"properties": {"bitOffset": {"const": 4}}}]}}, "oneOf": [
+          {"properties": {"value": {"const": 0}, "name": {"const": "5.5kHz"}}},
+          {"properties": {"value": {"const": 1}, "name": {"const": "11kHz"}}},
+          {"properties": {"value": {"const": 2}, "name": {"const": "22kHz"}}},
+          {"properties": {"value": {"const": 3}, "name": {"const": "44kHz"}}}
+        ]}
+      ]
+    },
+    "soundSizeField": {
+      "allOf": [
+        {"$ref": "#/$defs/namedField"},
+        {"properties": {"span": {"allOf": [{"$ref": "#/$defs/fixedSpan1"}, {"properties": {"bitOffset": {"const": 6}}}]}}, "oneOf": [
+          {"properties": {"value": {"const": 0}, "name": {"const": "8-bit"}}},
+          {"properties": {"value": {"const": 1}, "name": {"const": "16-bit"}}}
+        ]}
+      ]
+    },
+    "soundTypeField": {
+      "allOf": [
+        {"$ref": "#/$defs/namedField"},
+        {"properties": {"span": {"allOf": [{"$ref": "#/$defs/fixedSpan1"}, {"properties": {"bitOffset": {"const": 7}}}]}}, "oneOf": [
+          {"properties": {"value": {"const": 0}, "name": {"const": "mono"}}},
+          {"properties": {"value": {"const": 1}, "name": {"const": "stereo"}}}
+        ]}
+      ]
+    },
+    "audioTagHeader": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw", "span", "soundFormat", "soundRate", "soundSize", "soundType"],
+      "properties": {
+        "raw": {"$ref": "#/$defs/uint8"},
+        "span": {"allOf": [{"$ref": "#/$defs/span"}, {"properties": {"bitOffset": {"const": 0}, "bitLength": {"const": 8}}}]},
+        "soundFormat": {"$ref": "#/$defs/soundFormatField"},
+        "soundRate": {"$ref": "#/$defs/soundRateField"},
+        "soundSize": {"$ref": "#/$defs/soundSizeField"},
+        "soundType": {"$ref": "#/$defs/soundTypeField"}
+      }
+    },
+    "versionField": {
+      "allOf": [
+        {"$ref": "#/$defs/namedField"},
+        {"properties": {"span": {"allOf": [{"$ref": "#/$defs/fixedSpan2"}, {"properties": {"bitOffset": {"const": 3}}}]}}, "oneOf": [
+          {"properties": {"value": {"const": 0}, "name": {"const": "mpeg2.5"}}},
+          {"properties": {"value": {"const": 1}, "name": {"const": "reserved"}}},
+          {"properties": {"value": {"const": 2}, "name": {"const": "mpeg2"}}},
+          {"properties": {"value": {"const": 3}, "name": {"const": "mpeg1"}}}
+        ]}
+      ]
+    },
+    "layerField": {
+      "allOf": [
+        {"$ref": "#/$defs/namedField"},
+        {"properties": {"span": {"allOf": [{"$ref": "#/$defs/fixedSpan2"}, {"properties": {"bitOffset": {"const": 5}}}]}}, "oneOf": [
+          {"properties": {"value": {"const": 0}, "name": {"const": "reserved"}}},
+          {"properties": {"value": {"const": 1}, "name": {"const": "layerIII"}}},
+          {"properties": {"value": {"const": 2}, "name": {"const": "layerII"}}},
+          {"properties": {"value": {"const": 3}, "name": {"const": "layerI"}}}
+        ]}
+      ]
+    },
+    "protectionField": {
+      "allOf": [
+        {"$ref": "#/$defs/namedField"},
+        {"properties": {"span": {"allOf": [{"$ref": "#/$defs/fixedSpan1"}, {"properties": {"bitOffset": {"const": 7}}}]}}, "oneOf": [
+          {"properties": {"value": {"const": 0}, "name": {"const": "crc16"}}},
+          {"properties": {"value": {"const": 1}, "name": {"const": "none"}}}
+        ]}
+      ]
+    },
+    "channelModeField": {
+      "allOf": [
+        {"$ref": "#/$defs/namedField"},
+        {"properties": {"span": {"allOf": [{"$ref": "#/$defs/fixedSpan2"}, {"properties": {"bitOffset": {"const": 0}}}]}}, "oneOf": [
+          {"properties": {"value": {"const": 0}, "name": {"const": "stereo"}}},
+          {"properties": {"value": {"const": 1}, "name": {"const": "jointStereo"}}},
+          {"properties": {"value": {"const": 2}, "name": {"const": "dualChannel"}}},
+          {"properties": {"value": {"const": 3}, "name": {"const": "singleChannel"}}}
+        ]}
+      ]
+    },
+    "emphasisField": {
+      "allOf": [
+        {"$ref": "#/$defs/namedField"},
+        {"properties": {"span": {"allOf": [{"$ref": "#/$defs/fixedSpan2"}, {"properties": {"bitOffset": {"const": 6}}}]}}, "oneOf": [
+          {"properties": {"value": {"const": 0}, "name": {"const": "none"}}},
+          {"properties": {"value": {"const": 1}, "name": {"const": "50/15us"}}},
+          {"properties": {"value": {"const": 2}, "name": {"const": "reserved"}}},
+          {"properties": {"value": {"const": 3}, "name": {"const": "ccittJ17"}}}
+        ]}
+      ]
+    },
+    "syncWordField": {
+      "allOf": [
+        {"$ref": "#/$defs/unsignedField"},
+        {"properties": {"value": {"maximum": 2047}, "span": {"allOf": [{"$ref": "#/$defs/span"}, {"properties": {"bitOffset": {"const": 0}, "bitLength": {"const": 11}}}]}}}
+      ]
+    },
+    "bitrateIndexField": {
+      "allOf": [
+        {"$ref": "#/$defs/unsignedField"},
+        {"properties": {"value": {"maximum": 15}, "span": {"allOf": [{"$ref": "#/$defs/fixedSpan4"}, {"properties": {"bitOffset": {"const": 0}}}]}}}
+      ]
+    },
+    "samplingFrequencyIndexField": {
+      "allOf": [
+        {"$ref": "#/$defs/unsignedField"},
+        {"properties": {"value": {"maximum": 3}, "span": {"allOf": [{"$ref": "#/$defs/fixedSpan2"}, {"properties": {"bitOffset": {"const": 4}}}]}}}
+      ]
+    },
+    "modeExtensionField": {
+      "allOf": [
+        {"$ref": "#/$defs/unsignedField"},
+        {"properties": {"value": {"maximum": 3}, "span": {"allOf": [{"$ref": "#/$defs/fixedSpan2"}, {"properties": {"bitOffset": {"const": 2}}}]}}}
+      ]
+    },
+    "frameHeader": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw", "span", "syncWord", "version", "layer", "protectionBit", "crcProtected", "bitrateIndex", "bitrateMode", "samplingFrequencyIndex", "padding", "private", "channelMode", "modeExtension", "channels", "copyright", "original", "emphasis", "complete"],
+      "properties": {
+        "raw": {"$ref": "#/$defs/uint32"},
+        "span": {"allOf": [{"$ref": "#/$defs/span"}, {"properties": {"bitOffset": {"const": 0}, "bitLength": {"const": 32}}}]},
+        "syncWord": {"$ref": "#/$defs/syncWordField"},
+        "version": {"$ref": "#/$defs/versionField"},
+        "layer": {"$ref": "#/$defs/layerField"},
+        "protectionBit": {"$ref": "#/$defs/protectionField"},
+        "crcProtected": {"type": "boolean"},
+        "bitrateIndex": {"$ref": "#/$defs/bitrateIndexField"},
+        "bitrateMode": {"enum": ["free", "indexed", "invalid"]},
+        "bitrateKbps": {"$ref": "#/$defs/uint16"},
+        "samplingFrequencyIndex": {"$ref": "#/$defs/samplingFrequencyIndexField"},
+        "samplingFrequencyHz": {"$ref": "#/$defs/uint32"},
+        "padding": {"allOf": [{"$ref": "#/$defs/booleanField"}, {"properties": {"span": {"allOf": [{"$ref": "#/$defs/fixedSpan1"}, {"properties": {"bitOffset": {"const": 6}}}]}}}]},
+        "private": {"allOf": [{"$ref": "#/$defs/booleanField"}, {"properties": {"span": {"allOf": [{"$ref": "#/$defs/fixedSpan1"}, {"properties": {"bitOffset": {"const": 7}}}]}}}]},
+        "channelMode": {"$ref": "#/$defs/channelModeField"},
+        "modeExtension": {"$ref": "#/$defs/modeExtensionField"},
+        "channels": {"type": "integer", "minimum": 1, "maximum": 2},
+        "copyright": {"allOf": [{"$ref": "#/$defs/booleanField"}, {"properties": {"span": {"allOf": [{"$ref": "#/$defs/fixedSpan1"}, {"properties": {"bitOffset": {"const": 4}}}]}}}]},
+        "original": {"allOf": [{"$ref": "#/$defs/booleanField"}, {"properties": {"span": {"allOf": [{"$ref": "#/$defs/fixedSpan1"}, {"properties": {"bitOffset": {"const": 5}}}]}}}]},
+        "emphasis": {"$ref": "#/$defs/emphasisField"},
+        "samplesPerFrame": {"$ref": "#/$defs/uint16"},
+        "frameLengthBytes": {"$ref": "#/$defs/uint32"},
+        "complete": {"type": "boolean"}
+      },
+      "allOf": [
+        {"oneOf": [
+          {"properties": {"protectionBit": {"properties": {"value": {"const": 0}}, "required": ["value"]}, "crcProtected": {"const": true}}},
+          {"properties": {"protectionBit": {"properties": {"value": {"const": 1}}, "required": ["value"]}, "crcProtected": {"const": false}}}
+        ]},
+        {"oneOf": [
+          {"properties": {"channelMode": {"properties": {"value": {"const": 3}}, "required": ["value"]}, "channels": {"const": 1}}},
+          {"properties": {"channelMode": {"properties": {"value": {"enum": [0, 1, 2]}}, "required": ["value"]}, "channels": {"const": 2}}}
+        ]},
+        {"oneOf": [
+          {"properties": {"bitrateIndex": {"properties": {"value": {"const": 0}}, "required": ["value"]}, "bitrateMode": {"const": "free"}}, "not": {"anyOf": [{"required": ["bitrateKbps"]}, {"required": ["frameLengthBytes"]}]}},
+          {"properties": {"bitrateIndex": {"properties": {"value": {"minimum": 1, "maximum": 14}}, "required": ["value"]}, "bitrateMode": {"const": "indexed"}}},
+          {"properties": {"bitrateIndex": {"properties": {"value": {"const": 15}}, "required": ["value"]}, "bitrateMode": {"const": "invalid"}}, "not": {"anyOf": [{"required": ["bitrateKbps"]}, {"required": ["frameLengthBytes"]}]}}
+        ]},
+        {
+          "if": {"properties": {"version": {"properties": {"value": {"enum": [0, 2, 3]}}, "required": ["value"]}, "samplingFrequencyIndex": {"properties": {"value": {"maximum": 2}}, "required": ["value"]}}, "required": ["version", "samplingFrequencyIndex"]},
+          "then": {"required": ["samplingFrequencyHz"]},
+          "else": {"not": {"required": ["samplingFrequencyHz"]}}
+        },
+        {
+          "if": {"properties": {"version": {"properties": {"value": {"enum": [0, 2, 3]}}, "required": ["value"]}, "layer": {"properties": {"value": {"const": 1}}, "required": ["value"]}}, "required": ["version", "layer"]},
+          "then": {"required": ["samplesPerFrame"]},
+          "else": {"not": {"required": ["samplesPerFrame"]}}
+        },
+        {
+          "if": {"properties": {"version": {"properties": {"value": {"enum": [0, 2, 3]}}, "required": ["value"]}, "layer": {"properties": {"value": {"const": 1}}, "required": ["value"]}, "bitrateIndex": {"properties": {"value": {"minimum": 1, "maximum": 14}}, "required": ["value"]}}, "required": ["version", "layer", "bitrateIndex"]},
+          "then": {"required": ["bitrateKbps"]},
+          "else": {"not": {"required": ["bitrateKbps"]}}
+        },
+        {
+          "if": {"required": ["bitrateKbps", "samplingFrequencyHz"]},
+          "then": {"required": ["frameLengthBytes"]},
+          "else": {"not": {"required": ["frameLengthBytes"]}}
+        },
+        {
+          "if": {"properties": {"version": {"properties": {"value": {"const": 3}}, "required": ["value"]}, "layer": {"properties": {"value": {"const": 1}}, "required": ["value"]}}, "required": ["version", "layer"]},
+          "then": {"properties": {"samplesPerFrame": {"const": 1152}}}
+        },
+        {
+          "if": {"properties": {"version": {"properties": {"value": {"enum": [0, 2]}}, "required": ["value"]}, "layer": {"properties": {"value": {"const": 1}}, "required": ["value"]}}, "required": ["version", "layer"]},
+          "then": {"properties": {"samplesPerFrame": {"const": 576}}}
+        },
+        {"$ref": "#/$defs/samplingFrequencyMapping"},
+        {"$ref": "#/$defs/bitrateMapping"},
+        {
+          "if": {"properties": {"complete": {"const": true}}, "required": ["complete"]},
+          "then": {"properties": {"syncWord": {"properties": {"value": {"const": 2047}}}, "version": {"properties": {"value": {"enum": [0, 2, 3]}}}, "layer": {"properties": {"value": {"const": 1}}}, "bitrateIndex": {"properties": {"value": {"maximum": 14}}}, "samplingFrequencyIndex": {"properties": {"value": {"maximum": 2}}}}}
+        }
+      ]
+    },
+    "samplingFrequencyMapping": {
+      "allOf": [
+        {"if": {"properties": {"version": {"properties": {"value": {"const": 3}}}, "samplingFrequencyIndex": {"properties": {"value": {"const": 0}}}}}, "then": {"properties": {"samplingFrequencyHz": {"const": 44100}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"const": 3}}}, "samplingFrequencyIndex": {"properties": {"value": {"const": 1}}}}}, "then": {"properties": {"samplingFrequencyHz": {"const": 48000}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"const": 3}}}, "samplingFrequencyIndex": {"properties": {"value": {"const": 2}}}}}, "then": {"properties": {"samplingFrequencyHz": {"const": 32000}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"const": 2}}}, "samplingFrequencyIndex": {"properties": {"value": {"const": 0}}}}}, "then": {"properties": {"samplingFrequencyHz": {"const": 22050}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"const": 2}}}, "samplingFrequencyIndex": {"properties": {"value": {"const": 1}}}}}, "then": {"properties": {"samplingFrequencyHz": {"const": 24000}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"const": 2}}}, "samplingFrequencyIndex": {"properties": {"value": {"const": 2}}}}}, "then": {"properties": {"samplingFrequencyHz": {"const": 16000}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"const": 0}}}, "samplingFrequencyIndex": {"properties": {"value": {"const": 0}}}}}, "then": {"properties": {"samplingFrequencyHz": {"const": 11025}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"const": 0}}}, "samplingFrequencyIndex": {"properties": {"value": {"const": 1}}}}}, "then": {"properties": {"samplingFrequencyHz": {"const": 12000}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"const": 0}}}, "samplingFrequencyIndex": {"properties": {"value": {"const": 2}}}}}, "then": {"properties": {"samplingFrequencyHz": {"const": 8000}}}}
+      ]
+    },
+    "bitrateMapping": {
+      "allOf": [
+        {"if": {"properties": {"version": {"properties": {"value": {"const": 3}}}, "bitrateIndex": {"properties": {"value": {"const": 1}}}}}, "then": {"properties": {"bitrateKbps": {"const": 32}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"const": 3}}}, "bitrateIndex": {"properties": {"value": {"const": 2}}}}}, "then": {"properties": {"bitrateKbps": {"const": 40}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"const": 3}}}, "bitrateIndex": {"properties": {"value": {"const": 3}}}}}, "then": {"properties": {"bitrateKbps": {"const": 48}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"const": 3}}}, "bitrateIndex": {"properties": {"value": {"const": 4}}}}}, "then": {"properties": {"bitrateKbps": {"const": 56}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"const": 3}}}, "bitrateIndex": {"properties": {"value": {"const": 5}}}}}, "then": {"properties": {"bitrateKbps": {"const": 64}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"const": 3}}}, "bitrateIndex": {"properties": {"value": {"const": 6}}}}}, "then": {"properties": {"bitrateKbps": {"const": 80}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"const": 3}}}, "bitrateIndex": {"properties": {"value": {"const": 7}}}}}, "then": {"properties": {"bitrateKbps": {"const": 96}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"const": 3}}}, "bitrateIndex": {"properties": {"value": {"const": 8}}}}}, "then": {"properties": {"bitrateKbps": {"const": 112}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"const": 3}}}, "bitrateIndex": {"properties": {"value": {"const": 9}}}}}, "then": {"properties": {"bitrateKbps": {"const": 128}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"const": 3}}}, "bitrateIndex": {"properties": {"value": {"const": 10}}}}}, "then": {"properties": {"bitrateKbps": {"const": 160}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"const": 3}}}, "bitrateIndex": {"properties": {"value": {"const": 11}}}}}, "then": {"properties": {"bitrateKbps": {"const": 192}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"const": 3}}}, "bitrateIndex": {"properties": {"value": {"const": 12}}}}}, "then": {"properties": {"bitrateKbps": {"const": 224}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"const": 3}}}, "bitrateIndex": {"properties": {"value": {"const": 13}}}}}, "then": {"properties": {"bitrateKbps": {"const": 256}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"const": 3}}}, "bitrateIndex": {"properties": {"value": {"const": 14}}}}}, "then": {"properties": {"bitrateKbps": {"const": 320}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"enum": [0, 2]}}}, "bitrateIndex": {"properties": {"value": {"const": 1}}}}}, "then": {"properties": {"bitrateKbps": {"const": 8}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"enum": [0, 2]}}}, "bitrateIndex": {"properties": {"value": {"const": 2}}}}}, "then": {"properties": {"bitrateKbps": {"const": 16}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"enum": [0, 2]}}}, "bitrateIndex": {"properties": {"value": {"const": 3}}}}}, "then": {"properties": {"bitrateKbps": {"const": 24}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"enum": [0, 2]}}}, "bitrateIndex": {"properties": {"value": {"const": 4}}}}}, "then": {"properties": {"bitrateKbps": {"const": 32}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"enum": [0, 2]}}}, "bitrateIndex": {"properties": {"value": {"const": 5}}}}}, "then": {"properties": {"bitrateKbps": {"const": 40}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"enum": [0, 2]}}}, "bitrateIndex": {"properties": {"value": {"const": 6}}}}}, "then": {"properties": {"bitrateKbps": {"const": 48}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"enum": [0, 2]}}}, "bitrateIndex": {"properties": {"value": {"const": 7}}}}}, "then": {"properties": {"bitrateKbps": {"const": 56}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"enum": [0, 2]}}}, "bitrateIndex": {"properties": {"value": {"const": 8}}}}}, "then": {"properties": {"bitrateKbps": {"const": 64}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"enum": [0, 2]}}}, "bitrateIndex": {"properties": {"value": {"const": 9}}}}}, "then": {"properties": {"bitrateKbps": {"const": 80}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"enum": [0, 2]}}}, "bitrateIndex": {"properties": {"value": {"const": 10}}}}}, "then": {"properties": {"bitrateKbps": {"const": 96}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"enum": [0, 2]}}}, "bitrateIndex": {"properties": {"value": {"const": 11}}}}}, "then": {"properties": {"bitrateKbps": {"const": 112}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"enum": [0, 2]}}}, "bitrateIndex": {"properties": {"value": {"const": 12}}}}}, "then": {"properties": {"bitrateKbps": {"const": 128}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"enum": [0, 2]}}}, "bitrateIndex": {"properties": {"value": {"const": 13}}}}}, "then": {"properties": {"bitrateKbps": {"const": 144}}}},
+        {"if": {"properties": {"version": {"properties": {"value": {"enum": [0, 2]}}}, "bitrateIndex": {"properties": {"value": {"const": 14}}}}}, "then": {"properties": {"bitrateKbps": {"const": 160}}}}
+      ]
+    },
+    "mp3AudioDetail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "span", "bitsConsumed", "complete"],
+      "properties": {
+        "kind": {"const": "mp3Audio"},
+        "span": {"$ref": "#/$defs/span"},
+        "bitsConsumed": {"enum": [0, 8, 40]},
+        "complete": {"type": "boolean"},
+        "audioTagHeader": {"$ref": "#/$defs/audioTagHeader"},
+        "audioDataSpan": {"$ref": "#/$defs/span"},
+        "firstFrameHeader": {"$ref": "#/$defs/frameHeader"},
+        "unparsedDataSpan": {"$ref": "#/$defs/span"}
+      },
+      "oneOf": [
+        {
+          "properties": {"bitsConsumed": {"const": 0}, "complete": {"const": false}},
+          "not": {"anyOf": [{"required": ["audioTagHeader"]}, {"required": ["audioDataSpan"]}, {"required": ["firstFrameHeader"]}, {"required": ["unparsedDataSpan"]}]}
+        },
+        {
+          "properties": {"bitsConsumed": {"const": 8}, "complete": {"const": false}},
+          "required": ["audioTagHeader", "audioDataSpan"],
+          "not": {"anyOf": [{"required": ["firstFrameHeader"]}, {"required": ["unparsedDataSpan"]}]}
+        },
+        {
+          "properties": {"bitsConsumed": {"const": 40}, "complete": {"const": true}, "firstFrameHeader": {"properties": {"complete": {"const": true}}}},
+          "required": ["audioTagHeader", "audioDataSpan", "firstFrameHeader", "unparsedDataSpan"]
+        },
+        {
+          "properties": {"bitsConsumed": {"const": 40}, "complete": {"const": false}, "firstFrameHeader": {"properties": {"complete": {"const": false}}}},
+          "required": ["audioTagHeader", "audioDataSpan", "firstFrameHeader", "unparsedDataSpan"]
+        }
+      ]
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "severity", "offset", "bitOffset", "message"],
+      "properties": {
+        "code": {"enum": ["MP3_FLV_AUDIO_HEADER_TRUNCATED", "MP3_FRAME_HEADER_TRUNCATED", "MP3_SYNC_INVALID", "MP3_VERSION_RESERVED", "MP3_LAYER_RESERVED", "MP3_LAYER_NOT_III", "MP3_BITRATE_INDEX_INVALID", "MP3_SAMPLING_FREQUENCY_RESERVED", "MP3_FREE_FORMAT_UNRESOLVED", "MP3_EMPHASIS_RESERVED", "MP3_DIAGNOSTIC_LIMIT_REACHED"]},
+        "severity": {"enum": ["warning", "error"]},
+        "offset": {"$ref": "#/$defs/uint64"},
+        "bitOffset": {"type": "integer", "minimum": 0, "maximum": 7},
+        "message": {"type": "string", "minLength": 1},
+        "expected": {"$ref": "#/$defs/uint64"},
+        "actual": {"$ref": "#/$defs/uint64"},
+        "recoveryOffset": {"$ref": "#/$defs/uint64"}
+      },
+      "oneOf": [
+        {
+          "properties": {"code": {"const": "MP3_FREE_FORMAT_UNRESOLVED"}, "severity": {"const": "warning"}, "actual": {"const": 0}},
+          "required": ["actual"],
+          "not": {"anyOf": [{"required": ["expected"]}, {"required": ["recoveryOffset"]}]}
+        },
+        {
+          "properties": {"code": {"const": "MP3_EMPHASIS_RESERVED"}, "severity": {"const": "warning"}, "actual": {"const": 2}},
+          "required": ["actual"],
+          "not": {"anyOf": [{"required": ["expected"]}, {"required": ["recoveryOffset"]}]}
+        },
+        {
+          "properties": {"code": {"not": {"enum": ["MP3_FREE_FORMAT_UNRESOLVED", "MP3_EMPHASIS_RESERVED"]}}, "severity": {"const": "error"}},
+          "required": ["recoveryOffset"]
+        }
+      ]
+    }
+  }
+}

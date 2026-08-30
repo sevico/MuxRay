@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "documentType": "flv-mp3-tag-detail",
+  "source": {
+    "sizeBytes": 32
+  },
+  "tag": {
+    "id": 0,
+    "typeCode": 8,
+    "typeName": "audio",
+    "offset": 13,
+    "span": {
+      "byteOffset": 13,
+      "bitOffset": 0,
+      "bitLength": 120
+    },
+    "headerSpan": {
+      "byteOffset": 13,
+      "bitOffset": 0,
+      "bitLength": 88
+    },
+    "payloadSpan": {
+      "byteOffset": 24,
+      "bitOffset": 0,
+      "bitLength": 32
+    },
+    "rawTypeFlags": 8,
+    "filter": false,
+    "dataSize": 4,
+    "availableDataSize": 4,
+    "dts": 0,
+    "streamId": 0,
+    "payloadComplete": true,
+    "previousTagSize": {
+      "present": true,
+      "span": {
+        "byteOffset": 28,
+        "bitOffset": 0,
+        "bitLength": 32
+      },
+      "value": 15,
+      "expected": 15,
+      "valid": true
+    }
+  },
+  "detail": {
+    "kind": "mp3Audio",
+    "span": {
+      "byteOffset": 24,
+      "bitOffset": 0,
+      "bitLength": 32
+    },
+    "bitsConsumed": 8,
+    "complete": false,
+    "audioTagHeader": {
+      "raw": 47,
+      "span": {
+        "byteOffset": 24,
+        "bitOffset": 0,
+        "bitLength": 8
+      },
+      "soundFormat": {
+        "value": 2,
+        "name": "MP3",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 0,
+          "bitLength": 4
+        }
+      },
+      "soundRate": {
+        "value": 3,
+        "name": "44kHz",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 4,
+          "bitLength": 2
+        }
+      },
+      "soundSize": {
+        "value": 1,
+        "name": "16-bit",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 6,
+          "bitLength": 1
+        }
+      },
+      "soundType": {
+        "value": 1,
+        "name": "stereo",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 7,
+          "bitLength": 1
+        }
+      }
+    },
+    "audioDataSpan": {
+      "byteOffset": 25,
+      "bitOffset": 0,
+      "bitLength": 24
+    }
+  },
+  "diagnostics": [
+    {
+      "code": "MP3_FRAME_HEADER_TRUNCATED",
+      "severity": "error",
+      "offset": 25,
+      "bitOffset": 0,
+      "message": "MPEG Audio frame header requires four bytes",
+      "expected": 4,
+      "actual": 3,
+      "recoveryOffset": 28
+    }
+  ]
+}
