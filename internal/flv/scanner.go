@@ -2,6 +2,7 @@ package flv
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -14,6 +15,20 @@ import (
 // not retain payload bytes and therefore keeps memory use independent of input
 // payload size apart from the bounded tag index.
 func Scan(source io.ReaderAt, size uint64, options Options) (ScanResult, error) {
+	return scan(context.Background(), source, size, options, false)
+}
+
+// ScanContext builds an immutable chunked index without populating Tags. On
+// cancellation or I/O failure it returns the committed prefix and an error.
+// Cancellation cannot interrupt a blocked underlying ReaderAt call.
+func ScanContext(ctx context.Context, source io.ReaderAt, size uint64, options Options) (ScanResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return scan(ctx, source, size, options, true)
+}
+
+func scan(ctx context.Context, source io.ReaderAt, size uint64, options Options, chunked bool) (ScanResult, error) {
 	if source == nil {
 		return ScanResult{}, errors.New("flv: nil source")
 	}
@@ -23,14 +38,40 @@ func Scan(source io.ReaderAt, size uint64, options Options) (ScanResult, error) 
 	if err != nil {
 		return result, err
 	}
+	if chunked {
+		result.index = &chunkedTagIndex{limit: options.MaxTags}
+	}
+	if err := ctx.Err(); err != nil {
+		return result, err
+	}
 	diagnostics := newDiagnosticCollector(options.MaxDiagnostics)
+	if chunked {
+		source = cursor.WithContext(ctx, source)
+	}
 	reader := cursor.NewByteReader(source, size)
 
-	finish := func(complete bool) (ScanResult, error) {
+	finishError := func(complete bool, err error) (ScanResult, error) {
+		if canceled := ctx.Err(); canceled != nil {
+			err = canceled
+		}
 		result.BytesScanned = reader.Offset()
-		result.Complete = complete
+		result.Complete = complete && err == nil
 		result.Diagnostics = diagnostics.items
-		return result, nil
+		return result, err
+	}
+	finish := func(complete bool) (ScanResult, error) { return finishError(complete, nil) }
+	appendRecord := func(record TagRecord) {
+		if chunked {
+			result.index.append(record)
+		} else {
+			result.Tags = append(result.Tags, record)
+		}
+	}
+	count := func() uint64 {
+		if chunked {
+			return result.index.Len()
+		}
+		return uint64(len(result.Tags))
 	}
 
 	if size < HeaderSize {
@@ -44,7 +85,7 @@ func Scan(source io.ReaderAt, size uint64, options Options) (ScanResult, error) 
 
 	var fixedHeader [9]byte
 	if err := reader.ReadInto(fixedHeader[:]); err != nil {
-		return result, fmt.Errorf("flv: read fixed header: %w", err)
+		return finishError(false, fmt.Errorf("flv: read fixed header: %w", err))
 	}
 	signature := fixedHeader[:3]
 	version := fixedHeader[3]
@@ -101,7 +142,7 @@ func Scan(source io.ReaderAt, size uint64, options Options) (ScanResult, error) 
 
 	result.Header.ExtraDataSize = uint64(dataOffset) - HeaderSize
 	if err := reader.Seek(uint64(dataOffset)); err != nil {
-		return result, fmt.Errorf("flv: seek to data offset: %w", err)
+		return finishError(false, fmt.Errorf("flv: seek to data offset: %w", err))
 	}
 	if reader.Remaining() < 4 {
 		diagnostics.add(Diagnostic{
@@ -115,7 +156,7 @@ func Scan(source io.ReaderAt, size uint64, options Options) (ScanResult, error) 
 	previousTagSize0Offset := reader.Offset()
 	var uint32Bytes [4]byte
 	if err := reader.ReadInto(uint32Bytes[:]); err != nil {
-		return result, fmt.Errorf("flv: read initial previous tag size: %w", err)
+		return finishError(false, fmt.Errorf("flv: read initial previous tag size: %w", err))
 	}
 	previousTagSize0 := binary.BigEndian.Uint32(uint32Bytes[:])
 	result.PreviousTagSize0 = previousTagSize0
@@ -126,15 +167,20 @@ func Scan(source io.ReaderAt, size uint64, options Options) (ScanResult, error) 
 			Expected: number(0), Actual: number(uint64(previousTagSize0)),
 		})
 	}
-	result.Tags = make([]TagRecord, 0, initialTagCapacity(reader.Remaining(), options.MaxTags))
+	if !chunked {
+		result.Tags = make([]TagRecord, 0, initialTagCapacity(reader.Remaining(), options.MaxTags))
+	}
 
 	var tagHeader [11]byte
 	for reader.Remaining() > 0 {
-		if uint64(len(result.Tags)) >= options.MaxTags {
+		if err := ctx.Err(); err != nil {
+			return finishError(false, err)
+		}
+		if count() >= options.MaxTags {
 			diagnostics.add(Diagnostic{
 				Code: CodeTagLimitExceeded, Severity: SeverityError, Offset: reader.Offset(),
 				Message:  "configured tag limit reached",
-				Expected: number(options.MaxTags), Actual: number(uint64(len(result.Tags)) + 1),
+				Expected: number(options.MaxTags), Actual: number(count() + 1),
 			})
 			return finish(false)
 		}
@@ -150,7 +196,7 @@ func Scan(source io.ReaderAt, size uint64, options Options) (ScanResult, error) 
 		}
 
 		if err := reader.ReadInto(tagHeader[:]); err != nil {
-			return result, fmt.Errorf("flv: read tag header at %d: %w", tagOffset, err)
+			return finishError(false, fmt.Errorf("flv: read tag header at %d: %w", tagOffset, err))
 		}
 		rawTypeFlags := tagHeader[0]
 		dataSize := uint24(tagHeader[1:4])
@@ -161,7 +207,7 @@ func Scan(source io.ReaderAt, size uint64, options Options) (ScanResult, error) 
 		tagType := TagType(rawTypeFlags & 0x1f)
 		filter := rawTypeFlags&0x20 != 0
 		record := TagRecord{
-			ID:           uint64(len(result.Tags)),
+			ID:           count(),
 			Offset:       tagOffset,
 			RawTypeFlags: rawTypeFlags,
 			DataSize:     dataSize,
@@ -205,9 +251,12 @@ func Scan(source io.ReaderAt, size uint64, options Options) (ScanResult, error) 
 
 		if reader.Remaining() < uint64(dataSize) {
 			if err := reader.Skip(availablePayload); err != nil {
-				return result, fmt.Errorf("flv: skip partial payload at %d: %w", tagOffset, err)
+				return finishError(false, fmt.Errorf("flv: skip partial payload at %d: %w", tagOffset, err))
 			}
-			result.Tags = append(result.Tags, record)
+			if err := ctx.Err(); err != nil {
+				return finishError(false, err)
+			}
+			appendRecord(record)
 			diagnostics.add(Diagnostic{
 				Code: CodeTagBodyTruncated, Severity: SeverityError, Offset: reader.Offset(),
 				Message:  "FLV tag payload is shorter than DataSize",
@@ -217,27 +266,30 @@ func Scan(source io.ReaderAt, size uint64, options Options) (ScanResult, error) 
 		}
 
 		if err := reader.Skip(uint64(dataSize)); err != nil {
-			return result, fmt.Errorf("flv: skip payload at %d: %w", tagOffset, err)
+			return finishError(false, fmt.Errorf("flv: skip payload at %d: %w", tagOffset, err))
 		}
 		record.flags |= tagFlagPayloadComplete
 		record.AvailableDataSize = dataSize
 
 		previousTagSizeOffset := reader.Offset()
 		if reader.Remaining() < 4 {
-			result.Tags = append(result.Tags, record)
+			if err := ctx.Err(); err != nil {
+				return finishError(false, err)
+			}
+			appendRecord(record)
 			diagnostics.add(Diagnostic{
 				Code: CodePreviousTagSizeTruncated, Severity: SeverityError, Offset: previousTagSizeOffset,
 				Message:  "PreviousTagSize following the tag is truncated",
 				Expected: number(4), Actual: number(reader.Remaining()),
 			})
 			if err := reader.Skip(reader.Remaining()); err != nil {
-				return result, fmt.Errorf("flv: consume trailing previous tag size at %d: %w", previousTagSizeOffset, err)
+				return finishError(false, fmt.Errorf("flv: consume trailing previous tag size at %d: %w", previousTagSizeOffset, err))
 			}
 			return finish(false)
 		}
 
 		if err := reader.ReadInto(uint32Bytes[:]); err != nil {
-			return result, fmt.Errorf("flv: read previous tag size at %d: %w", previousTagSizeOffset, err)
+			return finishError(false, fmt.Errorf("flv: read previous tag size at %d: %w", previousTagSizeOffset, err))
 		}
 		previousTagSize := binary.BigEndian.Uint32(uint32Bytes[:])
 		record.flags |= tagFlagPreviousTagSizePresent
@@ -252,7 +304,10 @@ func Scan(source io.ReaderAt, size uint64, options Options) (ScanResult, error) 
 			})
 		}
 
-		result.Tags = append(result.Tags, record)
+		if err := ctx.Err(); err != nil {
+			return finishError(false, err)
+		}
+		appendRecord(record)
 	}
 
 	return finish(true)

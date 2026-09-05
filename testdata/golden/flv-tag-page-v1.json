@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "documentType": "flv-tag-page",
+  "source": {
+    "sizeBytes": 49
+  },
+  "scan": {
+    "bytesScanned": 49,
+    "complete": true
+  },
+  "page": {
+    "start": 1,
+    "limit": 1,
+    "total": 2,
+    "next": 2
+  },
+  "tags": [
+    {
+      "id": 1,
+      "typeCode": 18,
+      "typeName": "script",
+      "offset": 31,
+      "span": {
+        "byteOffset": 31,
+        "bitOffset": 0,
+        "bitLength": 112
+      },
+      "headerSpan": {
+        "byteOffset": 31,
+        "bitOffset": 0,
+        "bitLength": 88
+      },
+      "payloadSpan": {
+        "byteOffset": 42,
+        "bitOffset": 0,
+        "bitLength": 24
+      },
+      "rawTypeFlags": 18,
+      "filter": false,
+      "dataSize": 3,
+      "availableDataSize": 3,
+      "dts": 16777218,
+      "streamId": 0,
+      "payloadComplete": true,
+      "previousTagSize": {
+        "present": true,
+        "span": {
+          "byteOffset": 45,
+          "bitOffset": 0,
+          "bitLength": 32
+        },
+        "value": 14,
+        "expected": 14,
+        "valid": true
+      }
+    }
+  ],
+  "diagnostics": []
+}

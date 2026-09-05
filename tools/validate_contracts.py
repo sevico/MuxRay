@@ -12,6 +12,9 @@ from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parent.parent
 CONTRACTS = (
+    ("docs/schemas/flv-tag-page-v1.schema.json", "testdata/golden/flv-tag-page-v1.json"),
+    ("docs/schemas/flv-tag-page-v1.schema.json", "testdata/golden/flv-tag-page-empty-v1.json"),
+    ("docs/schemas/flv-tag-page-v1.schema.json", "testdata/golden/flv-tag-page-partial-v1.json"),
     (
         "docs/schemas/flv-scan-report-v1.schema.json",
         "testdata/golden/flv-basic-v1.json",
@@ -1306,7 +1309,38 @@ def validate_avc_detail_edge_cases(validator: Draft202012Validator) -> None:
     require_invalid(validator, eos_with_nalus, "AVC end-of-sequence with NAL units")
 
 
+def validate_tag_page_edge_cases(validator: Draft202012Validator) -> None:
+    page = load_json("testdata/golden/flv-tag-page-v1.json")
+    mutations = [
+        (("schemaVersion",), 2),
+        (("documentType",), "flv-scan-report"),
+        (("page", "limit"), 0),
+        (("page", "limit"), 4097),
+        (("page", "start"), -1),
+        (("page", "next"), 2**64),
+        (("page", "total"), 1.5),
+        (("page", "unexpected"), True),
+        (("source", "path"), "private.flv"),
+        (("tags",), None),
+        (("tags",), page["tags"] * 4097),
+        (("tags", 0, "headerSpan", "bitLength"), 87),
+        (("tags", 0, "id"), -1),
+    ]
+    for path, value in mutations:
+        changed = deepcopy(page)
+        target = changed
+        for key in path[:-1]:
+            target = target[key]
+        target[path[-1]] = value
+        require_invalid(validator, changed, f"tag page mutation {path}")
+    for key in page:
+        missing = deepcopy(page)
+        del missing[key]
+        require_invalid(validator, missing, f"tag page missing {key}")
+
+
 def main() -> None:
+    tag_page_validator = None
     detail_validator = None
     aac_detail_validator = None
     avc_detail_validator = None
@@ -1319,6 +1353,8 @@ def main() -> None:
         validator = Draft202012Validator(schema)
         require_valid(validator, load_json(instance_path), instance_path)
         print(f"validated {instance_path} against {schema_path}")
+        if schema_path == "docs/schemas/flv-tag-page-v1.schema.json":
+            tag_page_validator = validator
         if schema_path == "docs/schemas/flv-tag-detail-v1.schema.json":
             detail_validator = validator
         if schema_path == "docs/schemas/flv-aac-tag-detail-v1.schema.json":
@@ -1332,6 +1368,10 @@ def main() -> None:
         if schema_path == "docs/schemas/flv-media-summary-v2.schema.json":
             media_summary_v2_validator = validator
 
+    if tag_page_validator is None:
+        raise SystemExit("tag page schema was not validated")
+    validate_tag_page_edge_cases(tag_page_validator)
+    print("validated tag-page identity, limits, closed fields, spans, and negative cases")
     if detail_validator is None:
         raise SystemExit("detail schema was not validated")
     validate_detail_edge_cases(detail_validator)

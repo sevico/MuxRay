@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "documentType": "flv-tag-page",
+  "source": {
+    "sizeBytes": 43
+  },
+  "scan": {
+    "bytesScanned": 43,
+    "complete": false
+  },
+  "page": {
+    "start": 1,
+    "limit": 1,
+    "total": 2,
+    "next": 2
+  },
+  "tags": [
+    {
+      "id": 1,
+      "typeCode": 18,
+      "typeName": "script",
+      "offset": 31,
+      "span": {
+        "byteOffset": 31,
+        "bitOffset": 0,
+        "bitLength": 96
+      },
+      "headerSpan": {
+        "byteOffset": 31,
+        "bitOffset": 0,
+        "bitLength": 88
+      },
+      "payloadSpan": {
+        "byteOffset": 42,
+        "bitOffset": 0,
+        "bitLength": 8
+      },
+      "rawTypeFlags": 18,
+      "filter": false,
+      "dataSize": 3,
+      "availableDataSize": 1,
+      "dts": 16777218,
+      "streamId": 0,
+      "payloadComplete": false,
+      "previousTagSize": {
+        "present": false,
+        "value": 0,
+        "expected": 14,
+        "valid": false
+      }
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "FLV_TAG_BODY_TRUNCATED",
+      "severity": "error",
+      "offset": 43,
+      "bitOffset": 0,
+      "message": "FLV tag payload is shorter than DataSize",
+      "expected": 3,
+      "actual": 1
+    }
+  ]
+}

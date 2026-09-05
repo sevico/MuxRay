@@ -3,6 +3,7 @@
 The public Draft 2020-12 contracts are:
 
 - [`flv-scan-report-v1.schema.json`](./flv-scan-report-v1.schema.json) for `muxray inspect`;
+- [`flv-tag-page-v1.schema.json`](./flv-tag-page-v1.schema.json) for bounded `muxray tags --start <id> --count <n>` pages;
 - [`flv-tag-detail-v1.schema.json`](./flv-tag-detail-v1.schema.json) for one bounded AMF0 ScriptData `muxray detail --tag <id>` result;
 - [`flv-aac-tag-detail-v1.schema.json`](./flv-aac-tag-detail-v1.schema.json) for one bounded FLV AAC `muxray detail --tag <id>` result.
 - [`flv-avc-tag-detail-v1.schema.json`](./flv-avc-tag-detail-v1.schema.json) for one bounded FLV AVC/H.264 `muxray detail --tag <id>` result.
@@ -30,12 +31,17 @@ codec counts under its own closed Schema. See [v2 semantics](../media-summary-v2
 
 ## Deterministic encoding
 
+Tag pages use `documentType: "flv-tag-page"`, `schemaVersion: 1`; their bounded
+`tags` array retains global IDs and spans. Pages do not extend scan-report v1.
+See [index and cancellation semantics](../tag-index-v1.md). Cancelled CLI work
+exits 130 and may leave incomplete stdout, which callers must discard.
+
 For the same bytes, scanner/detail/summary options, schema version, and MuxRay build, repeated reports must be byte-identical within the same output mode:
 
 - the default is one compact UTF-8 JSON object followed by one LF;
 - `--pretty` uses two-space indentation and one trailing LF;
 - object fields use the order shown in the schema/Go report DTO;
-- tags are in source order and have contiguous, zero-based IDs;
+- tags are in source order and have contiguous, global zero-based IDs; a page starts at `page.start`, not necessarily zero;
 - diagnostics are in scanner discovery order;
 - AMF0 roots, flat arena nodes, and properties are in parser discovery/source order;
 - AAC framing diagnostics precede AudioSpecificConfig diagnostics, and AAC fields remain in parser/DTO order;

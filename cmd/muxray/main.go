@@ -1,15 +1,18 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 
 	"github.com/sevico/muxray/internal/aac"
 	"github.com/sevico/muxray/internal/amf0"
 	"github.com/sevico/muxray/internal/avc"
+	"github.com/sevico/muxray/internal/cursor"
 	"github.com/sevico/muxray/internal/flv"
 	"github.com/sevico/muxray/internal/mp3"
 	"github.com/sevico/muxray/internal/report"
@@ -20,15 +23,36 @@ const (
 	exitFailure     = 1
 	exitDiagnostics = 2
 	exitUsage       = 64
+	exitCanceled    = 130
 )
 
 var version = "dev"
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	code := runContext(ctx, os.Args[1:], os.Stdout, os.Stderr)
+	stop()
+	os.Exit(code)
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
+	return runContext(context.Background(), args, stdout, stderr)
+}
+
+func runContext(ctx context.Context, args []string, stdout, stderr io.Writer) (code int) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	defer func() {
+		if ctx.Err() != nil {
+			_, _ = fmt.Fprintf(stderr, "muxray: %v; discard incomplete stdout\n", ctx.Err())
+			code = exitCanceled
+		}
+	}()
+	if ctx.Err() != nil {
+		return exitCanceled
+	}
+	stdout = contextWriter{ctx: ctx, output: stdout}
 	if len(args) == 0 {
 		writeUsage(stderr)
 		return exitUsage
@@ -42,11 +66,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stdout, "muxray %s\n", version)
 		return exitOK
 	case "inspect":
-		return runInspect(args[1:], stdout, stderr)
+		return runInspect(ctx, args[1:], stdout, stderr)
+	case "tags":
+		return runTags(ctx, args[1:], stdout, stderr)
 	case "summary":
-		return runSummary(args[1:], stdout, stderr)
+		return runSummary(ctx, args[1:], stdout, stderr)
 	case "detail":
-		return runDetail(args[1:], stdout, stderr)
+		return runDetail(ctx, args[1:], stdout, stderr)
 	default:
 		_, _ = fmt.Fprintf(stderr, "muxray: unknown command %q\n", args[0])
 		writeUsage(stderr)
@@ -54,7 +80,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 }
 
-func runDetail(args []string, stdout, stderr io.Writer) int {
+func runDetail(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("muxray detail", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	pretty := flags.Bool("pretty", false, "indent JSON output")
@@ -153,7 +179,7 @@ func runDetail(args []string, stdout, stderr io.Writer) int {
 		return exitFailure
 	}
 
-	result, err := flv.Scan(file, uint64(info.Size()), flv.Options{
+	result, err := flv.ScanContext(ctx, file, uint64(info.Size()), flv.Options{
 		MaxTags: *maxTags, MaxDiagnostics: uint32(*maxDiagnostics),
 	})
 	if err != nil {
@@ -164,21 +190,22 @@ func runDetail(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stderr, "muxray: cannot produce tag detail from an incomplete FLV index (%d scan diagnostics); run inspect for details\n", len(result.Diagnostics))
 		return exitDiagnostics
 	}
-	if *tagID >= uint64(len(result.Tags)) {
-		_, _ = fmt.Fprintf(stderr, "muxray: tag %d was not indexed (indexed tags: %d)\n", *tagID, len(result.Tags))
+	tag, indexed := result.Index().Get(*tagID)
+	if !indexed {
+		_, _ = fmt.Fprintf(stderr, "muxray: tag %d was not indexed (indexed tags: %d)\n", *tagID, result.Index().Len())
 		return exitDiagnostics
 	}
 
-	tag := result.Tags[*tagID]
+	source := cursor.WithContext(ctx, file)
 	if tag.Type() == flv.TagTypeVideo && avcOptions.NALLengthSize == 0 {
-		resolved, resolveErr := resolveAVCNALLengthSize(file, result.Tags, *tagID, avcOptions)
+		resolved, resolveErr := resolveAVCNALLengthSize(ctx, source, result.Index(), *tagID, avcOptions)
 		if resolveErr != nil {
 			_, _ = fmt.Fprintf(stderr, "muxray: resolve AVC NAL length size: %v\n", resolveErr)
 			return exitFailure
 		}
 		avcOptions.NALLengthSize = resolved
 	}
-	detail, err := flv.ParseTagDetail(file, tag, flv.DetailOptions{AMF0: amfOptions, AAC: aacOptions, MP3: mp3Options, AVC: avcOptions})
+	detail, err := flv.ParseTagDetail(source, tag, flv.DetailOptions{AMF0: amfOptions, AAC: aacOptions, MP3: mp3Options, AVC: avcOptions})
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "muxray: parse tag %d detail: %v\n", *tagID, err)
 		if isDetailSelectionError(err) {
@@ -240,11 +267,12 @@ func makeAVCOptions(diagnostics, parameterSets, nalUnits, parameterSetBytes, rbs
 // resolveAVCNALLengthSize supplies the stream context omitted by an isolated
 // AVC NALU Tag. It only parses sequence-header candidates and never guesses a
 // default when no usable declaration exists.
-func resolveAVCNALLengthSize(source io.ReaderAt, tags []flv.TagRecord, selected uint64, options flv.AVCVideoOptions) (uint8, error) {
-	if selected >= uint64(len(tags)) {
+func resolveAVCNALLengthSize(ctx context.Context, source io.ReaderAt, tags flv.TagIndex, selected uint64, options flv.AVCVideoOptions) (uint8, error) {
+	tag, indexed := tags.Get(selected)
+	if !indexed {
 		return 0, nil
 	}
-	header, packetType, present, err := readAVCFramingPrefix(source, tags[selected])
+	header, packetType, present, err := readAVCFramingPrefix(source, tag)
 	if err != nil {
 		return 0, err
 	}
@@ -253,8 +281,12 @@ func resolveAVCNALLengthSize(source io.ReaderAt, tags []flv.TagRecord, selected 
 	}
 
 	options.NALLengthSize = 0
-	for index := int64(selected) - 1; index >= 0; index-- {
-		candidate := tags[index]
+	for index := selected; index > 0; {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
+		index--
+		candidate, _ := tags.Get(index)
 		header, candidateType, candidatePresent, readErr := readAVCFramingPrefix(source, candidate)
 		if readErr != nil {
 			return 0, readErr
@@ -328,7 +360,7 @@ func makeAMFOptions(depth, nodes, entries, stringBytes, totalStringBytes, diagno
 	return options.Normalized()
 }
 
-func runInspect(args []string, stdout, stderr io.Writer) int {
+func runInspect(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("muxray inspect", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	pretty := flags.Bool("pretty", false, "indent JSON output")
@@ -380,7 +412,7 @@ func runInspect(args []string, stdout, stderr io.Writer) int {
 		return exitFailure
 	}
 
-	result, err := flv.Scan(file, uint64(info.Size()), flv.Options{
+	result, err := flv.ScanContext(ctx, file, uint64(info.Size()), flv.Options{
 		MaxTags: *maxTags, MaxDiagnostics: uint32(*maxDiagnostics),
 	})
 	if err != nil {
@@ -402,6 +434,7 @@ func writeUsage(output io.Writer) {
 	_, _ = fmt.Fprintln(output, "")
 	_, _ = fmt.Fprintln(output, "Commands:")
 	_, _ = fmt.Fprintln(output, "  inspect    scan an FLV file and emit schemaVersion 1 JSON")
+	_, _ = fmt.Fprintln(output, "  tags       scan an FLV file and emit a bounded page of indexed tags")
 	_, _ = fmt.Fprintln(output, "  summary    derive bounded cross-tag media timing and codec summaries")
 	_, _ = fmt.Fprintln(output, "  detail     parse one supported indexed tag and emit versioned detail JSON")
 	_, _ = fmt.Fprintln(output, "  version    print the build version")

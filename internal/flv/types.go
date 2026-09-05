@@ -131,10 +131,11 @@ type ScanResult struct {
 	Header           Header
 	HeaderPresent    bool
 	PreviousTagSize0 uint32
-	Tags             []TagRecord
+	Tags             []TagRecord // Legacy Scan only; new consumers should use Index().
 	Diagnostics      []Diagnostic
 	BytesScanned     uint64
 	Complete         bool
+	index            *chunkedTagIndex
 }
 
 // HasErrors reports whether the scan is incomplete or produced an error diagnostic.

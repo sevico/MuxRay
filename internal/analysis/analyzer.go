@@ -47,15 +47,17 @@ func analyze(ctx context.Context, source io.ReaderAt, scan flv.ScanResult, optio
 		diagnostics:                   diagnosticCollector{limit: normalized.MaxDiagnostics},
 		previousKeyframeRetainedIndex: -1,
 	}
-	a.result.Keyframes.Entries = make([]Keyframe, 0, minCapacity(len(scan.Tags), normalized.MaxKeyframes))
-	a.result.AAC.Events = make([]AACConfiguration, 0, minCapacity(len(scan.Tags), normalized.MaxConfigurationEvents))
-	a.result.AVC.Events = make([]AVCConfiguration, 0, minCapacity(len(scan.Tags), normalized.MaxConfigurationEvents))
+	index := scan.Index()
+	tagCount := int(index.Len()) // Both scan paths are bounded by HardMaxTags.
+	a.result.Keyframes.Entries = make([]Keyframe, 0, minCapacity(tagCount, normalized.MaxKeyframes))
+	a.result.AAC.Events = make([]AACConfiguration, 0, minCapacity(tagCount, normalized.MaxConfigurationEvents))
+	a.result.AVC.Events = make([]AVCConfiguration, 0, minCapacity(tagCount, normalized.MaxConfigurationEvents))
 	if v2 != nil {
-		v2.mp3.Headers.Events = make([]MP3HeaderEvent, 0, minCapacity(len(scan.Tags), v2.headerLimit))
+		v2.mp3.Headers.Events = make([]MP3HeaderEvent, 0, minCapacity(tagCount, v2.headerLimit))
 	}
 
-	for index, tag := range scan.Tags {
-		if index&1023 == 0 {
+	for id, tag := range index.All() {
+		if id&1023 == 0 {
 			if err := a.ctx.Err(); err != nil {
 				a.result.Complete = false
 				return a.finish(), err

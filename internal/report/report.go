@@ -88,16 +88,17 @@ type Diagnostic struct {
 // New materializes a deterministic v1 report without paths, timestamps, or
 // random IDs. Use WriteScanJSON for large scans to avoid duplicating tag data.
 func New(result flv.ScanResult) Document {
+	index := result.Index()
 	document := Document{
 		SchemaVersion: SchemaVersion,
 		Source:        Source{SizeBytes: result.SourceSize},
 		Scan:          Scan{BytesScanned: result.BytesScanned, Complete: result.Complete},
 		Header:        mapHeader(result),
-		Tags:          make([]Tag, 0, len(result.Tags)),
+		Tags:          make([]Tag, 0, index.Len()),
 		Diagnostics:   make([]Diagnostic, 0, len(result.Diagnostics)),
 	}
 
-	for _, record := range result.Tags {
+	for _, record := range index.All() {
 		document.Tags = append(document.Tags, mapTag(record))
 	}
 
@@ -209,6 +210,7 @@ type jsonStreamWriter struct {
 }
 
 func (w *jsonStreamWriter) writeCompact(result flv.ScanResult) error {
+	index := result.Index()
 	if err := w.text(`{"schemaVersion":1,"source":`); err != nil {
 		return err
 	}
@@ -230,8 +232,8 @@ func (w *jsonStreamWriter) writeCompact(result flv.ScanResult) error {
 	if err := w.text(`,"tags":[`); err != nil {
 		return err
 	}
-	for index, record := range result.Tags {
-		if index > 0 {
+	for id, record := range index.All() {
+		if id > 0 {
 			if err := w.text(","); err != nil {
 				return err
 			}
@@ -257,6 +259,7 @@ func (w *jsonStreamWriter) writeCompact(result flv.ScanResult) error {
 }
 
 func (w *jsonStreamWriter) writePretty(result flv.ScanResult) error {
+	index := result.Index()
 	if err := w.text("{\n  \"schemaVersion\": 1,\n  \"source\": "); err != nil {
 		return err
 	}
@@ -278,7 +281,7 @@ func (w *jsonStreamWriter) writePretty(result flv.ScanResult) error {
 	if err := w.text(",\n  \"tags\": "); err != nil {
 		return err
 	}
-	if len(result.Tags) == 0 {
+	if index.Len() == 0 {
 		if err := w.text("[]"); err != nil {
 			return err
 		}
@@ -286,14 +289,14 @@ func (w *jsonStreamWriter) writePretty(result flv.ScanResult) error {
 		if err := w.text("[\n"); err != nil {
 			return err
 		}
-		for index, record := range result.Tags {
+		for id, record := range index.All() {
 			if err := w.text("    "); err != nil {
 				return err
 			}
 			if err := w.value(mapTag(record), "    "); err != nil {
 				return err
 			}
-			if index+1 < len(result.Tags) {
+			if id+1 < index.Len() {
 				if err := w.text(","); err != nil {
 					return err
 				}

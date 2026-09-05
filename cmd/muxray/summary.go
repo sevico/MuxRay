@@ -9,11 +9,12 @@ import (
 	"os"
 
 	"github.com/sevico/muxray/internal/analysis"
+	"github.com/sevico/muxray/internal/cursor"
 	"github.com/sevico/muxray/internal/flv"
 	"github.com/sevico/muxray/internal/report"
 )
 
-func runSummary(args []string, stdout, stderr io.Writer) int {
+func runSummary(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("muxray summary", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	pretty := flags.Bool("pretty", false, "indent JSON output")
@@ -119,7 +120,7 @@ func runSummary(args []string, stdout, stderr io.Writer) int {
 		return exitFailure
 	}
 
-	scan, err := flv.Scan(file, uint64(info.Size()), flv.Options{
+	scan, err := flv.ScanContext(ctx, file, uint64(info.Size()), flv.Options{
 		MaxTags: *maxTags, MaxDiagnostics: uint32(*maxScanDiagnostics),
 	})
 	if err != nil {
@@ -127,7 +128,7 @@ func runSummary(args []string, stdout, stderr io.Writer) int {
 		return exitFailure
 	}
 	if *schemaVersion == 2 {
-		summary, err := analysis.AnalyzeV2(context.Background(), file, scan, analysis.OptionsV2{
+		summary, err := analysis.AnalyzeV2(ctx, cursor.WithContext(ctx, file), scan, analysis.OptionsV2{
 			Options: analysisOptions, MaxMP3HeaderEvents: uint32(*maxMP3HeaderEvents),
 		})
 		if err != nil {
@@ -143,7 +144,7 @@ func runSummary(args []string, stdout, stderr io.Writer) int {
 		}
 		return exitOK
 	}
-	summary, err := analysis.Analyze(context.Background(), file, scan, analysisOptions)
+	summary, err := analysis.Analyze(ctx, cursor.WithContext(ctx, file), scan, analysisOptions)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "muxray: analyze input: %v\n", err)
 		return exitFailure

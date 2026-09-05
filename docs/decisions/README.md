@@ -11,3 +11,4 @@ Repository-wide architecture and compatibility decisions are recorded here. An a
 | [ADR-005](./005-bounded-media-summary.md) | Accepted | Derive bounded AAC/AVC timing, bitrate, keyframe/GOP, configuration, and A/V range summaries without timestamp guessing |
 | [ADR-006](./006-bounded-mp3-detail.md) | Accepted | Add a bounded first-frame MP3 detail contract while keeping media-summary v1 frozen |
 | [ADR-007](./007-mp3-media-summary-v2.md) | Accepted | Opt in to MP3 cross-tag summaries with explicit codec boundaries and a separate media-summary v2 contract |
+| [ADR-008](./008-cancellable-chunked-index.md) | Accepted | Add cancellable chunked scans and bounded tag pages while preserving legacy scans and existing JSON contracts |

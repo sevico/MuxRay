@@ -218,7 +218,7 @@ func NewMediaSummary(scan flv.ScanResult, result analysis.Result) MediaSummaryDo
 		Source:        Source{SizeBytes: scan.SourceSize},
 		Scan: MediaSummaryScan{
 			BytesScanned: scan.BytesScanned, Complete: scan.Complete,
-			IndexedTagCount: uint64(len(scan.Tags)),
+			IndexedTagCount: scan.Index().Len(),
 		},
 		Summary: MediaSummary{
 			Complete: result.Complete,
