@@ -53,4 +53,6 @@ CLI 使用 `ScanContext` 按需构建每块 1,024 条的索引，`inspect` 流�
 
 首批 8 个小样本与 1/2/10 GiB 实际落盘文件的验证结果见 [`语料与大文件实测`](docs/corpus-baseline-20260905.md)，复现方法见 [`tools/README.md`](tools/README.md)。媒体仅保留本地；公开样本尚未清权，另有一次首次取消延迟离群值待调查，不能据此宣告完整语料或性能验收通过。
 
+后续 [`取消专项`](docs/cancellation-investigation-20260905.md) 已完成独立进程复测和 Windows 真实 Ctrl+C 事件验证；历史离群值仍作为开放观察项保留。
+
 项目许可证尚待确定；在许可证落定前，不应把代码作为已授权的正式发行版分发。

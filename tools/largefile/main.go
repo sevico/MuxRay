@@ -38,6 +38,9 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 	if len(args) == 0 {
 		return errors.New("usage: largefile generate|measure --file <path> [options]")
 	}
+	if args[0] == "cancel-probe" {
+		return runCancelProbe(ctx, args[1:], output)
+	}
 	flags := flag.NewFlagSet("largefile "+args[0], flag.ContinueOnError)
 	path := flags.String("file", "", "explicit input/output file; generation refuses overwrite")
 	size := flags.Uint64("size-bytes", 0, "exact generated size, at most 12 GiB")

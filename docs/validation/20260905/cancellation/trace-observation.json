@@ -1,0 +1,13 @@
+{
+  "toolVersion": 1,
+  "traceSizeBytes": 11776,
+  "traceSha256": "658e201594ab47015ec695a0e3b558e4b38f6fe182da52ccf339a095d4857e28",
+  "measurementBinarySha256": "0df189c23e04bc2e3dbdba1d6bd0e749b10ae6bbd8edde1b08f714c509ee5d06",
+  "traceStoredInRepository": false,
+  "decoder": "Go 1.27.0 cmd/trace built from locally installed source, -d=parsed",
+  "traceEnabledCancelToScanReturnMs": 0.0338,
+  "cancelerRunnableToRunningMs": 0.005697,
+  "scannerHandshakeWaitToRunningMs": 0.008676,
+  "outlierReproduced": false,
+  "notes": "A separate instrumented normal run. Trace contains absolute build paths and remains local. These observations do not identify the cause of the historical 607.1234 ms outlier."
+}

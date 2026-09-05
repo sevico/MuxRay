@@ -66,3 +66,40 @@ Get-FileHash -Algorithm SHA256 -LiteralPath testdata/artifacts/largefile-local/f
 首次取消与预热后结果必须一起审阅，不能用预热隐藏超标样本。
 本机数据、已知 607 ms 离群值与后续事项见
 [`首批实测报告`](../docs/corpus-baseline-20260905.md)。工具不自动覆盖该报告或历史原始记录。
+
+## 首次取消分阶段实验
+
+`largefile cancel-probe` 每次进程只做一次取消；`--pre-scans 0–11` 控制此前完整扫描次数，
+`--prime-clock` 控制测量时钟是否预读。单独初始化的 observer 记录时钟、取消、调度握手与扫描返回阶段。
+`cancel_trials.py` 默认启动 30 个独立子进程（允许 1–100），单次时限 45 秒、双输出各 1 MiB。
+它记录二进制哈希、输入大小、每轮完整数据及失败项，不把旧进程中的重复调用当作首次取消。
+
+```powershell
+go build -o .cache/largefile-cancel.exe ./tools/largefile
+python -B tools/cancel_trials.py --tool .cache/largefile-cancel.exe --file testdata/artifacts/largefile-20260905/framing-10gib.flv --trials 30 --output .cache/cancel-new-run.json
+.cache/largefile-cancel.exe cancel-probe --file testdata/artifacts/largefile-20260905/framing-10gib.flv --pre-scans 11 --trace .cache/cancel-new-run.trace
+```
+
+`--output` 和 `--trace` 只创建新文件，拒绝覆盖历史证据。trace 上限 8 MiB，包含本机构建路径，
+只应留在忽略目录中；若本机已安装 trace 解读工具，可用 `go tool trace -d=parsed` 检查。
+`--legacy` 可对上一批未改动的 measure 二进制运行原协议，保留首次取消及全部预热后结果。
+不要覆盖旧二进制后称其为未改动对照；本次旧版哈希记录在专项报告中。
+输入文件须预先与 largefile 清单的完整大小/哈希核对；试验内检查大小/修改时间没有变化，不重复扫描全部 payload。
+
+## Windows Ctrl+C（显式运行，不自动进入 CI）
+
+`ctrlc_windows.py` 只在 Windows 运行，要求本机已有 CLI 与至少 1 GiB 的本地压力文件。
+它创建独立隐藏控制台和专属 Job，核对控制台仅包含本次进程后发送真实 `CTRL_C_EVENT`。
+不使用用户终端，不以 Ctrl+Break 代替，不接受任意 PID。退出或失败时只清理本次进程；
+如果系统不允许建立隔离控制台/Job，测试失败，不回退到共享控制台。
+
+```powershell
+go build -o .cache/muxray-cancel.exe ./cmd/muxray
+python -B tools/ctrlc_windows.py --muxray .cache/muxray-cancel.exe --file testdata/artifacts/largefile-20260905/framing-10gib.flv --runs 3 --output .cache/ctrlc-new-run.json
+```
+
+默认每项 3 次（允许 1–10），覆盖正常 version、4 种命令的扫描取消与 inspect/tags 输出取消；
+可用 `--case inspect-output` 等选择一项。helper 单次最长 25 秒，输出采集有上限，
+不联网、不打开可见交互窗口。测量包含事件分发、退出和管道排空，不代表纯核心取消时间。
+JSON 即使完整，exit=130 时也必须丢弃。阶段判定、权限边界、原始数据和历史未定位异常见
+[`取消专项报告`](../docs/cancellation-investigation-20260905.md)。

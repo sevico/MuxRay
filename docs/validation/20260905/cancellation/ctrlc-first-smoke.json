@@ -1,0 +1,36 @@
+{
+  "toolVersion": 1,
+  "binarySha256": "f497bc998b2fc2946ca82cf5d5ba282379ef4431cdb26e4292cae7bf7f1a2f36",
+  "inputName": "framing-10gib.flv",
+  "sizeBytes": 10737418240,
+  "runsPerCase": 1,
+  "privateHiddenConsole": true,
+  "killOnJobClose": true,
+  "trials": [
+    {
+      "case": "inspect-output",
+      "phase": "output",
+      "event": "CTRL_C_EVENT",
+      "exitCode": 130,
+      "eventToExitAndDrainMs": 3.495,
+      "readOperationsBeforeSignal": 200002,
+      "stdoutBytes": 5457,
+      "stdoutIsCompleteJSON": false,
+      "discardStdout": true,
+      "stderr": "muxray: write report: context canceled\nmuxray: context canceled; discard incomplete stdout\n",
+      "consoleOwnershipChecked": true,
+      "consoleMembersAfterExit": 1,
+      "forcedTermination": false
+    }
+  ],
+  "failures": [],
+  "eventToExitAndDrainMs": {
+    "median": 3.495,
+    "p95": 3.495,
+    "max": 3.495,
+    "values": [
+      3.495
+    ]
+  },
+  "complete": true
+}
