@@ -4,7 +4,15 @@ This directory records the identity, provenance, handling status, coverage featu
 
 Small samples may be checked into `testdata/small/` only after rights and privacy review. Large, private, production-derived, or otherwise restricted media stays outside the repository; its manifest contains a basename, size, and SHA-256 but no local absolute path, credentials, or internal storage URL.
 
-The [example manifest](./example-minimal-header-only.sample.json) illustrates the format and is not a registered corpus item because its `storage` is `metadata-only` and no corresponding media is committed.
+The [example manifest](./example-minimal-header-only.sample.json) illustrates the format and is explicitly excluded from corpus registration by its `example-` prefix. `metadata-only` does not by itself prevent registration: locally verified bytes can have a registered identity without being committed or cleared for redistribution.
+
+## Current inventory (2026-09-05)
+
+The directory contains 8 registered small-sample identities: 3 public external files, 3 generated media files, and 2 controlled damaged derivatives. The `largefile/` subdirectory contains 3 additional materialized container-stress fixtures (1/2/10 GiB, 100,000 tags each), not encoded media. All 11 hashes are distinct and all media remains local, outside version control.
+
+The 3 external files have unreviewed redistribution rights and unreviewed privacy status. They do not count toward a cleared-real-corpus acceptance target. Identity registration, availability, and acceptance clearance are separate states; generated or derived samples never become real samples just because they are playable or damaged.
+
+[`tools/validate_contracts.py`](../../tools/validate_contracts.py) recursively checks every registered manifest's schema, filename/ID, and hash uniqueness, but does not assert that media is present. [`tools/corpus.py`](../../tools/corpus.py) verifies local small-sample bytes and reports missing items explicitly; it does not recurse into `largefile/`. Use [`tools/largefile`](../../tools/largefile/main.go) for those stress fixtures. See the [validation record](../../docs/corpus-baseline-20260905.md) for provenance, results, limitations, and the unresolved cancellation outlier.
 
 ## Registration rules
 
@@ -36,5 +44,5 @@ Before treating a manifest as registered:
 2. Recompute `file.sizeBytes` and `file.sha256` from the exact artifact.
 3. Run `muxray inspect` with the corpus-standard limits.
 4. Confirm every `expected` fact and diagnostic count.
-5. Confirm rights/privacy evidence is retained outside the public manifest where necessary.
+5. Record the actual rights/privacy review state and retain evidence outside the public manifest where necessary. Unreviewed artifacts may be identity-registered for local investigation but must not be counted as cleared acceptance samples.
 6. Ensure the hash is unique across all registered manifests.

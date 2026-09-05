@@ -1,0 +1,55 @@
+{
+  "manifestVersion": 1,
+  "id": "generated-avc-aac",
+  "description": "Two-second synthetic 160x90 test pattern plus 997 Hz sine, H.264 with B-frames and AAC 44.1 kHz.",
+  "format": "flv",
+  "originClass": "generated",
+  "validity": "valid",
+  "storage": "metadata-only",
+  "file": {
+    "name": "generated-avc-aac.flv",
+    "sizeBytes": 49722,
+    "sha256": "eb1e2e139ec8816c64aa0c6a2465a79ab742cb7f70dfd42fb4082ee410bab441"
+  },
+  "provenance": {
+    "method": "generated",
+    "sourceReference": "Local synthetic test pattern or sine wave; no captured or customer media.",
+    "generator": {
+      "name": "FFmpeg",
+      "version": "7.1.1-full_build-www.gyan.dev",
+      "recipe": "Use the generated-avc-aac.flv recipe in tools/prepare_corpus.py (RECIPES); single-threaded encoding, fixed lavfi source and two-second duration, no FLV metadata."
+    }
+  },
+  "rights": {
+    "redistribution": "testing-only",
+    "evidenceReference": "docs/corpus-baseline-20260905.md"
+  },
+  "privacy": {
+    "reviewStatus": "no-sensitive-data",
+    "evidenceReference": "Synthetic lavfi sources / controlled mutation; no personal or production inputs."
+  },
+  "features": [
+    "avc",
+    "aac",
+    "sequence-header",
+    "b-frames",
+    "composition-time",
+    "end-of-sequence"
+  ],
+  "expected": {
+    "reportSchemaVersion": 1,
+    "scanComplete": true,
+    "header": {
+      "present": true,
+      "version": 1,
+      "typeFlags": 5,
+      "hasAudio": true,
+      "hasVideo": true,
+      "dataOffset": 9,
+      "previousTagSize0": 0
+    },
+    "tagCount": 141,
+    "diagnostics": []
+  },
+  "notes": "Generated for local regression on 2026-09-05. Not a real-world source and not counted toward real-corpus targets. Binary output is version/build-sensitive; a hash change requires review, never automatic expectation updates."
+}

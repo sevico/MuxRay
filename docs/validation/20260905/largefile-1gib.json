@@ -1,0 +1,114 @@
+{
+  "toolVersion": 1,
+  "goVersion": "go1.27.0",
+  "os": "windows",
+  "arch": "amd64",
+  "sizeBytes": 1073741824,
+  "tagCount": 100000,
+  "warmups": 1,
+  "runs": 10,
+  "readerAtBytesPerScan": 1500013,
+  "scanMs": {
+    "median": 1034.18145,
+    "p95": 1352.2529,
+    "values": [
+      1235.6751,
+      1352.2529,
+      1122.3953,
+      1204.2988,
+      1176.9889,
+      945.9676,
+      531.2216,
+      549.4008,
+      644.2333,
+      641.7308
+    ]
+  },
+  "allocatedBytesPerScan": {
+    "median": 4829864,
+    "p95": 4835232,
+    "values": [
+      4834816,
+      4835232,
+      4829848,
+      4830056,
+      4830184,
+      4829880,
+      4829480,
+      4829704,
+      4829256,
+      4829480
+    ]
+  },
+  "allocationsPerScan": {
+    "median": 125,
+    "p95": 136,
+    "values": [
+      130,
+      136,
+      125,
+      128,
+      128,
+      125,
+      120,
+      123,
+      117,
+      120
+    ]
+  },
+  "retainedHeapBytes": {
+    "median": 5194096,
+    "p95": 5194528,
+    "values": [
+      5188144,
+      5193408,
+      5193440,
+      5193872,
+      5194096,
+      5194096,
+      5194096,
+      5194320,
+      5194288,
+      5194528
+    ]
+  },
+  "workingSetBytes": {
+    "median": 13426688,
+    "p95": 13623296,
+    "values": [
+      13623296,
+      13369344,
+      13398016,
+      13402112,
+      13438976,
+      13475840,
+      13430784,
+      13422592,
+      13455360,
+      13406208
+    ]
+  },
+  "peakWorkingSetBytes": 13623296,
+  "workingSetSource": "windows-process-working-set",
+  "cancelMs": {
+    "median": 0.001,
+    "p95": 0.0024,
+    "values": [
+      0.0024,
+      0.0016,
+      0.0019,
+      0.0013,
+      0.0009,
+      0.001,
+      0.001,
+      0.001,
+      0.001,
+      0.001
+    ]
+  },
+  "cancelClock": "windows-query-performance-counter",
+  "cancelWarmups": 1,
+  "coldCancelMs": 0.0611,
+  "page256AllocatedBytes": 12288,
+  "page256Allocations": 1
+}

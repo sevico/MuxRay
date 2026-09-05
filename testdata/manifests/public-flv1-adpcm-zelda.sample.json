@@ -1,0 +1,48 @@
+{
+  "manifestVersion": 1,
+  "id": "public-flv1-adpcm-zelda",
+  "description": "Public external FLV with Sorenson video and ADPCM SWF audio; container is indexed while both codecs remain outside phase-one analysis.",
+  "format": "flv",
+  "originClass": "real",
+  "validity": "valid",
+  "storage": "metadata-only",
+  "file": {
+    "name": "zelda.flv",
+    "sizeBytes": 601526,
+    "sha256": "d7153290fcdae628aa0569c083a96d42f19142094a4da6ec3ca8bcb69bf575b3"
+  },
+  "provenance": {
+    "method": "downloaded",
+    "sourceReference": "https://samples.ffmpeg.org/FLV/zelda.flv"
+  },
+  "rights": {
+    "redistribution": "unreviewed",
+    "evidenceReference": "https://samples.ffmpeg.org/00-README"
+  },
+  "privacy": {
+    "reviewStatus": "not-reviewed",
+    "evidenceReference": "Public sample; no privacy clearance inferred from public availability."
+  },
+  "features": [
+    "flv1",
+    "adpcm-swf",
+    "legacy-audio-unsupported",
+    "legacy-video-unsupported"
+  ],
+  "expected": {
+    "reportSchemaVersion": 1,
+    "scanComplete": true,
+    "header": {
+      "present": true,
+      "version": 1,
+      "typeFlags": 5,
+      "hasAudio": true,
+      "hasVideo": true,
+      "dataOffset": 9,
+      "previousTagSize0": 0
+    },
+    "tagCount": 998,
+    "diagnostics": []
+  },
+  "notes": "Fetched for local regression on 2026-09-05. Original producer and redistribution/privacy clearance remain unverified; do not count toward the cleared-real-corpus acceptance target. Media is not committed."
+}

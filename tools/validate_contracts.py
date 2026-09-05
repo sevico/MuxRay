@@ -1340,6 +1340,23 @@ def validate_tag_page_edge_cases(validator: Draft202012Validator) -> None:
 
 
 def main() -> None:
+    manifest_schema = load_json("testdata/manifests/sample-manifest-v1.schema.json")
+    Draft202012Validator.check_schema(manifest_schema)
+    manifest_validator = Draft202012Validator(manifest_schema)
+    seen_ids, seen_hashes = set(), set()
+    for manifest_path in sorted((ROOT / "testdata/manifests").rglob("*.sample.json")):
+        if manifest_path.name.startswith("example-"):
+            continue
+        relative = manifest_path.relative_to(ROOT).as_posix()
+        manifest = load_json(relative)
+        require_valid(manifest_validator, manifest, relative)
+        if manifest_path.name != manifest["id"] + ".sample.json":
+            raise SystemExit(f"{relative}: filename does not match sample ID")
+        if manifest["id"] in seen_ids or manifest["file"]["sha256"] in seen_hashes:
+            raise SystemExit(f"{relative}: duplicate corpus ID or SHA-256")
+        seen_ids.add(manifest["id"])
+        seen_hashes.add(manifest["file"]["sha256"])
+    print(f"validated {len(seen_ids)} corpus manifest identities (media presence checked separately)")
     tag_page_validator = None
     detail_validator = None
     aac_detail_validator = None

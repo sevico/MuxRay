@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "ffprobe-drops-mp3-with-invalid-previous-size",
+      "sampleId": "derived-mp3-bad-previous",
+      "sha256": "2f0be330e384c284910a81b414f7edf8bd4bf44763a198715b1d978cb64e3845",
+      "ffprobeVersion": "ffprobe version 7.1.1-full_build-www.gyan.dev",
+      "omittedPacketPositions": ["13"],
+      "reason": "FFmpeg 7.1.1 defaults to checking PreviousTagSize and drops the first MP3 packet after the deliberate zero-trailer mutation. MuxRay retains the tag and emits a warning. Re-running ffprobe with -flv_ignore_prevtag 1 must recover every packet exactly."
+    }
+  ]
+}

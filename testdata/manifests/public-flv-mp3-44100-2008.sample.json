@@ -1,0 +1,50 @@
+{
+  "manifestVersion": 1,
+  "id": "public-flv-mp3-44100-2008",
+  "description": "Public external FLV with MP3 44.1 kHz stereo and Sorenson video; scanner-valid, legacy video intentionally unclassified.",
+  "format": "flv",
+  "originClass": "real",
+  "validity": "valid",
+  "storage": "metadata-only",
+  "file": {
+    "name": "11-04-2008.flv",
+    "sizeBytes": 11097438,
+    "sha256": "bc1c53cce65136f7a47d6413b10862e79b332a2391912035d45e6800871d354c"
+  },
+  "provenance": {
+    "method": "downloaded",
+    "sourceReference": "https://samples.ffmpeg.org/FLV/11-04-2008.flv"
+  },
+  "rights": {
+    "redistribution": "unreviewed",
+    "evidenceReference": "https://samples.ffmpeg.org/00-README"
+  },
+  "privacy": {
+    "reviewStatus": "not-reviewed",
+    "evidenceReference": "Public sample; no privacy clearance inferred from public availability."
+  },
+  "features": [
+    "mp3",
+    "sample-rate-44100",
+    "stereo",
+    "flv1",
+    "script-data",
+    "legacy-video-unsupported"
+  ],
+  "expected": {
+    "reportSchemaVersion": 1,
+    "scanComplete": true,
+    "header": {
+      "present": true,
+      "version": 1,
+      "typeFlags": 5,
+      "hasAudio": true,
+      "hasVideo": true,
+      "dataOffset": 9,
+      "previousTagSize0": 0
+    },
+    "tagCount": 11959,
+    "diagnostics": []
+  },
+  "notes": "Fetched for local regression on 2026-09-05. Original producer and redistribution/privacy clearance remain unverified; do not count toward the cleared-real-corpus acceptance target. Media is not committed."
+}

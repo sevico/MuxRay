@@ -6,6 +6,8 @@
 *.out
 coverage.txt
 coverage.html
+__pycache__/
+*.pyc
 
 # Wails/frontend output
 /frontend/node_modules/

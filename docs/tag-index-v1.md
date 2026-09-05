@@ -88,8 +88,10 @@ go test ./internal/flv -run=^$ -bench='Benchmark(ScanContextTags|TagPage)$' -ben
 python tools/validate_contracts.py
 ```
 
-下一阶段优先注册真实语料并完成大文件实测，再设计可观测进度/后台扫描会话、
-磁盘索引或更高 Tag 上限。Wails GUI、在线输入、过滤排序不在本批范围。
+后续批次已补首批外部/生成语料及实际落盘大文件测量，见
+[语料与大文件实测](corpus-baseline-20260905.md)。真实语料清权/数量与首次取消离群值仍待闭环，
+之后再设计可观测进度/后台扫描会话、磁盘索引或更高 Tag 上限。
+Wails GUI、在线输入、过滤排序不在本批范围。
 
 ### 本批本机验证（2026-09-05）
 

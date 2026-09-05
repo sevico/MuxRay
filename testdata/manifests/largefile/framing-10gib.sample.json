@@ -1,0 +1,54 @@
+{
+  "manifestVersion": 1,
+  "id": "framing-10gib",
+  "description": "Materialized 10 GiB container stress fixture with exactly 100,000 tags. Payload is deterministic non-media fill, not valid AMF syntax or encoded media.",
+  "format": "flv",
+  "originClass": "generated",
+  "validity": "edge-case",
+  "storage": "metadata-only",
+  "file": {
+    "name": "framing-10gib.flv",
+    "sizeBytes": 10737418240,
+    "sha256": "0fc94ee61590a968f7b86f722dc085b125fc250d762906524f72a5012d9278e7"
+  },
+  "provenance": {
+    "method": "generated",
+    "sourceReference": "tools/largefile/main.go generator v1; sequential writes, no sparse allocation.",
+    "generator": {
+      "name": "MuxRay largefile",
+      "version": "1",
+      "recipe": "largefile generate --file framing-10gib.flv --size-bytes 10737418240 --tags 100000"
+    }
+  },
+  "rights": {
+    "redistribution": "testing-only",
+    "evidenceReference": "docs/corpus-baseline-20260905.md"
+  },
+  "privacy": {
+    "reviewStatus": "no-sensitive-data",
+    "evidenceReference": "Deterministic byte fill generated without any input media."
+  },
+  "features": [
+    "materialized-file",
+    "container-stress",
+    "opaque-payload",
+    "hundred-thousand-tags",
+    "large-offset-64bit"
+  ],
+  "expected": {
+    "reportSchemaVersion": 1,
+    "scanComplete": true,
+    "header": {
+      "present": true,
+      "version": 1,
+      "typeFlags": 0,
+      "hasAudio": false,
+      "hasVideo": false,
+      "dataOffset": 9,
+      "previousTagSize0": 0
+    },
+    "tagCount": 100000,
+    "diagnostics": []
+  },
+  "notes": "Local large-file fixture, excluded from small-media corpus verification. Validate with tools/largefile measure; inspect is expected to scan successfully but codec/AMF analysis is not an acceptance target. Large media is not committed."
+}

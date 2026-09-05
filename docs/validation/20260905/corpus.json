@@ -1,0 +1,234 @@
+{
+  "toolVersion": 1,
+  "ffprobeVersion": "ffprobe version 7.1.1-full_build-www.gyan.dev",
+  "verified": [
+    {
+      "id": "derived-aac-truncated",
+      "sha256": "155bcdd7767727fa2d3440ed4a27b9e15e99d00881c5132898b7c7323da83149",
+      "sizeBytes": 17998,
+      "tagCount": 96,
+      "scanComplete": false,
+      "repeatCount": 3,
+      "scanDiagnostics": [
+        {
+          "code": "FLV_PREVIOUS_TAG_SIZE_TRUNCATED",
+          "offset": 17996
+        }
+      ],
+      "summaryComplete": false,
+      "detailVariantsChecked": 0,
+      "analysisCodes": [],
+      "ffprobePacketsCompared": null,
+      "ffprobeStreams": [],
+      "explainedDifference": null
+    },
+    {
+      "id": "derived-mp3-bad-previous",
+      "sha256": "2f0be330e384c284910a81b414f7edf8bd4bf44763a198715b1d978cb64e3845",
+      "sizeBytes": 33861,
+      "tagCount": 78,
+      "scanComplete": true,
+      "repeatCount": 3,
+      "scanDiagnostics": [
+        {
+          "code": "FLV_PREVIOUS_TAG_SIZE_MISMATCH",
+          "offset": 442
+        }
+      ],
+      "summaryComplete": true,
+      "detailVariantsChecked": 1,
+      "analysisCodes": [],
+      "ffprobePacketsCompared": 77,
+      "ffprobeStreams": [
+        {
+          "codec_name": "mp3",
+          "codec_type": "audio",
+          "sample_rate": "44100",
+          "channels": 1,
+          "time_base": "1/1000"
+        }
+      ],
+      "explainedDifference": "ffprobe-drops-mp3-with-invalid-previous-size"
+    },
+    {
+      "id": "generated-aac",
+      "sha256": "961ee298ae992a15af57e508ade4f73768e04c0c5c0f53c91edd2b286451171e",
+      "sizeBytes": 18000,
+      "tagCount": 96,
+      "scanComplete": true,
+      "repeatCount": 3,
+      "scanDiagnostics": [],
+      "summaryComplete": true,
+      "detailVariantsChecked": 2,
+      "analysisCodes": [],
+      "ffprobePacketsCompared": 95,
+      "ffprobeStreams": [
+        {
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "sample_rate": "48000",
+          "channels": 1,
+          "time_base": "1/1000"
+        }
+      ],
+      "explainedDifference": null
+    },
+    {
+      "id": "generated-avc-aac",
+      "sha256": "eb1e2e139ec8816c64aa0c6a2465a79ab742cb7f70dfd42fb4082ee410bab441",
+      "sizeBytes": 49722,
+      "tagCount": 141,
+      "scanComplete": true,
+      "repeatCount": 3,
+      "scanDiagnostics": [],
+      "summaryComplete": true,
+      "detailVariantsChecked": 5,
+      "analysisCodes": [],
+      "ffprobePacketsCompared": 138,
+      "ffprobeStreams": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 160,
+          "height": 90,
+          "time_base": "1/1000"
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "sample_rate": "44100",
+          "channels": 1,
+          "time_base": "1/1000"
+        }
+      ],
+      "explainedDifference": null
+    },
+    {
+      "id": "generated-mp3",
+      "sha256": "8d4be1f377a479f791b37fddb30db75fd69c32489efc68bd9a107d8de20b4223",
+      "sizeBytes": 33861,
+      "tagCount": 78,
+      "scanComplete": true,
+      "repeatCount": 3,
+      "scanDiagnostics": [],
+      "summaryComplete": true,
+      "detailVariantsChecked": 1,
+      "analysisCodes": [],
+      "ffprobePacketsCompared": 78,
+      "ffprobeStreams": [
+        {
+          "codec_name": "mp3",
+          "codec_type": "audio",
+          "sample_rate": "44100",
+          "channels": 1,
+          "time_base": "1/1000"
+        }
+      ],
+      "explainedDifference": null
+    },
+    {
+      "id": "public-flv-mp3-22050-2010",
+      "sha256": "4148685771966881b5a90e48819ff5063cc81b3d8e34eceebc84d9db12cab370",
+      "sizeBytes": 2297322,
+      "tagCount": 11026,
+      "scanComplete": true,
+      "repeatCount": 3,
+      "scanDiagnostics": [
+        {
+          "code": "FLV_PREVIOUS_TAG_SIZE_MISMATCH",
+          "offset": 312
+        }
+      ],
+      "summaryComplete": false,
+      "detailVariantsChecked": 1,
+      "analysisCodes": [
+        "MEDIA_VIDEO_CODEC_UNSUPPORTED"
+      ],
+      "ffprobePacketsCompared": 11025,
+      "ffprobeStreams": [
+        {
+          "codec_name": "mp3",
+          "codec_type": "audio",
+          "sample_rate": "22050",
+          "channels": 1,
+          "time_base": "1/1000"
+        },
+        {
+          "codec_name": "flv1",
+          "codec_type": "video",
+          "width": 320,
+          "height": 320,
+          "time_base": "1/1000"
+        }
+      ],
+      "explainedDifference": null
+    },
+    {
+      "id": "public-flv-mp3-44100-2008",
+      "sha256": "bc1c53cce65136f7a47d6413b10862e79b332a2391912035d45e6800871d354c",
+      "sizeBytes": 11097438,
+      "tagCount": 11959,
+      "scanComplete": true,
+      "repeatCount": 3,
+      "scanDiagnostics": [],
+      "summaryComplete": false,
+      "detailVariantsChecked": 1,
+      "analysisCodes": [
+        "MEDIA_DIAGNOSTIC_LIMIT_REACHED",
+        "MEDIA_VIDEO_CODEC_UNSUPPORTED"
+      ],
+      "ffprobePacketsCompared": 11958,
+      "ffprobeStreams": [
+        {
+          "codec_name": "mp3",
+          "codec_type": "audio",
+          "sample_rate": "44100",
+          "channels": 2,
+          "time_base": "1/1000"
+        },
+        {
+          "codec_name": "flv1",
+          "codec_type": "video",
+          "width": 346,
+          "height": 260,
+          "time_base": "1/1000"
+        }
+      ],
+      "explainedDifference": null
+    },
+    {
+      "id": "public-flv1-adpcm-zelda",
+      "sha256": "d7153290fcdae628aa0569c083a96d42f19142094a4da6ec3ca8bcb69bf575b3",
+      "sizeBytes": 601526,
+      "tagCount": 998,
+      "scanComplete": true,
+      "repeatCount": 3,
+      "scanDiagnostics": [],
+      "summaryComplete": false,
+      "detailVariantsChecked": 0,
+      "analysisCodes": [
+        "MEDIA_AUDIO_CODEC_UNSUPPORTED",
+        "MEDIA_VIDEO_CODEC_UNSUPPORTED"
+      ],
+      "ffprobePacketsCompared": 998,
+      "ffprobeStreams": [
+        {
+          "codec_name": "flv1",
+          "codec_type": "video",
+          "width": 160,
+          "height": 120,
+          "time_base": "1/1000"
+        },
+        {
+          "codec_name": "adpcm_swf",
+          "codec_type": "audio",
+          "sample_rate": "22050",
+          "channels": 1,
+          "time_base": "1/1000"
+        }
+      ],
+      "explainedDifference": null
+    }
+  ],
+  "missing": []
+}
