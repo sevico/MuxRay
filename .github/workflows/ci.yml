@@ -75,3 +75,5 @@ jobs:
         run: go test ./internal/flv -run=^$ -fuzz=FuzzAVCVideo -fuzztime=30s
       - name: Fuzz cross-tag media analysis
         run: go test ./internal/analysis -run=^$ -fuzz=FuzzAnalyzeTag -fuzztime=30s
+      - name: Fuzz MP3 cross-tag media analysis v2
+        run: go test ./internal/analysis -run=^$ -fuzz=FuzzAnalyzeV2 -fuzztime=30s

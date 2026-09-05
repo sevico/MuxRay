@@ -1,0 +1,234 @@
+{
+  "schemaVersion": 2,
+  "documentType": "flv-media-summary",
+  "source": {
+    "sizeBytes": 110
+  },
+  "scan": {
+    "bytesScanned": 110,
+    "complete": true,
+    "indexedTagCount": 5
+  },
+  "summary": {
+    "complete": false,
+    "tags": {
+      "total": 5,
+      "audio": 5,
+      "video": 0,
+      "script": 0,
+      "other": 0,
+      "dataSizeBytes": 22
+    },
+    "audio": {
+      "tagCount": 5,
+      "indexedDataSizeBytes": 22,
+      "mediaTagCount": 3,
+      "mediaDataSizeBytes": 15,
+      "excludedTagCount": 0,
+      "unclassifiedTagCount": 2,
+      "timing": {
+        "sampleCount": 3,
+        "firstMs": 0,
+        "lastMs": 104,
+        "minMs": 0,
+        "maxMs": 104,
+        "rangeMs": 104,
+        "forwardDeltaTotalMs": 104,
+        "regressionCount": 0,
+        "duplicateCount": 0,
+        "largestForwardGapMs": 78
+      },
+      "bitrate": {
+        "basis": "flvMediaTagCoveredDataSizeOverForwardDtsIntervals",
+        "bytes": 5,
+        "coveredIntervalMs": 26,
+        "averageBitsPerSecond": 1538
+      }
+    },
+    "video": {
+      "tagCount": 0,
+      "indexedDataSizeBytes": 0,
+      "mediaTagCount": 0,
+      "mediaDataSizeBytes": 0,
+      "excludedTagCount": 0,
+      "unclassifiedTagCount": 0
+    },
+    "keyframes": {
+      "declaredCount": 0,
+      "entries": [],
+      "truncated": false
+    },
+    "gop": {
+      "count": 0,
+      "closedDurationCount": 0,
+      "nonPositiveDurationCount": 0,
+      "minDurationMs": 0,
+      "maxDurationMs": 0,
+      "averageDurationMs": 0
+    },
+    "aacConfigurations": {
+      "eventCount": 0,
+      "analyzedCount": 0,
+      "skippedByBudgetCount": 0,
+      "changeCount": 0,
+      "events": [],
+      "truncated": false
+    },
+    "avcConfigurations": {
+      "eventCount": 0,
+      "analyzedCount": 0,
+      "skippedByBudgetCount": 0,
+      "changeCount": 0,
+      "events": [],
+      "truncated": false
+    },
+    "audioCodecs": {
+      "aacTagCount": 0,
+      "mp3TagCount": 5,
+      "otherTagCount": 0,
+      "unknownTagCount": 0,
+      "switchCount": 0
+    },
+    "mp3": {
+      "track": {
+        "tagCount": 5,
+        "indexedDataSizeBytes": 22,
+        "mediaTagCount": 3,
+        "mediaDataSizeBytes": 15,
+        "excludedTagCount": 0,
+        "unclassifiedTagCount": 2,
+        "timing": {
+          "sampleCount": 3,
+          "firstMs": 0,
+          "lastMs": 104,
+          "minMs": 0,
+          "maxMs": 104,
+          "rangeMs": 104,
+          "forwardDeltaTotalMs": 104,
+          "regressionCount": 0,
+          "duplicateCount": 0,
+          "largestForwardGapMs": 78
+        },
+        "bitrate": {
+          "basis": "flvMediaTagCoveredDataSizeOverForwardDtsIntervals",
+          "bytes": 5,
+          "coveredIntervalMs": 26,
+          "averageBitsPerSecond": 1538
+        }
+      },
+      "headers": {
+        "eventCount": 5,
+        "validCount": 3,
+        "malformedCount": 2,
+        "freeFormatCount": 0,
+        "parameterChangeCount": 0,
+        "bitrateChangeCount": 0,
+        "events": [
+          {
+            "tagId": 0,
+            "offset": 13,
+            "dts": 0,
+            "complete": true,
+            "parameters": {
+              "version": {
+                "value": 3,
+                "name": "mpeg1"
+              },
+              "samplingFrequencyHz": 44100,
+              "channelMode": {
+                "value": 1,
+                "name": "jointStereo"
+              },
+              "channels": 2,
+              "samplesPerFrame": 1152
+            },
+            "bitrateMode": "indexed",
+            "bitrateKbps": 128
+          },
+          {
+            "tagId": 1,
+            "offset": 33,
+            "dts": 26,
+            "complete": false
+          },
+          {
+            "tagId": 2,
+            "offset": 50,
+            "dts": 52,
+            "complete": false
+          },
+          {
+            "tagId": 3,
+            "offset": 70,
+            "dts": 78,
+            "complete": true,
+            "parameters": {
+              "version": {
+                "value": 3,
+                "name": "mpeg1"
+              },
+              "samplingFrequencyHz": 44100,
+              "channelMode": {
+                "value": 1,
+                "name": "jointStereo"
+              },
+              "channels": 2,
+              "samplesPerFrame": 1152
+            },
+            "bitrateMode": "indexed",
+            "bitrateKbps": 128
+          },
+          {
+            "tagId": 4,
+            "offset": 90,
+            "dts": 104,
+            "complete": true,
+            "parameters": {
+              "version": {
+                "value": 3,
+                "name": "mpeg1"
+              },
+              "samplingFrequencyHz": 44100,
+              "channelMode": {
+                "value": 1,
+                "name": "jointStereo"
+              },
+              "channels": 2,
+              "samplesPerFrame": 1152
+            },
+            "bitrateMode": "indexed",
+            "bitrateKbps": 128,
+            "parametersChangedFromPrevious": false,
+            "bitrateChangedFromPrevious": false
+          }
+        ],
+        "truncated": false
+      }
+    }
+  },
+  "scanDiagnostics": [],
+  "analysisDiagnostics": [
+    {
+      "code": "MP3_FRAME_HEADER_TRUNCATED",
+      "severity": "error",
+      "tagId": 1,
+      "offset": 45,
+      "bitOffset": 0,
+      "message": "MPEG Audio frame header requires four bytes",
+      "expected": 4,
+      "actual": 1,
+      "recoveryOffset": 46
+    },
+    {
+      "code": "MP3_SYNC_INVALID",
+      "severity": "error",
+      "tagId": 2,
+      "offset": 62,
+      "bitOffset": 0,
+      "message": "MPEG Audio sync word is not eleven set bits",
+      "expected": 2047,
+      "actual": 7,
+      "recoveryOffset": 66
+    }
+  ]
+}

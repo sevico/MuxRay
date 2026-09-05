@@ -17,6 +17,8 @@ func runSummary(args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("muxray summary", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	pretty := flags.Bool("pretty", false, "indent JSON output")
+	schemaVersion := flags.Uint64("schema-version", 1, "summary schema version: 1 (AAC/AVC) or 2 (AAC/AVC/MP3)")
+	maxMP3HeaderEvents := flags.Uint64("max-mp3-header-events", 0, fmt.Sprintf("v2 only: maximum MP3 header events retained (0 uses %d; hard maximum %d)", analysis.DefaultMaxMP3HeaderEvents, analysis.HardMaxMP3HeaderEvents))
 	maxTags := flags.Uint64("max-tags", 0, fmt.Sprintf("maximum tags to index (0 uses %d; hard maximum %d)", flv.DefaultMaxTags, flv.HardMaxTags))
 	maxScanDiagnostics := flags.Uint64("max-diagnostics", 0, fmt.Sprintf("maximum scan diagnostics to retain (0 uses %d; range %d-%d)", flv.DefaultMaxDiagnostics, flv.MinDiagnostics, flv.HardMaxDiagnostics))
 	maxKeyframes := flags.Uint64("max-keyframes", 0, fmt.Sprintf("maximum keyframe index entries to retain (0 uses %d; hard maximum %d)", analysis.DefaultMaxKeyframes, analysis.HardMaxKeyframes))
@@ -36,6 +38,24 @@ func runSummary(args []string, stdout, stderr io.Writer) int {
 	}
 	if flags.NArg() != 1 {
 		flags.Usage()
+		return exitUsage
+	}
+	if *schemaVersion != 1 && *schemaVersion != 2 {
+		_, _ = fmt.Fprintln(stderr, "muxray: --schema-version must be 1 or 2")
+		return exitUsage
+	}
+	mp3LimitSet := false
+	flags.Visit(func(option *flag.Flag) {
+		if option.Name == "max-mp3-header-events" {
+			mp3LimitSet = true
+		}
+	})
+	if mp3LimitSet && *schemaVersion != 2 {
+		_, _ = fmt.Fprintln(stderr, "muxray: --max-mp3-header-events requires --schema-version 2")
+		return exitUsage
+	}
+	if *maxMP3HeaderEvents > uint64(analysis.HardMaxMP3HeaderEvents) {
+		_, _ = fmt.Fprintf(stderr, "muxray: --max-mp3-header-events exceeds hard maximum %d\n", analysis.HardMaxMP3HeaderEvents)
 		return exitUsage
 	}
 	if *maxTags > flv.HardMaxTags {
@@ -105,6 +125,23 @@ func runSummary(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "muxray: scan input: %v\n", err)
 		return exitFailure
+	}
+	if *schemaVersion == 2 {
+		summary, err := analysis.AnalyzeV2(context.Background(), file, scan, analysis.OptionsV2{
+			Options: analysisOptions, MaxMP3HeaderEvents: uint32(*maxMP3HeaderEvents),
+		})
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "muxray: analyze input: %v\n", err)
+			return exitFailure
+		}
+		if err := report.WriteMediaSummaryV2JSON(stdout, report.NewMediaSummaryV2(scan, summary), *pretty); err != nil {
+			_, _ = fmt.Fprintf(stderr, "muxray: write media summary: %v\n", err)
+			return exitFailure
+		}
+		if scan.HasErrors() || summary.HasErrors() {
+			return exitDiagnostics
+		}
+		return exitOK
 	}
 	summary, err := analysis.Analyze(context.Background(), file, scan, analysisOptions)
 	if err != nil {

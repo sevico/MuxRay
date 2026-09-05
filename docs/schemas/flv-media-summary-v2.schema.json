@@ -1,0 +1,633 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "flv-media-summary-v2.schema.json",
+  "title": "MuxRay FLV media summary v2",
+  "description": "Opt-in AAC/AVC/MP3 cross-tag summary. Counts are FLV Tags; MP3 observations inspect only the first fixed frame header. See ADR-007.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion","documentType","source","scan","summary","scanDiagnostics","analysisDiagnostics"],
+  "properties": {
+    "schemaVersion": {"const":2},
+    "documentType": {"const":"flv-media-summary"},
+    "source": {"$ref":"#/$defs/source"},
+    "scan": {"$ref":"#/$defs/scan"},
+    "summary": {"$ref":"#/$defs/summary"},
+    "scanDiagnostics": {"type":"array","maxItems":65536,"items":{"$ref":"#/$defs/scanDiagnostic"}},
+    "analysisDiagnostics": {"type":"array","maxItems":65536,"items":{"$ref":"#/$defs/analysisDiagnostic"}}
+  },
+  "allOf": [
+    {
+      "if": {"properties":{"summary":{"properties":{"complete":{"const":true}},"required":["complete"]}},"required":["summary"]},
+      "then": {
+        "properties": {
+          "scan": {"properties":{"complete":{"const":true}},"required":["complete"]},
+          "analysisDiagnostics": {"not":{"contains":{"properties":{"severity":{"const":"error"}},"required":["severity"]}}},
+          "scanDiagnostics": {"not":{"contains":{"properties":{"severity":{"const":"error"}},"required":["severity"]}}}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "uint8": {"type":"integer","minimum":0,"maximum":255},
+    "uint24": {"type":"integer","minimum":0,"maximum":16777215},
+    "uint32": {"type":"integer","minimum":0,"maximum":4294967295},
+    "uint64": {"type":"integer","minimum":0,"maximum":18446744073709552000},
+    "int32": {"type":"integer","minimum":-2147483648,"maximum":2147483647},
+    "signedInt24": {"type":"integer","minimum":-8388608,"maximum":8388607},
+    "int64": {"type":"integer","minimum":-9223372036854776000,"maximum":9223372036854776000},
+    "ptsMilliseconds": {"type":"integer","minimum":-8388608,"maximum":4303355902},
+    "ptsRangeMilliseconds": {"type":"integer","minimum":0,"maximum":4311744510},
+    "avSyncSkewMilliseconds": {"type":"integer","minimum":-4303355903,"maximum":4303355902},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sizeBytes"],
+      "properties": {"sizeBytes":{"$ref":"#/$defs/uint64"}}
+    },
+    "scan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bytesScanned","complete","indexedTagCount"],
+      "properties": {"bytesScanned":{"$ref":"#/$defs/uint64"},"complete":{"type":"boolean"},"indexedTagCount":{"$ref":"#/$defs/uint64"}}
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["complete","tags","audio","video","keyframes","gop","aacConfigurations","avcConfigurations","audioCodecs","mp3"],
+      "properties": {
+        "complete": {
+          "type": "boolean",
+          "description": "True only when the container scan completed without an error diagnostic and every indexed audio/video tag was classifiable within the analysis budgets without an analysis error."
+        },
+        "tags": {"$ref":"#/$defs/tagCounts"},
+        "audio": {"$ref":"#/$defs/track"},
+        "video": {"$ref":"#/$defs/track"},
+        "videoPts": {"$ref":"#/$defs/ptsTimeline"},
+        "compositionTime": {"$ref":"#/$defs/compositionTime"},
+        "keyframes": {"$ref":"#/$defs/keyframes"},
+        "gop": {"$ref":"#/$defs/gop"},
+        "aacConfigurations": {"$ref":"#/$defs/aacConfigurations"},
+        "avcConfigurations": {"$ref":"#/$defs/avcConfigurations"},
+        "avSync": {"$ref":"#/$defs/avSync"},
+        "audioCodecs": {"$ref":"#/$defs/audioCodecs"},
+        "mp3": {"$ref":"#/$defs/mp3"}
+      },
+      "allOf": [
+        {
+          "if": {"properties":{"complete":{"const":true}},"required":["complete"]},
+          "then": {
+            "properties": {
+              "audio": {"properties":{"unclassifiedTagCount":{"const":0}},"required":["unclassifiedTagCount"]},
+              "video": {"properties":{"unclassifiedTagCount":{"const":0}},"required":["unclassifiedTagCount"]},
+              "aacConfigurations": {
+                "properties": {
+                  "skippedByBudgetCount": {"const":0},
+                  "events": {"items":{"properties":{"complete":{"const":true}},"required":["complete"]}}
+                },
+                "required": ["skippedByBudgetCount","events"]
+              },
+              "avcConfigurations": {
+                "properties": {
+                  "skippedByBudgetCount": {"const":0},
+                  "events": {"items":{"properties":{"complete":{"const":true}},"required":["complete"]}}
+                },
+                "required": ["skippedByBudgetCount","events"]
+              },
+              "audioCodecs": {"properties":{"otherTagCount":{"const":0},"unknownTagCount":{"const":0}}},
+              "mp3": {
+                "properties": {
+                  "track": {"properties":{"unclassifiedTagCount":{"const":0}}},
+                  "headers": {"properties":{"malformedCount":{"const":0},"events":{"items":{"properties":{"complete":{"const":true}}}}}}
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {"required":["avSync"]},
+          "then": {
+            "required": ["complete","audio","video","videoPts"],
+            "properties": {
+              "complete": {"const":true},
+              "audio": {
+                "required": ["timing"],
+                "properties": {"timing":{"properties":{"regressionCount":{"const":0}},"required":["regressionCount"]}}
+              },
+              "video": {
+                "required": ["timing"],
+                "properties": {"timing":{"properties":{"regressionCount":{"const":0}},"required":["regressionCount"]}}
+              },
+              "audioCodecs": {"properties":{"switchCount":{"const":0}}}
+            }
+          }
+        }
+      ]
+    },
+    "tagCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total","audio","video","script","other","dataSizeBytes"],
+      "properties": {
+        "total": {"$ref":"#/$defs/uint64"},
+        "audio": {"$ref":"#/$defs/uint64"},
+        "video": {"$ref":"#/$defs/uint64"},
+        "script": {"$ref":"#/$defs/uint64"},
+        "other": {"$ref":"#/$defs/uint64"},
+        "dataSizeBytes": {"$ref":"#/$defs/uint64"}
+      }
+    },
+    "track": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tagCount","indexedDataSizeBytes","mediaTagCount","mediaDataSizeBytes","excludedTagCount","unclassifiedTagCount"],
+      "properties": {
+        "tagCount": {"$ref":"#/$defs/uint64"},
+        "indexedDataSizeBytes": {"$ref":"#/$defs/uint64"},
+        "mediaTagCount": {"$ref":"#/$defs/uint64"},
+        "mediaDataSizeBytes": {"$ref":"#/$defs/uint64"},
+        "excludedTagCount": {"$ref":"#/$defs/uint64"},
+        "unclassifiedTagCount": {"$ref":"#/$defs/uint64"},
+        "timing": {"$ref":"#/$defs/dtsTimeline"},
+        "bitrate": {"$ref":"#/$defs/bitrate"}
+      }
+    },
+    "dtsTimeline": {
+      "type": "object",
+      "description": "Raw uint32 FLV DTS observations in source order; timestamps are not unwrapped. Sample count measures media Tags, not decoded frames or audio samples.",
+      "additionalProperties": false,
+      "required": [
+        "sampleCount",
+        "firstMs",
+        "lastMs",
+        "minMs",
+        "maxMs",
+        "rangeMs",
+        "forwardDeltaTotalMs",
+        "regressionCount",
+        "duplicateCount",
+        "largestForwardGapMs"
+      ],
+      "properties": {
+        "sampleCount": {"allOf":[{"$ref":"#/$defs/uint64"},{"minimum":1}]},
+        "firstMs": {"$ref":"#/$defs/uint32"},
+        "lastMs": {"$ref":"#/$defs/uint32"},
+        "minMs": {"$ref":"#/$defs/uint32"},
+        "maxMs": {"$ref":"#/$defs/uint32"},
+        "rangeMs": {"$ref":"#/$defs/uint32"},
+        "forwardDeltaTotalMs": {"$ref":"#/$defs/uint64"},
+        "regressionCount": {"$ref":"#/$defs/uint64"},
+        "duplicateCount": {"$ref":"#/$defs/uint64"},
+        "largestForwardGapMs": {"$ref":"#/$defs/uint32"}
+      }
+    },
+    "ptsTimeline": {
+      "type": "object",
+      "description": "Timeline of exact AVC PTS values: raw uint32 DTS plus signed 24-bit CompositionTime.",
+      "additionalProperties": false,
+      "required": [
+        "sampleCount",
+        "firstMs",
+        "lastMs",
+        "minMs",
+        "maxMs",
+        "rangeMs",
+        "forwardDeltaTotalMs",
+        "regressionCount",
+        "duplicateCount",
+        "largestForwardGapMs"
+      ],
+      "properties": {
+        "sampleCount": {"allOf":[{"$ref":"#/$defs/uint64"},{"minimum":1}]},
+        "firstMs": {"$ref":"#/$defs/ptsMilliseconds"},
+        "lastMs": {"$ref":"#/$defs/ptsMilliseconds"},
+        "minMs": {"$ref":"#/$defs/ptsMilliseconds"},
+        "maxMs": {"$ref":"#/$defs/ptsMilliseconds"},
+        "rangeMs": {"$ref":"#/$defs/ptsRangeMilliseconds"},
+        "forwardDeltaTotalMs": {"$ref":"#/$defs/uint64"},
+        "regressionCount": {"$ref":"#/$defs/uint64"},
+        "duplicateCount": {"$ref":"#/$defs/uint64"},
+        "largestForwardGapMs": {"$ref":"#/$defs/ptsRangeMilliseconds"}
+      }
+    },
+    "bitrate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["basis","bytes","coveredIntervalMs","averageBitsPerSecond"],
+      "properties": {
+        "basis": {"const":"flvMediaTagCoveredDataSizeOverForwardDtsIntervals"},
+        "bytes": {"$ref":"#/$defs/uint64"},
+        "coveredIntervalMs": {"allOf":[{"$ref":"#/$defs/uint64"},{"minimum":1}]},
+        "averageBitsPerSecond": {"$ref":"#/$defs/uint64"}
+      },
+      "description": "Covered FLV media Tag DataSize bytes over forward-DTS intervals; final groups are excluded. V2 audio additionally breaks coverage on codec/unknown/unclassified barriers and MP3 parameter changes."
+    },
+    "compositionTime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sampleCount","negativeCount","zeroCount","positiveCount","minMs","maxMs"],
+      "properties": {
+        "sampleCount": {"allOf":[{"$ref":"#/$defs/uint64"},{"minimum":1}]},
+        "negativeCount": {"$ref":"#/$defs/uint64"},
+        "zeroCount": {"$ref":"#/$defs/uint64"},
+        "positiveCount": {"$ref":"#/$defs/uint64"},
+        "minMs": {"$ref":"#/$defs/signedInt24"},
+        "maxMs": {"$ref":"#/$defs/signedInt24"}
+      }
+    },
+    "keyframe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tagId","offset","dts","pts","dataSizeBytes","codecId"],
+      "properties": {
+        "tagId": {"$ref":"#/$defs/uint64"},
+        "offset": {"$ref":"#/$defs/uint64"},
+        "dts": {"$ref":"#/$defs/uint32"},
+        "pts": {"$ref":"#/$defs/ptsMilliseconds"},
+        "dataSizeBytes": {"$ref":"#/$defs/uint24"},
+        "codecId": {"const":7},
+        "gopDurationMs": {"allOf":[{"$ref":"#/$defs/uint32"},{"minimum":1}]}
+      }
+    },
+    "keyframes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["declaredCount","entries","truncated"],
+      "properties": {
+        "declaredCount": {"$ref":"#/$defs/uint64"},
+        "entries": {"type":"array","maxItems":65536,"items":{"$ref":"#/$defs/keyframe"}},
+        "truncated": {"type":"boolean"}
+      }
+    },
+    "gop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count","closedDurationCount","nonPositiveDurationCount","minDurationMs","maxDurationMs","averageDurationMs"],
+      "properties": {
+        "count": {"$ref":"#/$defs/uint64"},
+        "closedDurationCount": {"$ref":"#/$defs/uint64"},
+        "nonPositiveDurationCount": {"$ref":"#/$defs/uint64"},
+        "minDurationMs": {"$ref":"#/$defs/uint64"},
+        "maxDurationMs": {"$ref":"#/$defs/uint64"},
+        "averageDurationMs": {"$ref":"#/$defs/uint64"}
+      }
+    },
+    "namedUint8": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value","name"],
+      "properties": {"value":{"$ref":"#/$defs/uint8"},"name":{"type":"string"}}
+    },
+    "channelConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value","name"],
+      "properties": {"value":{"$ref":"#/$defs/uint8"},"name":{"type":"string"},"channelCount":{"$ref":"#/$defs/uint8"}}
+    },
+    "aacConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tagId","offset","dts","fingerprintSha256","complete"],
+      "properties": {
+        "tagId": {"$ref":"#/$defs/uint64"},
+        "offset": {"$ref":"#/$defs/uint64"},
+        "dts": {"$ref":"#/$defs/uint32"},
+        "fingerprintSha256": {"type":"string","pattern":"^[0-9a-f]{64}$"},
+        "changedFromPrevious": {
+          "type": "boolean",
+          "description": "Comparison with the preceding complete AAC configuration in the same codec epoch; absent when no comparison was made."
+        },
+        "complete": {"type":"boolean"},
+        "audioObjectType": {"$ref":"#/$defs/namedUint8"},
+        "samplingFrequencyHz": {"$ref":"#/$defs/uint32"},
+        "extensionSamplingFrequencyHz": {"$ref":"#/$defs/uint32"},
+        "channelConfiguration": {"$ref":"#/$defs/channelConfiguration"}
+      },
+      "allOf": [
+        {
+          "if": {"properties":{"complete":{"const":true}},"required":["complete"]},
+          "then": {"required":["audioObjectType","samplingFrequencyHz","channelConfiguration"]}
+        },
+        {"if":{"required":["changedFromPrevious"]},"then":{"properties":{"complete":{"const":true}},"required":["complete"]}}
+      ]
+    },
+    "aacConfigurations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventCount","analyzedCount","skippedByBudgetCount","changeCount","events","truncated"],
+      "properties": {
+        "eventCount": {"$ref":"#/$defs/uint64"},
+        "analyzedCount": {"$ref":"#/$defs/uint64"},
+        "skippedByBudgetCount": {"$ref":"#/$defs/uint64"},
+        "changeCount": {
+          "allOf": [{"$ref":"#/$defs/uint64"}],
+          "description": "Number of compared source events whose raw configuration fingerprint changed; independent of retained-event truncation."
+        },
+        "events": {"type":"array","maxItems":65536,"items":{"$ref":"#/$defs/aacConfiguration"}},
+        "truncated": {"type":"boolean"}
+      }
+    },
+    "avcProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profileIdc","profileCompatibility","levelIdc"],
+      "properties": {
+        "profileIdc": {"$ref":"#/$defs/uint8"},
+        "profileCompatibility": {"$ref":"#/$defs/uint8"},
+        "levelIdc": {"$ref":"#/$defs/uint8"}
+      }
+    },
+    "avcFirstCompleteSps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index","spsId","codedWidth","codedHeight","displayWidth","displayHeight"],
+      "properties": {
+        "index": {"$ref":"#/$defs/uint32"},
+        "spsId": {"$ref":"#/$defs/uint32"},
+        "codedWidth": {"$ref":"#/$defs/uint64"},
+        "codedHeight": {"$ref":"#/$defs/uint64"},
+        "displayWidth": {"$ref":"#/$defs/uint64"},
+        "displayHeight": {"$ref":"#/$defs/uint64"}
+      }
+    },
+    "avcConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tagId","offset","dts","fingerprintSha256","complete","completeSpsCount","distinctSpsDimensions"],
+      "properties": {
+        "tagId": {"$ref":"#/$defs/uint64"},
+        "offset": {"$ref":"#/$defs/uint64"},
+        "dts": {"$ref":"#/$defs/uint32"},
+        "fingerprintSha256": {"type":"string","pattern":"^[0-9a-f]{64}$"},
+        "changedFromPrevious": {
+          "type": "boolean",
+          "description": "Comparison with the preceding complete AVC configuration in the same codec epoch; absent when no comparison was made."
+        },
+        "complete": {"type":"boolean"},
+        "profile": {"$ref":"#/$defs/avcProfile"},
+        "lengthSize": {"type":"integer","enum":[1,2,4]},
+        "completeSpsCount": {"$ref":"#/$defs/uint32"},
+        "distinctSpsDimensions": {"$ref":"#/$defs/uint32"},
+        "firstCompleteSps": {"$ref":"#/$defs/avcFirstCompleteSps"}
+      },
+      "allOf": [
+        {"if":{"properties":{"complete":{"const":true}},"required":["complete"]},"then":{"required":["profile","lengthSize"]}},
+        {"if":{"required":["changedFromPrevious"]},"then":{"properties":{"complete":{"const":true}},"required":["complete"]}}
+      ]
+    },
+    "avcConfigurations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventCount","analyzedCount","skippedByBudgetCount","changeCount","events","truncated"],
+      "properties": {
+        "eventCount": {"$ref":"#/$defs/uint64"},
+        "analyzedCount": {"$ref":"#/$defs/uint64"},
+        "skippedByBudgetCount": {"$ref":"#/$defs/uint64"},
+        "changeCount": {
+          "allOf": [{"$ref":"#/$defs/uint64"}],
+          "description": "Number of compared source events whose raw configuration fingerprint changed; independent of retained-event truncation."
+        },
+        "events": {"type":"array","maxItems":65536,"items":{"$ref":"#/$defs/avcConfiguration"}},
+        "truncated": {"type":"boolean"}
+      }
+    },
+    "avSync": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["basis","startExtremaSkewMs","endExtremaSkewMs","rangesOverlap","overlapMs"],
+      "properties": {
+        "basis": {"const":"videoPtsExtremaMinusAudioDtsExtrema"},
+        "startExtremaSkewMs": {"$ref":"#/$defs/avSyncSkewMilliseconds"},
+        "endExtremaSkewMs": {"$ref":"#/$defs/avSyncSkewMilliseconds"},
+        "rangesOverlap": {"type":"boolean"},
+        "overlapMs": {"$ref":"#/$defs/uint32"}
+      },
+      "allOf": [
+        {
+          "if": {"properties":{"rangesOverlap":{"const":false}},"required":["rangesOverlap"]},
+          "then": {"properties":{"overlapMs":{"const":0}},"required":["overlapMs"]}
+        }
+      ]
+    },
+    "scanDiagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code","severity","offset","bitOffset","message"],
+      "properties": {
+        "code": {"type":"string","pattern":"^FLV_[A-Z0-9_]+$"},
+        "severity": {"type":"string","enum":["warning","error"]},
+        "offset": {"$ref":"#/$defs/uint64"},
+        "bitOffset": {"type":"integer","minimum":0,"maximum":7},
+        "message": {"type":"string"},
+        "expected": {"$ref":"#/$defs/uint64"},
+        "actual": {"$ref":"#/$defs/uint64"}
+      }
+    },
+    "analysisDiagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code","severity","offset","bitOffset","message"],
+      "properties": {
+        "code": {"type":"string","pattern":"^(MEDIA|AAC|AVC|MP3)_[A-Z0-9_]+$"},
+        "severity": {"type":"string","enum":["warning","error"]},
+        "tagId": {"$ref":"#/$defs/uint64"},
+        "offset": {"$ref":"#/$defs/uint64"},
+        "bitOffset": {"type":"integer","minimum":0,"maximum":7},
+        "message": {"type":"string"},
+        "expected": {"$ref":"#/$defs/uint64"},
+        "actual": {"$ref":"#/$defs/uint64"},
+        "recoveryOffset": {"$ref":"#/$defs/uint64"}
+      },
+      "allOf": [
+        {
+          "if": {"properties":{"code":{"pattern":"^MP3_"}},"required":["code"]},
+          "then": {
+            "properties": {
+              "code": {
+                "enum": [
+                  "MP3_FRAME_HEADER_TRUNCATED",
+                  "MP3_SYNC_INVALID",
+                  "MP3_VERSION_RESERVED",
+                  "MP3_LAYER_RESERVED",
+                  "MP3_LAYER_NOT_III",
+                  "MP3_BITRATE_INDEX_INVALID",
+                  "MP3_SAMPLING_FREQUENCY_RESERVED",
+                  "MP3_FREE_FORMAT_UNRESOLVED",
+                  "MP3_EMPHASIS_RESERVED"
+                ]
+              }
+            },
+            "required": ["tagId"],
+            "allOf": [
+              {
+                "if": {"properties":{"code":{"enum":["MP3_FREE_FORMAT_UNRESOLVED","MP3_EMPHASIS_RESERVED"]}}},
+                "then": {"properties":{"severity":{"const":"warning"}},"not":{"required":["recoveryOffset"]}},
+                "else": {"properties":{"severity":{"const":"error"}},"required":["recoveryOffset"]}
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "audioCodecs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["aacTagCount","mp3TagCount","otherTagCount","unknownTagCount","switchCount"],
+      "properties": {
+        "aacTagCount": {"$ref":"#/$defs/uint64"},
+        "mp3TagCount": {"$ref":"#/$defs/uint64"},
+        "otherTagCount": {"$ref":"#/$defs/uint64"},
+        "unknownTagCount": {"$ref":"#/$defs/uint64"},
+        "switchCount": {"$ref":"#/$defs/uint64"}
+      },
+      "description": "Partitions all audio Tags by trusted SoundFormat. Switch count compares consecutive known identities, including unsupported formats; unknown Tags clear the baseline."
+    },
+    "mp3": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["track","headers"],
+      "properties": {
+        "track": {"allOf":[{"$ref":"#/$defs/track"},{"properties":{"excludedTagCount":{"const":0}}}]},
+        "headers": {"$ref":"#/$defs/mp3Headers"}
+      },
+      "description": "Subset of complete, unfiltered SoundFormat=2 Tags with a FLV audio-header byte. Malformed first MPEG headers remain in track/header counts but are not media observations."
+    },
+    "mp3Headers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eventCount",
+        "validCount",
+        "malformedCount",
+        "freeFormatCount",
+        "parameterChangeCount",
+        "bitrateChangeCount",
+        "events",
+        "truncated"
+      ],
+      "properties": {
+        "eventCount": {"$ref":"#/$defs/uint64"},
+        "validCount": {"$ref":"#/$defs/uint64"},
+        "malformedCount": {"$ref":"#/$defs/uint64"},
+        "freeFormatCount": {"$ref":"#/$defs/uint64"},
+        "parameterChangeCount": {"$ref":"#/$defs/uint64"},
+        "bitrateChangeCount": {"$ref":"#/$defs/uint64"},
+        "events": {"type":"array","maxItems":65536,"items":{"$ref":"#/$defs/mp3HeaderEvent"}},
+        "truncated": {"type":"boolean"}
+      },
+      "description": "All counters continue beyond the retained source-order event prefix. Parameter and bitrate changes compare only complete headers within the same trusted MP3 epoch.",
+      "allOf": [
+        {
+          "if": {"properties":{"eventCount":{"const":0}},"required":["eventCount"]},
+          "then": {
+            "properties": {
+              "validCount": {"const":0},
+              "malformedCount": {"const":0},
+              "freeFormatCount": {"const":0},
+              "parameterChangeCount": {"const":0},
+              "bitrateChangeCount": {"const":0},
+              "events": {"maxItems":0},
+              "truncated": {"const":false}
+            }
+          }
+        },
+        {
+          "if": {"properties":{"truncated":{"const":true}},"required":["truncated"]},
+          "then": {"properties":{"eventCount":{"minimum":2},"events":{"minItems":1}}}
+        }
+      ]
+    },
+    "mp3HeaderEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tagId","offset","dts","complete"],
+      "properties": {
+        "tagId": {"$ref":"#/$defs/uint64"},
+        "offset": {"$ref":"#/$defs/uint64"},
+        "dts": {"$ref":"#/$defs/uint32"},
+        "complete": {"type":"boolean"},
+        "parameters": {"$ref":"#/$defs/mp3Parameters"},
+        "bitrateMode": {"enum":["indexed","free"]},
+        "bitrateKbps": {"type":"integer","minimum":8,"maximum":320},
+        "parametersChangedFromPrevious": {"type":"boolean"},
+        "bitrateChangedFromPrevious": {"type":"boolean"}
+      },
+      "dependentRequired": {
+        "parametersChangedFromPrevious": ["bitrateChangedFromPrevious"],
+        "bitrateChangedFromPrevious": ["parametersChangedFromPrevious"]
+      },
+      "allOf": [
+        {
+          "if": {"properties":{"complete":{"const":true}},"required":["complete"]},
+          "then": {"required":["parameters","bitrateMode"]},
+          "else": {
+            "not": {
+              "anyOf": [
+                {"required":["parameters"]},
+                {"required":["bitrateMode"]},
+                {"required":["bitrateKbps"]},
+                {"required":["parametersChangedFromPrevious"]},
+                {"required":["bitrateChangedFromPrevious"]}
+              ]
+            }
+          }
+        },
+        {
+          "if": {"properties":{"bitrateMode":{"const":"indexed"}},"required":["bitrateMode"]},
+          "then": {"required":["bitrateKbps"]},
+          "else": {"not":{"required":["bitrateKbps"]}}
+        },
+        {
+          "if": {"properties":{"parameters":{"properties":{"version":{"properties":{"value":{"const":3}}}}}},"required":["parameters"]},
+          "then": {"properties":{"bitrateKbps":{"enum":[32,40,48,56,64,80,96,112,128,160,192,224,256,320]}}},
+          "else": {"properties":{"bitrateKbps":{"enum":[8,16,24,32,40,48,56,64,80,96,112,128,144,160]}}}
+        }
+      ]
+    },
+    "mp3Parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version","samplingFrequencyHz","channelMode","channels","samplesPerFrame"],
+      "properties": {
+        "version": {
+          "allOf": [{"$ref":"#/$defs/namedUint8"}],
+          "oneOf": [
+            {"properties":{"value":{"const":0},"name":{"const":"mpeg2.5"}}},
+            {"properties":{"value":{"const":2},"name":{"const":"mpeg2"}}},
+            {"properties":{"value":{"const":3},"name":{"const":"mpeg1"}}}
+          ]
+        },
+        "samplingFrequencyHz": {"type":"integer"},
+        "channelMode": {
+          "allOf": [{"$ref":"#/$defs/namedUint8"}],
+          "oneOf": [
+            {"properties":{"value":{"const":0},"name":{"const":"stereo"}}},
+            {"properties":{"value":{"const":1},"name":{"const":"jointStereo"}}},
+            {"properties":{"value":{"const":2},"name":{"const":"dualChannel"}}},
+            {"properties":{"value":{"const":3},"name":{"const":"singleChannel"}}}
+          ]
+        },
+        "channels": {"enum":[1,2]},
+        "samplesPerFrame": {"enum":[576,1152]}
+      },
+      "allOf": [
+        {
+          "if": {"properties":{"version":{"properties":{"value":{"const":0}}}}},
+          "then": {"properties":{"samplingFrequencyHz":{"enum":[8000,11025,12000]},"samplesPerFrame":{"const":576}}}
+        },
+        {
+          "if": {"properties":{"version":{"properties":{"value":{"const":2}}}}},
+          "then": {"properties":{"samplingFrequencyHz":{"enum":[16000,22050,24000]},"samplesPerFrame":{"const":576}}}
+        },
+        {
+          "if": {"properties":{"version":{"properties":{"value":{"const":3}}}}},
+          "then": {"properties":{"samplingFrequencyHz":{"enum":[32000,44100,48000]},"samplesPerFrame":{"const":1152}}}
+        },
+        {
+          "if": {"properties":{"channelMode":{"properties":{"value":{"const":3}}}}},
+          "then": {"properties":{"channels":{"const":1}}},
+          "else": {"properties":{"channels":{"const":2}}}
+        }
+      ]
+    }
+  }
+}

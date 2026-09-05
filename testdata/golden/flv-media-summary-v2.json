@@ -1,0 +1,315 @@
+{
+  "schemaVersion": 2,
+  "documentType": "flv-media-summary",
+  "source": {
+    "sizeBytes": 225
+  },
+  "scan": {
+    "bytesScanned": 225,
+    "complete": true,
+    "indexedTagCount": 11
+  },
+  "summary": {
+    "complete": true,
+    "tags": {
+      "total": 11,
+      "audio": 9,
+      "video": 2,
+      "script": 0,
+      "other": 0,
+      "dataSizeBytes": 47
+    },
+    "audio": {
+      "tagCount": 9,
+      "indexedDataSizeBytes": 37,
+      "mediaTagCount": 7,
+      "mediaDataSizeBytes": 29,
+      "excludedTagCount": 2,
+      "unclassifiedTagCount": 0,
+      "timing": {
+        "sampleCount": 7,
+        "firstMs": 0,
+        "lastMs": 156,
+        "minMs": 0,
+        "maxMs": 156,
+        "rangeMs": 156,
+        "forwardDeltaTotalMs": 156,
+        "regressionCount": 0,
+        "duplicateCount": 0,
+        "largestForwardGapMs": 26
+      },
+      "bitrate": {
+        "basis": "flvMediaTagCoveredDataSizeOverForwardDtsIntervals",
+        "bytes": 13,
+        "coveredIntervalMs": 78,
+        "averageBitsPerSecond": 1333
+      }
+    },
+    "video": {
+      "tagCount": 2,
+      "indexedDataSizeBytes": 10,
+      "mediaTagCount": 2,
+      "mediaDataSizeBytes": 10,
+      "excludedTagCount": 0,
+      "unclassifiedTagCount": 0,
+      "timing": {
+        "sampleCount": 2,
+        "firstMs": 0,
+        "lastMs": 156,
+        "minMs": 0,
+        "maxMs": 156,
+        "rangeMs": 156,
+        "forwardDeltaTotalMs": 156,
+        "regressionCount": 0,
+        "duplicateCount": 0,
+        "largestForwardGapMs": 156
+      },
+      "bitrate": {
+        "basis": "flvMediaTagCoveredDataSizeOverForwardDtsIntervals",
+        "bytes": 5,
+        "coveredIntervalMs": 156,
+        "averageBitsPerSecond": 256
+      }
+    },
+    "videoPts": {
+      "sampleCount": 2,
+      "firstMs": 0,
+      "lastMs": 156,
+      "minMs": 0,
+      "maxMs": 156,
+      "rangeMs": 156,
+      "forwardDeltaTotalMs": 156,
+      "regressionCount": 0,
+      "duplicateCount": 0,
+      "largestForwardGapMs": 156
+    },
+    "compositionTime": {
+      "sampleCount": 2,
+      "negativeCount": 0,
+      "zeroCount": 2,
+      "positiveCount": 0,
+      "minMs": 0,
+      "maxMs": 0
+    },
+    "keyframes": {
+      "declaredCount": 2,
+      "entries": [
+        {
+          "tagId": 9,
+          "offset": 185,
+          "dts": 0,
+          "pts": 0,
+          "dataSizeBytes": 5,
+          "codecId": 7,
+          "gopDurationMs": 156
+        },
+        {
+          "tagId": 10,
+          "offset": 205,
+          "dts": 156,
+          "pts": 156,
+          "dataSizeBytes": 5,
+          "codecId": 7
+        }
+      ],
+      "truncated": false
+    },
+    "gop": {
+      "count": 2,
+      "closedDurationCount": 1,
+      "nonPositiveDurationCount": 0,
+      "minDurationMs": 156,
+      "maxDurationMs": 156,
+      "averageDurationMs": 156
+    },
+    "aacConfigurations": {
+      "eventCount": 2,
+      "analyzedCount": 2,
+      "skippedByBudgetCount": 0,
+      "changeCount": 0,
+      "events": [
+        {
+          "tagId": 0,
+          "offset": 13,
+          "dts": 0,
+          "fingerprintSha256": "ba3d722a88cacce18f22962612eda4d50e7a61cd9b7db60694043efed2a61448",
+          "complete": true,
+          "audioObjectType": {
+            "value": 2,
+            "name": "aacLC"
+          },
+          "samplingFrequencyHz": 44100,
+          "channelConfiguration": {
+            "value": 2,
+            "name": "stereo",
+            "channelCount": 2
+          }
+        },
+        {
+          "tagId": 6,
+          "offset": 130,
+          "dts": 130,
+          "fingerprintSha256": "ba3d722a88cacce18f22962612eda4d50e7a61cd9b7db60694043efed2a61448",
+          "complete": true,
+          "audioObjectType": {
+            "value": 2,
+            "name": "aacLC"
+          },
+          "samplingFrequencyHz": 44100,
+          "channelConfiguration": {
+            "value": 2,
+            "name": "stereo",
+            "channelCount": 2
+          }
+        }
+      ],
+      "truncated": false
+    },
+    "avcConfigurations": {
+      "eventCount": 0,
+      "analyzedCount": 0,
+      "skippedByBudgetCount": 0,
+      "changeCount": 0,
+      "events": [],
+      "truncated": false
+    },
+    "audioCodecs": {
+      "aacTagCount": 5,
+      "mp3TagCount": 4,
+      "otherTagCount": 0,
+      "unknownTagCount": 0,
+      "switchCount": 2
+    },
+    "mp3": {
+      "track": {
+        "tagCount": 4,
+        "indexedDataSizeBytes": 20,
+        "mediaTagCount": 4,
+        "mediaDataSizeBytes": 20,
+        "excludedTagCount": 0,
+        "unclassifiedTagCount": 0,
+        "timing": {
+          "sampleCount": 4,
+          "firstMs": 26,
+          "lastMs": 104,
+          "minMs": 26,
+          "maxMs": 104,
+          "rangeMs": 78,
+          "forwardDeltaTotalMs": 78,
+          "regressionCount": 0,
+          "duplicateCount": 0,
+          "largestForwardGapMs": 26
+        },
+        "bitrate": {
+          "basis": "flvMediaTagCoveredDataSizeOverForwardDtsIntervals",
+          "bytes": 10,
+          "coveredIntervalMs": 52,
+          "averageBitsPerSecond": 1538
+        }
+      },
+      "headers": {
+        "eventCount": 4,
+        "validCount": 4,
+        "malformedCount": 0,
+        "freeFormatCount": 0,
+        "parameterChangeCount": 1,
+        "bitrateChangeCount": 2,
+        "events": [
+          {
+            "tagId": 2,
+            "offset": 50,
+            "dts": 26,
+            "complete": true,
+            "parameters": {
+              "version": {
+                "value": 3,
+                "name": "mpeg1"
+              },
+              "samplingFrequencyHz": 44100,
+              "channelMode": {
+                "value": 1,
+                "name": "jointStereo"
+              },
+              "channels": 2,
+              "samplesPerFrame": 1152
+            },
+            "bitrateMode": "indexed",
+            "bitrateKbps": 128
+          },
+          {
+            "tagId": 3,
+            "offset": 70,
+            "dts": 52,
+            "complete": true,
+            "parameters": {
+              "version": {
+                "value": 3,
+                "name": "mpeg1"
+              },
+              "samplingFrequencyHz": 44100,
+              "channelMode": {
+                "value": 1,
+                "name": "jointStereo"
+              },
+              "channels": 2,
+              "samplesPerFrame": 1152
+            },
+            "bitrateMode": "indexed",
+            "bitrateKbps": 160,
+            "parametersChangedFromPrevious": false,
+            "bitrateChangedFromPrevious": true
+          },
+          {
+            "tagId": 4,
+            "offset": 90,
+            "dts": 78,
+            "complete": true,
+            "parameters": {
+              "version": {
+                "value": 2,
+                "name": "mpeg2"
+              },
+              "samplingFrequencyHz": 22050,
+              "channelMode": {
+                "value": 3,
+                "name": "singleChannel"
+              },
+              "channels": 1,
+              "samplesPerFrame": 576
+            },
+            "bitrateMode": "indexed",
+            "bitrateKbps": 64,
+            "parametersChangedFromPrevious": true,
+            "bitrateChangedFromPrevious": true
+          },
+          {
+            "tagId": 5,
+            "offset": 110,
+            "dts": 104,
+            "complete": true,
+            "parameters": {
+              "version": {
+                "value": 2,
+                "name": "mpeg2"
+              },
+              "samplingFrequencyHz": 22050,
+              "channelMode": {
+                "value": 3,
+                "name": "singleChannel"
+              },
+              "channels": 1,
+              "samplesPerFrame": 576
+            },
+            "bitrateMode": "indexed",
+            "bitrateKbps": 64,
+            "parametersChangedFromPrevious": false,
+            "bitrateChangedFromPrevious": false
+          }
+        ],
+        "truncated": false
+      }
+    }
+  },
+  "scanDiagnostics": [],
+  "analysisDiagnostics": []
+}

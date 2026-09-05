@@ -8,8 +8,10 @@ The public Draft 2020-12 contracts are:
 - [`flv-avc-tag-detail-v1.schema.json`](./flv-avc-tag-detail-v1.schema.json) for one bounded FLV AVC/H.264 `muxray detail --tag <id>` result.
 - [`flv-mp3-tag-detail-v1.schema.json`](./flv-mp3-tag-detail-v1.schema.json) for the bounded first MPEG Audio Layer III frame header in one FLV MP3 `muxray detail --tag <id>` result.
 - [`flv-media-summary-v1.schema.json`](./flv-media-summary-v1.schema.json) for bounded cross-tag AAC/AVC `muxray summary` analysis.
+- [`flv-media-summary-v2.schema.json`](./flv-media-summary-v2.schema.json) for opt-in AAC/AVC/MP3 `muxray summary --schema-version 2` analysis.
 
-All use `schemaVersion: 1`, but they are independent contracts. The scan report
+Scan and detail use `schemaVersion: 1`; media summary explicitly selects 1 or 2
+and defaults to 1. These are independent contracts. The scan report
 is selected by the `inspect` command. Detail consumers must select the validator
 using both `documentType` and `schemaVersion`: AMF0 uses
 `documentType: "flv-tag-detail"`, while AAC uses
@@ -23,11 +25,12 @@ The media summary is selected with `documentType: "flv-media-summary"` and its
 own schemaVersion. Its independently bounded entry lists do not extend any
 scan or detail v1 document. Media-summary v1 remains frozen to AAC/AVC: MP3
 Tags remain unsupported/unclassified even though an independent MP3 detail
-document now exists.
+document now exists. V2 adds MP3 classification, header observations, and audio
+codec counts under its own closed Schema. See [v2 semantics](../media-summary-v2.md).
 
 ## Deterministic encoding
 
-For the same bytes, scanner options, selected AMF0, AAC, AVC, or MP3 detail options, and MuxRay build, repeated reports must be byte-identical within the same output mode:
+For the same bytes, scanner/detail/summary options, schema version, and MuxRay build, repeated reports must be byte-identical within the same output mode:
 
 - the default is one compact UTF-8 JSON object followed by one LF;
 - `--pretty` uses two-space indentation and one trailing LF;
@@ -38,7 +41,7 @@ For the same bytes, scanner options, selected AMF0, AAC, AVC, or MP3 detail opti
 - AAC framing diagnostics precede AudioSpecificConfig diagnostics, and AAC fields remain in parser/DTO order;
 - AVC framing diagnostics precede avcC or NAL-unit diagnostics; parameter sets and NAL units remain in source order;
 - MP3 framing diagnostics precede first-frame-header diagnostics; fixed header fields remain in source-bit order;
-- media-summary keyframes and configuration events remain in source order; their `truncated` flags make retained-prefix limits explicit;
+- media-summary keyframes, configuration events, and v2 MP3 header events remain in source order; their `truncated` flags make retained-prefix limits explicit;
 - HTML escaping is disabled, and integer fields use base-10 JSON syntax;
 - AMF0 Number and Date milliseconds preserve their exact 64-bit IEEE-754 payload as lowercase hexadecimal `bits`; finite values also emit a JSON number (including `-0`), while NaN and infinities emit only their class and bits;
 - paths, base names, wall-clock timestamps, durations, host information, random IDs, and map-order-dependent values are absent.
@@ -72,11 +75,13 @@ JSON numbers used for offsets and sizes are unsigned 64-bit integers. Consumers 
 - MP3 `detail.complete: true` means the FLV header and one MPEG Layer III fixed header satisfy phase-one syntax checks. It does not prove that a complete compressed frame, CRC, VBR header, or later frame exists. `bitsConsumed` is therefore exactly 40 for any decoded frame header, independent of Tag payload size.
 - `bitrateMode: indexed` publishes table-derived bitrate and, when sampling frequency is also valid, frame length. `bitrateMode: free` is valid and complete with `MP3_FREE_FORMAT_UNRESOLVED`, but intentionally omits `bitrateKbps` and `frameLengthBytes` because one header cannot determine them.
 - Every MP3 detail error has `recoveryOffset` equal to the exclusive end of the selected FLV Tag payload. `MP3_FREE_FORMAT_UNRESOLVED` and `MP3_EMPHASIS_RESERVED` are warnings without a recovery offset and can coexist with `detail.complete: true`.
-- In a media summary, only AAC raw and AVC NALU Tags are supported media samples. Track `timing` values are raw, unwrapped unsigned 32-bit FLV DTS values. `videoPts` adds signed 24-bit CompositionTime exactly, so each value is in `-8388608..4303355902`. `rangeMs` is numeric `max-min`, while `forwardDeltaTotalMs` sums only strictly positive source-order deltas, never crosses a regression edge, and is not a wall-clock elapsed duration.
+- In media-summary v1, only AAC raw and AVC NALU Tags are supported media observations; v2 also includes MP3 Tags with a complete first Layer III header. Track `timing` uses raw unsigned 32-bit FLV DTS without automatic unwrapping, and `sampleCount` counts Tags. `videoPts` adds signed 24-bit CompositionTime exactly, so each value is in `-8388608..4303355902`. `rangeMs` is numeric `max-min`, while `forwardDeltaTotalMs` sums only strictly positive source-order deltas, never crosses a regression edge, and is not a wall-clock elapsed duration.
 - Media bitrate uses `flvMediaTagCoveredDataSizeOverForwardDtsIntervals`: a same-DTS byte group is included only when a later, greater DTS closes its interval in the same segment. `coveredIntervalMs` sums only those intervals; segment-tail bytes are excluded because their duration is unknown.
+- V2 audio and MP3 bitrate additionally break coverage on sound-format switches, unknown/unclassified audio, and MP3 parameter changes. Timelines still describe all accepted Tags in source order. Header-declared `bitrateKbps` and DTS-covered interval bitrate have distinct meanings; free-format can have only the latter.
 - AVC `pts` is `dts + signed compositionTime`. Declared keyframes come from FLV `FrameType=1`; they are not proof of an IDR NAL. GOP durations never cross DTS regressions, codec/end-of-sequence boundaries, or an actual complete AVC configuration change.
 - Configuration fingerprints cover only raw ASC/avcC bytes. `changedFromPrevious` appears only when the current complete configuration was compared with a preceding complete configuration in the same codec epoch; absence means no comparison was made. `changeCount` counts changed comparisons across all source events even when the retained event prefix is truncated. Malformed configurations do not replace the baseline. Leaving AAC/AVC, or losing a trustworthy codec identity at an unusable media Tag, clears that codec's baseline; AVC end-of-sequence also clears it. First, malformed, and budget-skipped AVC configurations conservatively break GOP continuity; the first complete AVC configuration after malformed/skipped uncertainty is also a recovery barrier, while a repeated identical complete configuration in a known state is not. AVC dimensions are the first complete SPS summary and do not claim that slices reference that SPS.
 - `avSync` uses signed video-PTS-extrema-minus-audio-DTS-extrema values and reports whether the sample-start ranges overlap. It is present only in a complete summary with audio DTS, video DTS, and video PTS timelines and no DTS regression on either track. When `rangesOverlap` is false, `overlapMs` is zero. It does not model decoder delay or decoded sample duration.
+- V2 additionally omits `avSync` when `audioCodecs.switchCount` is nonzero. MP3 malformed events omit parameter and bitrate facts; complete events compare MPEG version, sample rate, and channel mode separately from bitrate mode/indexed value. Unknown identities, codec switches, malformed headers, and backward MP3 DTS clear the comparison baseline.
 - `summary.complete: true` excludes error-severity entries from both `scanDiagnostics` and `analysisDiagnostics`; warnings may still coexist with a complete summary when they do not make classification incomplete.
 
 The constraints between duplicated compact fields—such as `tag.offset == tag.span.byteOffset`, `availableDataSize <= dataSize`, and `scan.bytesScanned <= source.sizeBytes`—are semantic invariants tested by MuxRay even where JSON Schema cannot express them portably.

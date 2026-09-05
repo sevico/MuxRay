@@ -10,3 +10,4 @@ Repository-wide architecture and compatibility decisions are recorded here. An a
 | [ADR-004](./004-avc-nal-length-context.md) | Accepted | Resolve AVC NAL length prefixes from explicit or prior sequence-header context without guessing |
 | [ADR-005](./005-bounded-media-summary.md) | Accepted | Derive bounded AAC/AVC timing, bitrate, keyframe/GOP, configuration, and A/V range summaries without timestamp guessing |
 | [ADR-006](./006-bounded-mp3-detail.md) | Accepted | Add a bounded first-frame MP3 detail contract while keeping media-summary v1 frozen |
+| [ADR-007](./007-mp3-media-summary-v2.md) | Accepted | Opt in to MP3 cross-tag summaries with explicit codec boundaries and a separate media-summary v2 contract |

@@ -1,0 +1,249 @@
+{
+  "schemaVersion": 2,
+  "documentType": "flv-media-summary",
+  "source": {
+    "sizeBytes": 93
+  },
+  "scan": {
+    "bytesScanned": 93,
+    "complete": true,
+    "indexedTagCount": 4
+  },
+  "summary": {
+    "complete": true,
+    "tags": {
+      "total": 4,
+      "audio": 2,
+      "video": 2,
+      "script": 0,
+      "other": 0,
+      "dataSizeBytes": 20
+    },
+    "audio": {
+      "tagCount": 2,
+      "indexedDataSizeBytes": 10,
+      "mediaTagCount": 2,
+      "mediaDataSizeBytes": 10,
+      "excludedTagCount": 0,
+      "unclassifiedTagCount": 0,
+      "timing": {
+        "sampleCount": 2,
+        "firstMs": 100,
+        "lastMs": 125,
+        "minMs": 100,
+        "maxMs": 125,
+        "rangeMs": 25,
+        "forwardDeltaTotalMs": 25,
+        "regressionCount": 0,
+        "duplicateCount": 0,
+        "largestForwardGapMs": 25
+      },
+      "bitrate": {
+        "basis": "flvMediaTagCoveredDataSizeOverForwardDtsIntervals",
+        "bytes": 5,
+        "coveredIntervalMs": 25,
+        "averageBitsPerSecond": 1600
+      }
+    },
+    "video": {
+      "tagCount": 2,
+      "indexedDataSizeBytes": 10,
+      "mediaTagCount": 2,
+      "mediaDataSizeBytes": 10,
+      "excludedTagCount": 0,
+      "unclassifiedTagCount": 0,
+      "timing": {
+        "sampleCount": 2,
+        "firstMs": 110,
+        "lastMs": 130,
+        "minMs": 110,
+        "maxMs": 130,
+        "rangeMs": 20,
+        "forwardDeltaTotalMs": 20,
+        "regressionCount": 0,
+        "duplicateCount": 0,
+        "largestForwardGapMs": 20
+      },
+      "bitrate": {
+        "basis": "flvMediaTagCoveredDataSizeOverForwardDtsIntervals",
+        "bytes": 5,
+        "coveredIntervalMs": 20,
+        "averageBitsPerSecond": 2000
+      }
+    },
+    "videoPts": {
+      "sampleCount": 2,
+      "firstMs": 100,
+      "lastMs": 130,
+      "minMs": 100,
+      "maxMs": 130,
+      "rangeMs": 30,
+      "forwardDeltaTotalMs": 30,
+      "regressionCount": 0,
+      "duplicateCount": 0,
+      "largestForwardGapMs": 30
+    },
+    "compositionTime": {
+      "sampleCount": 2,
+      "negativeCount": 1,
+      "zeroCount": 1,
+      "positiveCount": 0,
+      "minMs": -10,
+      "maxMs": 0
+    },
+    "keyframes": {
+      "declaredCount": 1,
+      "entries": [
+        {
+          "tagId": 2,
+          "offset": 53,
+          "dts": 110,
+          "pts": 100,
+          "dataSizeBytes": 5,
+          "codecId": 7
+        }
+      ],
+      "truncated": false
+    },
+    "gop": {
+      "count": 1,
+      "closedDurationCount": 0,
+      "nonPositiveDurationCount": 0,
+      "minDurationMs": 0,
+      "maxDurationMs": 0,
+      "averageDurationMs": 0
+    },
+    "aacConfigurations": {
+      "eventCount": 0,
+      "analyzedCount": 0,
+      "skippedByBudgetCount": 0,
+      "changeCount": 0,
+      "events": [],
+      "truncated": false
+    },
+    "avcConfigurations": {
+      "eventCount": 0,
+      "analyzedCount": 0,
+      "skippedByBudgetCount": 0,
+      "changeCount": 0,
+      "events": [],
+      "truncated": false
+    },
+    "avSync": {
+      "basis": "videoPtsExtremaMinusAudioDtsExtrema",
+      "startExtremaSkewMs": 0,
+      "endExtremaSkewMs": 5,
+      "rangesOverlap": true,
+      "overlapMs": 25
+    },
+    "audioCodecs": {
+      "aacTagCount": 0,
+      "mp3TagCount": 2,
+      "otherTagCount": 0,
+      "unknownTagCount": 0,
+      "switchCount": 0
+    },
+    "mp3": {
+      "track": {
+        "tagCount": 2,
+        "indexedDataSizeBytes": 10,
+        "mediaTagCount": 2,
+        "mediaDataSizeBytes": 10,
+        "excludedTagCount": 0,
+        "unclassifiedTagCount": 0,
+        "timing": {
+          "sampleCount": 2,
+          "firstMs": 100,
+          "lastMs": 125,
+          "minMs": 100,
+          "maxMs": 125,
+          "rangeMs": 25,
+          "forwardDeltaTotalMs": 25,
+          "regressionCount": 0,
+          "duplicateCount": 0,
+          "largestForwardGapMs": 25
+        },
+        "bitrate": {
+          "basis": "flvMediaTagCoveredDataSizeOverForwardDtsIntervals",
+          "bytes": 5,
+          "coveredIntervalMs": 25,
+          "averageBitsPerSecond": 1600
+        }
+      },
+      "headers": {
+        "eventCount": 2,
+        "validCount": 2,
+        "malformedCount": 0,
+        "freeFormatCount": 2,
+        "parameterChangeCount": 0,
+        "bitrateChangeCount": 0,
+        "events": [
+          {
+            "tagId": 0,
+            "offset": 13,
+            "dts": 100,
+            "complete": true,
+            "parameters": {
+              "version": {
+                "value": 0,
+                "name": "mpeg2.5"
+              },
+              "samplingFrequencyHz": 8000,
+              "channelMode": {
+                "value": 3,
+                "name": "singleChannel"
+              },
+              "channels": 1,
+              "samplesPerFrame": 576
+            },
+            "bitrateMode": "free"
+          },
+          {
+            "tagId": 1,
+            "offset": 33,
+            "dts": 125,
+            "complete": true,
+            "parameters": {
+              "version": {
+                "value": 0,
+                "name": "mpeg2.5"
+              },
+              "samplingFrequencyHz": 8000,
+              "channelMode": {
+                "value": 3,
+                "name": "singleChannel"
+              },
+              "channels": 1,
+              "samplesPerFrame": 576
+            },
+            "bitrateMode": "free",
+            "parametersChangedFromPrevious": false,
+            "bitrateChangedFromPrevious": false
+          }
+        ],
+        "truncated": false
+      }
+    }
+  },
+  "scanDiagnostics": [],
+  "analysisDiagnostics": [
+    {
+      "code": "MP3_FREE_FORMAT_UNRESOLVED",
+      "severity": "warning",
+      "tagId": 0,
+      "offset": 27,
+      "bitOffset": 0,
+      "message": "free-format bitrate and frame length cannot be derived from one header",
+      "actual": 0
+    },
+    {
+      "code": "MP3_FREE_FORMAT_UNRESOLVED",
+      "severity": "warning",
+      "tagId": 1,
+      "offset": 47,
+      "bitOffset": 0,
+      "message": "free-format bitrate and frame length cannot be derived from one header",
+      "actual": 0
+    }
+  ]
+}

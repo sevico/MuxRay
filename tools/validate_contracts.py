@@ -69,6 +69,18 @@ CONTRACTS = (
         "testdata/golden/flv-media-summary-v1.json",
     ),
     (
+        "docs/schemas/flv-media-summary-v2.schema.json",
+        "testdata/golden/flv-media-summary-v2.json",
+    ),
+    (
+        "docs/schemas/flv-media-summary-v2.schema.json",
+        "testdata/golden/flv-media-summary-mp3-free-v2.json",
+    ),
+    (
+        "docs/schemas/flv-media-summary-v2.schema.json",
+        "testdata/golden/flv-media-summary-mp3-malformed-v2.json",
+    ),
+    (
         "testdata/manifests/sample-manifest-v1.schema.json",
         "testdata/manifests/example-minimal-header-only.sample.json",
     ),
@@ -364,6 +376,99 @@ def validate_media_summary_edge_cases(validator: Draft202012Validator) -> None:
     signed_24_overflow = deepcopy(summary)
     signed_24_overflow["summary"]["compositionTime"]["maxMs"] = 8388608
     require_invalid(validator, signed_24_overflow, "composition time outside signed 24-bit range")
+
+
+def validate_media_summary_v2_edge_cases(validator: Draft202012Validator) -> None:
+    indexed = load_json("testdata/golden/flv-media-summary-v2.json")
+    free = load_json("testdata/golden/flv-media-summary-mp3-free-v2.json")
+    malformed = load_json("testdata/golden/flv-media-summary-mp3-malformed-v2.json")
+    v1 = Draft202012Validator(load_json("docs/schemas/flv-media-summary-v1.schema.json"))
+    require_invalid(v1, indexed, "v2 cannot masquerade as v1")
+    require_invalid(validator, load_json("testdata/golden/flv-media-summary-v1.json"), "v1 is not v2")
+
+    wrong_version = deepcopy(indexed)
+    wrong_version["schemaVersion"] = 1
+    require_invalid(validator, wrong_version, "v2 wrong schema version")
+    for field in ("mp3", "audioCodecs"):
+        missing = deepcopy(indexed)
+        del missing["summary"][field]
+        require_invalid(validator, missing, f"v2 missing {field}")
+
+    for field in ("unknownTagCount", "otherTagCount"):
+        incomplete = deepcopy(indexed)
+        incomplete["summary"]["audioCodecs"][field] = 1
+        require_invalid(validator, incomplete, f"complete v2 with {field}")
+    bad_count = deepcopy(indexed)
+    bad_count["summary"]["audioCodecs"]["switchCount"] = -1
+    require_invalid(validator, bad_count, "negative codec switch count")
+
+    codec_switch_skew = deepcopy(free)
+    codec_switch_skew["summary"]["audioCodecs"]["switchCount"] = 1
+    require_invalid(validator, codec_switch_skew, "A/V skew across a codec switch")
+
+    # Retaining a prefix does not invalidate exact aggregate counters.
+    retained = deepcopy(indexed)
+    retained["summary"]["mp3"]["headers"]["events"] = retained["summary"]["mp3"]["headers"]["events"][:1]
+    retained["summary"]["mp3"]["headers"]["truncated"] = True
+    require_valid(validator, retained, "complete v2 with truncated retained events")
+
+    for field in ("parameters", "bitrateMode", "bitrateKbps"):
+        missing = deepcopy(indexed)
+        del missing["summary"]["mp3"]["headers"]["events"][0][field]
+        require_invalid(validator, missing, f"complete indexed MP3 missing {field}")
+    invented_free_bitrate = deepcopy(free)
+    invented_free_bitrate["summary"]["mp3"]["headers"]["events"][0]["bitrateKbps"] = 128
+    require_invalid(validator, invented_free_bitrate, "free format invented bitrate")
+
+    parameter_mutations = (
+        ("version", {"value": 1, "name": "reserved"}),
+        ("version", {"value": 3, "name": "mpeg2"}),
+        ("samplingFrequencyHz", 22050),
+        ("samplesPerFrame", 576),
+        ("channelMode", {"value": 1, "name": "stereo"}),
+        ("channels", 1),
+        ("unrecognized", 0),
+    )
+    for field, value in parameter_mutations:
+        mutated = deepcopy(indexed)
+        mutated["summary"]["mp3"]["headers"]["events"][0]["parameters"][field] = value
+        require_invalid(validator, mutated, f"MP3 parameter contradiction: {field}")
+    for value in (0, 8, 129, 321):
+        mutated = deepcopy(indexed)
+        mutated["summary"]["mp3"]["headers"]["events"][0]["bitrateKbps"] = value
+        require_invalid(validator, mutated, f"MPEG-1 indexed bitrate outside table: {value}")
+    for field in ("frameLengthBytes", "decodedDurationMs", "vbr"):
+        mutated = deepcopy(indexed)
+        mutated["summary"]["mp3"]["headers"]["events"][0][field] = 1
+        require_invalid(validator, mutated, f"unpromised MP3 observation: {field}")
+
+    for field in ("parametersChangedFromPrevious", "bitrateChangedFromPrevious"):
+        mutated = deepcopy(indexed)
+        del mutated["summary"]["mp3"]["headers"]["events"][1][field]
+        require_invalid(validator, mutated, f"unpaired MP3 comparison: {field}")
+    malformed_facts = deepcopy(malformed)
+    malformed_facts["summary"]["mp3"]["headers"]["events"][1]["parameters"] = indexed["summary"]["mp3"]["headers"]["events"][0]["parameters"]
+    require_invalid(validator, malformed_facts, "incomplete MP3 event with confident parameters")
+    malformed_complete = deepcopy(retained)
+    malformed_complete["summary"]["mp3"]["headers"]["malformedCount"] = 1
+    require_invalid(validator, malformed_complete, "complete summary hides malformed unretained headers")
+    malformed_event = deepcopy(indexed)
+    malformed_event["summary"]["mp3"]["headers"]["events"][0] = malformed["summary"]["mp3"]["headers"]["events"][1]
+    require_invalid(validator, malformed_event, "complete summary with malformed event")
+
+    wrong_mode = deepcopy(free)
+    wrong_mode["summary"]["mp3"]["headers"]["events"][0]["bitrateMode"] = "vbr"
+    require_invalid(validator, wrong_mode, "first headers cannot claim VBR")
+    for field, value in (("code", "MP3_UNKNOWN"), ("severity", "warning")):
+        mutated = deepcopy(malformed)
+        mutated["analysisDiagnostics"][0][field] = value
+        require_invalid(validator, mutated, f"MP3 diagnostic wrong {field}")
+    missing_recovery = deepcopy(malformed)
+    del missing_recovery["analysisDiagnostics"][0]["recoveryOffset"]
+    require_invalid(validator, missing_recovery, "MP3 error missing recovery")
+    warning_recovery = deepcopy(free)
+    warning_recovery["analysisDiagnostics"][0]["recoveryOffset"] = 29
+    require_invalid(validator, warning_recovery, "MP3 warning with fabricated recovery")
 
 
 def validate_detail_edge_cases(validator: Draft202012Validator) -> None:
@@ -1207,6 +1312,7 @@ def main() -> None:
     avc_detail_validator = None
     mp3_detail_validator = None
     media_summary_validator = None
+    media_summary_v2_validator = None
     for schema_path, instance_path in CONTRACTS:
         schema = load_json(schema_path)
         Draft202012Validator.check_schema(schema)
@@ -1223,6 +1329,8 @@ def main() -> None:
             mp3_detail_validator = validator
         if schema_path == "docs/schemas/flv-media-summary-v1.schema.json":
             media_summary_validator = validator
+        if schema_path == "docs/schemas/flv-media-summary-v2.schema.json":
+            media_summary_v2_validator = validator
 
     if detail_validator is None:
         raise SystemExit("detail schema was not validated")
@@ -1244,6 +1352,10 @@ def main() -> None:
         raise SystemExit("media summary schema was not validated")
     validate_media_summary_edge_cases(media_summary_validator)
     print("validated media-summary identity, bounds, completeness, and negative contract cases")
+    if media_summary_v2_validator is None:
+        raise SystemExit("media summary v2 schema was not validated")
+    validate_media_summary_v2_edge_cases(media_summary_v2_validator)
+    print("validated media-summary v2 version isolation, MP3 parameters, bitrate modes, retention, and recovery cases")
 
 
 if __name__ == "__main__":

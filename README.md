@@ -12,6 +12,7 @@ MuxRay 是一个面向 FLV 和音视频码流的跨平台诊断工具。项目�
 - FLV AVC VideoTagHeader、AVCPacketType、有符号 CompositionTime、AVCDecoderConfigurationRecord，以及 SPS/PPS 和 length-prefixed NAL 边界解析；
 - FLV MP3 AudioTagHeader 与首个四字节 MPEG Audio Layer III 帧头的有界详情解析；
 - AAC/AVC 跨 Tag 时间线、配置变化、声明关键帧/GOP、有覆盖区间定义的平均码率与基础 A/V 时间范围偏差；
+- 可选的 media-summary v2：MP3 跨 Tag 时间线、区间码率、首帧头参数/码率变化与音频编码切换统计；
 - 稳定、版本化的 JSON 输出和诊断代码；
 - 正常、边界、损坏样本的 unit、Golden 与 fuzz 测试。
 
@@ -25,6 +26,7 @@ go vet ./...
 go test -race ./...
 go run ./cmd/muxray inspect sample.flv
 go run ./cmd/muxray summary --pretty sample.flv
+go run ./cmd/muxray summary --schema-version 2 --pretty sample.flv
 go run ./cmd/muxray detail --tag 0 --pretty sample.flv
 ```
 
@@ -33,6 +35,8 @@ go run ./cmd/muxray detail --tag 0 --pretty sample.flv
 `summary` 输出独立的 [`flv-media-summary-v1.schema.json`](docs/schemas/flv-media-summary-v1.schema.json) 文档，分析 AAC raw 与 AVC NALU 的 DTS/PTS、CompositionTime、声明关键帧/GOP、配置变化、平均 payload 码率和基础 A/V 时间范围偏差。它不自动展开 32 位 DTS，也不把最后一帧猜成具有已知时长；码率只使用同一连续段内已被下一更大 DTS 覆盖的字节组。关键帧是 FLV `FrameType=1` 声明，不等同于已验证 IDR；A/V 偏差也不包含 codec delay 或解码后唇音同步。该 v1 合同继续冻结为 AAC/AVC 范围；即使已有独立 MP3 详情，MP3 和其他 codec 仍会在 summary v1 中明确报告为未分类。完整语义见 [`ADR-005`](docs/decisions/005-bounded-media-summary.md) 与 [`ADR-006`](docs/decisions/006-bounded-mp3-detail.md)，新增诊断码见 [`media-summary-diagnostics-v1.md`](docs/media-summary-diagnostics-v1.md)。
 
 `summary` 的退出码为：`0` 表示成功且没有 diagnostics 状态（不影响完整性的 warning 可以共存）；`2` 表示扫描或分析不完整/有 error，或 unsupported、filtered 等 warning 使摘要无法完整分类，此时仍会先输出 JSON；`1` 表示打开、读取、分析或写出等运行失败；`64` 表示参数或用法错误。
+
+`summary --schema-version 2` 显式启用 AAC/AVC/MP3 汇总，新增 `audioCodecs` 和 `mp3` 统计。MP3 每个 Tag 仅读取首帧头；参数变化与声明码率变化分别计数，编码切换、损坏或参数变化会中断相应码率覆盖区间。Free-format 可参与 DTS 和区间码率统计，但不输出无法推导的声明码率。`--max-mp3-header-events` 限制保留的事件前缀（默认 256，最多 65,536），超出后继续准确计数；此参数仅适用于 v2。默认版本仍为 1。完整口径与示例见 [`media-summary-v2.md`](docs/media-summary-v2.md) 和 [`ADR-007`](docs/decisions/007-mp3-media-summary-v2.md)。
 
 `detail --tag <id>` 在容器索引完整时，按 Tag 类型分发到对应的有界解析器，不改变默认扫描结果，也不会把所有 payload 或递归对象树保留在内存。ScriptData、AAC Audio、AVC Video 与 MP3 Audio 分别使用 [`flv-tag-detail-v1.schema.json`](docs/schemas/flv-tag-detail-v1.schema.json)、[`flv-aac-tag-detail-v1.schema.json`](docs/schemas/flv-aac-tag-detail-v1.schema.json)、[`flv-avc-tag-detail-v1.schema.json`](docs/schemas/flv-avc-tag-detail-v1.schema.json) 和 [`flv-mp3-tag-detail-v1.schema.json`](docs/schemas/flv-mp3-tag-detail-v1.schema.json)，由 `documentType` 区分，现有 AMF0/AAC/AVC v1 输出保持不变。AAC sequence header 会解析 AudioSpecificConfig，raw AAC 只报告源 Span。AVC sequence header 会解析 avcC 与 SPS/PPS 基础摘要；raw NALU 的长度字段宽度由 `--avc-nal-length-size 1|2|4` 明确指定，或在默认值 0 时从最近的有效 sequence header 自动取得，不会猜测四字节宽度。MP3 第一阶段仅解析 `SoundFormat=2` 的首个固定帧头，余下数据只报告源 Span；free-format 会保留完整详情但不虚构码率或帧长。
 

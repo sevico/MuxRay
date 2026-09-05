@@ -24,6 +24,10 @@ const avSyncBasis = "videoPtsExtremaMinusAudioDtsExtrema"
 // A/V range summaries. It reads only codec framing prefixes and sequence
 // headers; ordinary media payloads remain in the source.
 func Analyze(ctx context.Context, source io.ReaderAt, scan flv.ScanResult, options Options) (Result, error) {
+	return analyze(ctx, source, scan, options, nil)
+}
+
+func analyze(ctx context.Context, source io.ReaderAt, scan flv.ScanResult, options Options, v2 *summaryV2State) (Result, error) {
 	result := Result{Complete: !scan.HasErrors()}
 	if ctx == nil {
 		ctx = context.Background()
@@ -39,13 +43,16 @@ func Analyze(ctx context.Context, source io.ReaderAt, scan flv.ScanResult, optio
 	}
 
 	a := analyzer{
-		ctx: ctx, source: source, options: normalized, result: result,
+		ctx: ctx, source: source, options: normalized, result: result, v2: v2,
 		diagnostics:                   diagnosticCollector{limit: normalized.MaxDiagnostics},
 		previousKeyframeRetainedIndex: -1,
 	}
 	a.result.Keyframes.Entries = make([]Keyframe, 0, minCapacity(len(scan.Tags), normalized.MaxKeyframes))
 	a.result.AAC.Events = make([]AACConfiguration, 0, minCapacity(len(scan.Tags), normalized.MaxConfigurationEvents))
 	a.result.AVC.Events = make([]AVCConfiguration, 0, minCapacity(len(scan.Tags), normalized.MaxConfigurationEvents))
+	if v2 != nil {
+		v2.mp3.Headers.Events = make([]MP3HeaderEvent, 0, minCapacity(len(scan.Tags), v2.headerLimit))
+	}
 
 	for index, tag := range scan.Tags {
 		if index&1023 == 0 {
@@ -72,6 +79,7 @@ type analyzer struct {
 	options     Options
 	result      Result
 	diagnostics diagnosticCollector
+	v2          *summaryV2State
 
 	previousAACFingerprint        string
 	haveAACFingerprint            bool
@@ -114,11 +122,13 @@ func (a *analyzer) visit(tag flv.TagRecord) error {
 func (a *analyzer) visitAudio(tag flv.TagRecord) error {
 	if !a.usable(tag, &a.result.Audio) {
 		a.resetAACEpoch()
+		a.unknownAudioV2()
 		return nil
 	}
 	prefix := a.framingScratch[:2]
 	if tag.DataSize == 0 {
 		a.resetAACEpoch()
+		a.unknownAudioV2()
 		a.unclassified(&a.result.Audio, Diagnostic{
 			Code: CodeAudioHeaderTruncated, Severity: SeverityError, Offset: tag.PayloadSpan().ByteOffset,
 			Message: "FLV audio tag header is missing", Expected: number(1), Actual: number(0),
@@ -128,12 +138,24 @@ func (a *analyzer) visitAudio(tag flv.TagRecord) error {
 	if err := readAtLeast(a.source, prefix[:1], tag.PayloadSpan().ByteOffset); err != nil {
 		return fmt.Errorf("analysis: read audio tag %d header: %w", tag.ID, err)
 	}
-	if soundFormat := prefix[0] >> 4; soundFormat != flv.SoundFormatAAC {
+	soundFormat := prefix[0] >> 4
+	if a.v2 != nil {
+		a.observeAudioCodecV2(soundFormat)
+		if soundFormat == flv.SoundFormatMP3 {
+			a.resetAACEpoch()
+			return a.visitMP3(tag)
+		}
+	}
+	if soundFormat != flv.SoundFormatAAC {
 		a.resetAACEpoch()
+		message := "audio codec is outside the AAC media-summary v1 scope"
+		if a.v2 != nil {
+			message = "audio codec is outside the AAC/MP3 media-summary v2 scope"
+		}
 		a.unclassified(&a.result.Audio, Diagnostic{
 			Code: CodeAudioCodecUnsupported, Severity: SeverityWarning,
 			Offset: tag.PayloadSpan().ByteOffset, BitOffset: 0,
-			Message: "audio codec is outside the AAC media-summary v1 scope",
+			Message: message,
 			Actual:  number(uint64(soundFormat)),
 		}, tag)
 		return nil
@@ -317,6 +339,10 @@ func (a *analyzer) usable(tag flv.TagRecord, track *Track) bool {
 }
 
 func (a *analyzer) unclassified(track *Track, diagnostic Diagnostic, tag flv.TagRecord) {
+	if a.v2 != nil && track == &a.result.Audio {
+		a.breakAudioCoverageV2()
+		a.v2.haveMP3Header = false
+	}
 	track.UnclassifiedTagCount++
 	a.result.Complete = false
 	diagnostic.TagID = tagID(tag.ID)
@@ -622,6 +648,9 @@ func (a *analyzer) finish() Result {
 		a.result.Complete = false
 	}
 	a.result.Audio.finish(a.audioBitrate)
+	if a.v2 != nil {
+		a.v2.mp3.Track.finish(a.v2.mp3Bitrate)
+	}
 	a.result.Video.finish(a.videoBitrate)
 	a.result.VideoPTS.finish()
 	if a.result.GOP.ClosedDurationCount > 0 {
@@ -629,7 +658,8 @@ func (a *analyzer) finish() Result {
 	}
 	if a.result.Complete && a.result.Audio.UnclassifiedTagCount == 0 && a.result.Video.UnclassifiedTagCount == 0 &&
 		a.result.Audio.Timing.Present && a.result.VideoPTS.Present &&
-		a.result.Audio.Timing.RegressionCount == 0 && a.result.Video.Timing.RegressionCount == 0 {
+		a.result.Audio.Timing.RegressionCount == 0 && a.result.Video.Timing.RegressionCount == 0 &&
+		(a.v2 == nil || a.v2.audioCodecs.SwitchCount == 0) {
 		overlapStart := maxInt64(a.result.Audio.Timing.MinMS, a.result.VideoPTS.MinMS)
 		overlapEnd := minInt64(a.result.Audio.Timing.MaxMS, a.result.VideoPTS.MaxMS)
 		a.result.AVSync = AVSync{
