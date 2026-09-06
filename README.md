@@ -7,6 +7,7 @@ MuxRay 是一个面向 FLV 和音视频码流的跨平台诊断工具。项目�
 - 有界 byte/bit 读取与统一源范围 `Span`；
 - FLV Header、PreviousTagSize 和 Tag 索引扫描；
 - 可取消的分块索引、按全局 Tag ID 查询和有界分页；
+- Go 后台扫描会话、标量进度快照、取消/等待/关闭和结束后分页；
 - 按 Tag、资源有界的通用详情分发；
 - AMF0 ScriptData 详情解析；
 - FLV AAC AudioTagHeader、AACPacketType 与 MPEG-4 AudioSpecificConfig 详情解析；
@@ -45,9 +46,11 @@ go run ./cmd/muxray detail --tag 0 --pretty sample.flv
 
 损坏或超限的 AMF0/AAC/AVC/MP3 语法仍会输出部分结果、精确到 bit 的诊断和 Tag payload 末端恢复位置，并以状态码 2 退出。非 AAC/MP3 Audio、非 AVC Video、尚未支持的编解码器以及不完整的容器索引不会伪装成详情文档。稳定诊断码见 [`docs/amf0-diagnostics-v1.md`](docs/amf0-diagnostics-v1.md)、[`docs/aac-diagnostics-v1.md`](docs/aac-diagnostics-v1.md)、[`docs/avc-diagnostics-v1.md`](docs/avc-diagnostics-v1.md) 和 [`docs/mp3-diagnostics-v1.md`](docs/mp3-diagnostics-v1.md)。
 
-`tags --start <id> --count <n>` 扫描后输出一个有界 Tag 页，使用独立的 [`flv-tag-page-v1.schema.json`](docs/schemas/flv-tag-page-v1.schema.json) 合同。默认从 0 开始、每页 256 条，允许 1–4,096 条；ID 和 Span 不会按页重新编号。页尾 `next` 可作为下一页的 `start`；`start == total` 返回空页，超出则退出 64。当前每次 CLI 调用都会重新扫描，不提供后台会话或边扫描边查询。详细接口与退出码见 [`tag-index-v1.md`](docs/tag-index-v1.md)。
+`tags --start <id> --count <n>` 扫描后输出一个有界 Tag 页，使用独立的 [`flv-tag-page-v1.schema.json`](docs/schemas/flv-tag-page-v1.schema.json) 合同。默认从 0 开始、每页 256 条，允许 1–4,096 条；ID 和 Span 不会按页重新编号。页尾 `next` 可作为下一页的 `start`；`start == total` 返回空页，超出则退出 64。当前每次 CLI 调用都会重新扫描，尚未接入 Go 后台会话，也不提供边扫描边查询。详细接口与退出码见 [`tag-index-v1.md`](docs/tag-index-v1.md)。
 
-CLI 使用 `ScanContext` 按需构建每块 1,024 条的索引，`inspect` 流式导出且不复制整个索引；旧 `Scan` 及其 `Tags` slice 继续兼容。默认和硬上限仍为 1,000,000 个 Tag，诊断默认 1,024 条、允许范围 2–65,536 条。至少保留两条，才能同时提供首个问题和“诊断已截断”标记。更高 Tag 上限、磁盘索引和实时进度另行设计，本阶段不开放。
+CLI 使用 `ScanContext` 按需构建每块 1,024 条的索引，`inspect` 流式导出且不复制整个索引；旧 `Scan` 及其 `Tags` slice 继续兼容。默认和硬上限仍为 1,000,000 个 Tag，诊断默认 1,024 条、允许范围 2–65,536 条。至少保留两条，才能同时提供首个问题和“诊断已截断”标记。更高 Tag 上限和磁盘索引仍未开放。
+
+Go 应用层新增 `internal/session.Open`：一个会话拥有一个后台扫描 worker，支持 `Snapshot/Cancel/Wait/Page/Result/Close`。扫描期间仅发布有界标量进度，结束后才能访问完整或部分索引；文件在扫描结束后自动关闭，等待超时不强制终止底层 I/O。使用方式、错误与资源所有权见 [`后台扫描会话`](docs/background-scan-session.md) 和 [`ADR-009`](docs/decisions/009-background-scan-sessions.md)。这不是新的 CLI/JSON 合同，也尚未实现桌面界面。
 
 扫描、详情、汇总和输出共用 Ctrl+C 取消上下文，取消退出码为 `130`，不会伪造文件损坏诊断。取消时 stdout 可能不完整，调用方应丢弃；核心返回的部分索引仍可分页读取。取消是协作式的，不能强制中断已阻塞的底层读取或写入。设计依据见 [`ADR-008`](docs/decisions/008-cancellable-chunked-index.md)。
 

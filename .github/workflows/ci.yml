@@ -71,6 +71,8 @@ jobs:
         run: go test ./internal/flv -run=^$ -fuzz=FuzzTag -fuzztime=30s
       - name: Fuzz chunked scan and tag pages
         run: go test ./internal/flv -run=^$ -fuzz=FuzzScanContextPage -fuzztime=30s
+      - name: Fuzz scan progress equivalence
+        run: go test ./internal/flv -run=^$ -fuzz=FuzzScanProgress -fuzztime=30s
       - name: Fuzz FLV AAC detail
         run: go test ./internal/flv -run=^$ -fuzz=FuzzAACAudio -fuzztime=30s
       - name: Fuzz FLV MP3 detail

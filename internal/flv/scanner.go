@@ -15,7 +15,7 @@ import (
 // not retain payload bytes and therefore keeps memory use independent of input
 // payload size apart from the bounded tag index.
 func Scan(source io.ReaderAt, size uint64, options Options) (ScanResult, error) {
-	return scan(context.Background(), source, size, options, false)
+	return scan(context.Background(), source, size, options, false, nil)
 }
 
 // ScanContext builds an immutable chunked index without populating Tags. On
@@ -25,10 +25,10 @@ func ScanContext(ctx context.Context, source io.ReaderAt, size uint64, options O
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return scan(ctx, source, size, options, true)
+	return scan(ctx, source, size, options, true, nil)
 }
 
-func scan(ctx context.Context, source io.ReaderAt, size uint64, options Options, chunked bool) (ScanResult, error) {
+func scan(ctx context.Context, source io.ReaderAt, size uint64, options Options, chunked bool, progress func(ScanProgress)) (ScanResult, error) {
 	if source == nil {
 		return ScanResult{}, errors.New("flv: nil source")
 	}
@@ -60,18 +60,27 @@ func scan(ctx context.Context, source io.ReaderAt, size uint64, options Options,
 		return result, err
 	}
 	finish := func(complete bool) (ScanResult, error) { return finishError(complete, nil) }
+	count := func() uint64 {
+		if chunked {
+			return result.index.Len()
+		}
+		return uint64(len(result.Tags))
+	}
+	publishProgress := func() {
+		progress(ScanProgress{
+			SourceSize: size, BytesScanned: reader.Offset(),
+			TagCount: count(), DiagnosticCount: uint32(len(diagnostics.items)),
+		})
+	}
 	appendRecord := func(record TagRecord) {
 		if chunked {
 			result.index.append(record)
 		} else {
 			result.Tags = append(result.Tags, record)
 		}
-	}
-	count := func() uint64 {
-		if chunked {
-			return result.index.Len()
+		if progress != nil && count()%tagBlockSize == 0 {
+			publishProgress()
 		}
-		return uint64(len(result.Tags))
 	}
 
 	if size < HeaderSize {
@@ -169,6 +178,9 @@ func scan(ctx context.Context, source io.ReaderAt, size uint64, options Options,
 	}
 	if !chunked {
 		result.Tags = make([]TagRecord, 0, initialTagCapacity(reader.Remaining(), options.MaxTags))
+	}
+	if progress != nil {
+		publishProgress()
 	}
 
 	var tagHeader [11]byte
