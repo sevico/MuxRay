@@ -13,3 +13,4 @@ Repository-wide architecture and compatibility decisions are recorded here. An a
 | [ADR-007](./007-mp3-media-summary-v2.md) | Accepted | Opt in to MP3 cross-tag summaries with explicit codec boundaries and a separate media-summary v2 contract |
 | [ADR-008](./008-cancellable-chunked-index.md) | Accepted | Add cancellable chunked scans and bounded tag pages while preserving legacy scans and existing JSON contracts |
 | [ADR-009](./009-background-scan-sessions.md) | Accepted | Add bounded progress snapshots and owned background scan sessions with post-scan paging and explicit cleanup |
+| [ADR-010](./010-minimal-desktop-adapter.md) | Accepted | Add a single-slot desktop adapter with stale-request isolation, exact integer DTOs, bounded pages, and explicit host shutdown |

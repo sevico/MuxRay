@@ -231,9 +231,14 @@ func (s *Session) Result() (flv.ScanResult, error) {
 	if err != nil {
 		return flv.ScanResult{}, err
 	}
-	result.Diagnostics = slices.Clone(result.Diagnostics)
-	for i := range result.Diagnostics {
-		diagnostic := &result.Diagnostics[i]
+	result.Diagnostics = cloneDiagnostics(result.Diagnostics)
+	return result, nil
+}
+
+func cloneDiagnostics(diagnostics []flv.Diagnostic) []flv.Diagnostic {
+	diagnostics = slices.Clone(diagnostics)
+	for i := range diagnostics {
+		diagnostic := &diagnostics[i]
 		if diagnostic.Expected != nil {
 			value := *diagnostic.Expected
 			diagnostic.Expected = &value
@@ -243,7 +248,7 @@ func (s *Session) Result() (flv.ScanResult, error) {
 			diagnostic.Actual = &value
 		}
 	}
-	return result, nil
+	return diagnostics
 }
 
 // Close disables new result/page access, cancels the worker, and releases the

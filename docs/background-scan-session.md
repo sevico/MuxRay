@@ -154,3 +154,10 @@ $env:Path = 'C:\Users\swk01\scoop\apps\gcc\current\bin;' + $env:Path
 
 下一阶段可在这个 Go API 上设计最小桌面适配层；源文件复用的详情/汇总会话、
 扫描中分页、事件推送、磁盘索引、提升 Tag 上限不属于本批。
+
+### 后续桌面适配层
+
+[ADR-010](decisions/010-minimal-desktop-adapter.md) 已实现独立的单槽位 Go 适配层，
+并新增 `Session.DiagnosticPage(start, count)`：只深拷贝一个有界诊断窗口，沿用
+结束后查询、关闭后拒绝和每页 1–4,096 条规则。原有会话接口保持兼容。
+适配层的整数传输、错误和宿主生命周期见 [桌面适配层说明](desktop-adapter-v1.md)。

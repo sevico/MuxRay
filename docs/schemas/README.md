@@ -56,6 +56,12 @@ For the same bytes, scanner/detail/summary options, schema version, and MuxRay b
 
 JSON numbers used for offsets and sizes are unsigned 64-bit integers. Consumers must not silently round values through an IEEE-754-only representation. In particular, JavaScript clients should use a lossless JSON parser before accepting values above `2^53 - 1`.
 
+The separate [desktop adapter](../desktop-adapter-v1.md) uses `apiVersion: 1`
+DTOs with decimal strings for 64-bit values. It does not send these CLI report
+documents through a desktop binding or change any of the schemas above. Its
+Go/JSON shape tests are separate from CLI Schema validation; actual GUI binding
+generation is not yet implemented.
+
 ## Field semantics
 
 - A `span` is half-open in bit space: it starts at `(byteOffset, bitOffset)` and covers exactly `bitLength` bits. Bit offset zero is the most-significant bit of the first byte.
