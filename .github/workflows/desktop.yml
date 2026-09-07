@@ -1,0 +1,50 @@
+name: Desktop
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-shell:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: desktop/go.mod
+          cache: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+      - name: Install reviewed Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.14.0
+      - name: Generate and verify bindings
+        run: |
+          wails generate module
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --exit-code -- frontend/wailsjs/go go.mod go.sum
+      - name: Install frontend
+        run: npm ci --no-audit --no-fund
+        working-directory: desktop/frontend
+      - name: Frontend tests
+        run: npm test
+        working-directory: desktop/frontend
+      - name: Type-check and build frontend
+        run: npm run build
+        working-directory: desktop/frontend
+      - name: Host tests and vet
+        run: |
+          go test -count=1 ./...
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go vet ./...
+      - name: Production Windows build (no installer)
+        run: wails build -webview2 error -nopackage -trimpath

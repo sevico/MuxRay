@@ -1,0 +1,496 @@
+export namespace desktop {
+	
+	export class Diagnostic {
+	    code: string;
+	    severity: string;
+	    offset: string;
+	    bitOffset: number;
+	    message: string;
+	    expected?: string;
+	    actual?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Diagnostic(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.severity = source["severity"];
+	        this.offset = source["offset"];
+	        this.bitOffset = source["bitOffset"];
+	        this.message = source["message"];
+	        this.expected = source["expected"];
+	        this.actual = source["actual"];
+	    }
+	}
+	export class PageBounds {
+	    start: string;
+	    limit: number;
+	    total: string;
+	    next: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PageBounds(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.start = source["start"];
+	        this.limit = source["limit"];
+	        this.total = source["total"];
+	        this.next = source["next"];
+	    }
+	}
+	export class DiagnosticPage {
+	    sessionId: string;
+	    bounds: PageBounds;
+	    diagnostics: Diagnostic[];
+	
+	    static createFrom(source: any = {}) {
+	        return new DiagnosticPage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.bounds = this.convertValues(source["bounds"], PageBounds);
+	        this.diagnostics = this.convertValues(source["diagnostics"], Diagnostic);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Fault {
+	    code: string;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Fault(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.message = source["message"];
+	    }
+	}
+	export class DiagnosticPageResponse {
+	    apiVersion: number;
+	    page?: DiagnosticPage;
+	    error?: Fault;
+	
+	    static createFrom(source: any = {}) {
+	        return new DiagnosticPageResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.apiVersion = source["apiVersion"];
+	        this.page = this.convertValues(source["page"], DiagnosticPage);
+	        this.error = this.convertValues(source["error"], Fault);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class OpenRequest {
+	    path: string;
+	    maxTags: number;
+	    maxDiagnostics: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new OpenRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.maxTags = source["maxTags"];
+	        this.maxDiagnostics = source["maxDiagnostics"];
+	    }
+	}
+	
+	export class PageRequest {
+	    sessionId: string;
+	    start: string;
+	    count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new PageRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.start = source["start"];
+	        this.count = source["count"];
+	    }
+	}
+	export class Span {
+	    byteOffset: string;
+	    bitOffset: number;
+	    bitLength: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Span(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.byteOffset = source["byteOffset"];
+	        this.bitOffset = source["bitOffset"];
+	        this.bitLength = source["bitLength"];
+	    }
+	}
+	export class PreviousTagSize {
+	    present: boolean;
+	    span?: Span;
+	    value: number;
+	    expected: number;
+	    valid: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new PreviousTagSize(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.present = source["present"];
+	        this.span = this.convertValues(source["span"], Span);
+	        this.value = source["value"];
+	        this.expected = source["expected"];
+	        this.valid = source["valid"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Progress {
+	    sourceSize: string;
+	    bytesScanned: string;
+	    tagCount: string;
+	    diagnosticCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Progress(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sourceSize = source["sourceSize"];
+	        this.bytesScanned = source["bytesScanned"];
+	        this.tagCount = source["tagCount"];
+	        this.diagnosticCount = source["diagnosticCount"];
+	    }
+	}
+	export class ScanOutcome {
+	    complete: boolean;
+	    hasErrors: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ScanOutcome(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.complete = source["complete"];
+	        this.hasErrors = source["hasErrors"];
+	    }
+	}
+	export class SessionSnapshot {
+	    sessionId: string;
+	    state: string;
+	    terminal: boolean;
+	    closed: boolean;
+	    progress?: Progress;
+	    scan?: ScanOutcome;
+	    failure?: Fault;
+	
+	    static createFrom(source: any = {}) {
+	        return new SessionSnapshot(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.state = source["state"];
+	        this.terminal = source["terminal"];
+	        this.closed = source["closed"];
+	        this.progress = this.convertValues(source["progress"], Progress);
+	        this.scan = this.convertValues(source["scan"], ScanOutcome);
+	        this.failure = this.convertValues(source["failure"], Fault);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SessionResponse {
+	    apiVersion: number;
+	    session?: SessionSnapshot;
+	    error?: Fault;
+	
+	    static createFrom(source: any = {}) {
+	        return new SessionResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.apiVersion = source["apiVersion"];
+	        this.session = this.convertValues(source["session"], SessionSnapshot);
+	        this.error = this.convertValues(source["error"], Fault);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
+	export class Tag {
+	    id: string;
+	    typeCode: number;
+	    typeName: string;
+	    offset: string;
+	    span: Span;
+	    headerSpan: Span;
+	    payloadSpan: Span;
+	    rawTypeFlags: number;
+	    filter: boolean;
+	    dataSize: number;
+	    availableDataSize: number;
+	    dts: string;
+	    streamId: number;
+	    payloadComplete: boolean;
+	    previousTagSize: PreviousTagSize;
+	
+	    static createFrom(source: any = {}) {
+	        return new Tag(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.typeCode = source["typeCode"];
+	        this.typeName = source["typeName"];
+	        this.offset = source["offset"];
+	        this.span = this.convertValues(source["span"], Span);
+	        this.headerSpan = this.convertValues(source["headerSpan"], Span);
+	        this.payloadSpan = this.convertValues(source["payloadSpan"], Span);
+	        this.rawTypeFlags = source["rawTypeFlags"];
+	        this.filter = source["filter"];
+	        this.dataSize = source["dataSize"];
+	        this.availableDataSize = source["availableDataSize"];
+	        this.dts = source["dts"];
+	        this.streamId = source["streamId"];
+	        this.payloadComplete = source["payloadComplete"];
+	        this.previousTagSize = this.convertValues(source["previousTagSize"], PreviousTagSize);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TagPage {
+	    sessionId: string;
+	    bounds: PageBounds;
+	    tags: Tag[];
+	
+	    static createFrom(source: any = {}) {
+	        return new TagPage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.bounds = this.convertValues(source["bounds"], PageBounds);
+	        this.tags = this.convertValues(source["tags"], Tag);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TagPageResponse {
+	    apiVersion: number;
+	    page?: TagPage;
+	    error?: Fault;
+	
+	    static createFrom(source: any = {}) {
+	        return new TagPageResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.apiVersion = source["apiVersion"];
+	        this.page = this.convertValues(source["page"], TagPage);
+	        this.error = this.convertValues(source["error"], Fault);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
+export namespace main {
+	
+	export class PickResponse {
+	    apiVersion: number;
+	    canceled: boolean;
+	    fileName: string;
+	    session?: desktop.SessionSnapshot;
+	    error?: desktop.Fault;
+	
+	    static createFrom(source: any = {}) {
+	        return new PickResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.apiVersion = source["apiVersion"];
+	        this.canceled = source["canceled"];
+	        this.fileName = source["fileName"];
+	        this.session = this.convertValues(source["session"], desktop.SessionSnapshot);
+	        this.error = this.convertValues(source["error"], desktop.Fault);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+

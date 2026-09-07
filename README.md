@@ -9,6 +9,7 @@ MuxRay 是一个面向 FLV 和音视频码流的跨平台诊断工具。项目�
 - 可取消的分块索引、按全局 Tag ID 查询和有界分页；
 - Go 后台扫描会话、标量进度快照、取消/等待/关闭和结束后分页；
 - 最小桌面 Go 适配层：单会话管理、旧请求隔离、精确整数 DTO 和 Tag/诊断分页；
+- 独立 Wails/React 最小桌面壳：原生文件选择、进度、取消/关闭和有界结果页；
 - 按 Tag、资源有界的通用详情分发；
 - AMF0 ScriptData 详情解析；
 - FLV AAC AudioTagHeader、AACPacketType 与 MPEG-4 AudioSpecificConfig 详情解析；
@@ -20,7 +21,7 @@ MuxRay 是一个面向 FLV 和音视频码流的跨平台诊断工具。项目�
 - 正常、边界、损坏样本的 unit、Golden 与 fuzz 测试；
 - 离线语料身份/差分校验与实际落盘大文件的扫描测量工具。
 
-Wails 桌面界面、完整 VUI/PPS/slice 等深层 H.264 语义、MP3 多帧/VBR/CRC 深层分析、分页帧级曲线和实时 RTMP/HTTP-FLV 将在后续阶段加入。
+桌面详情树/hex/summary、完整 VUI/PPS/slice 等深层 H.264 语义、MP3 多帧/VBR/CRC 深层分析、分页帧级曲线和实时 RTMP/HTTP-FLV 将在后续阶段加入。
 
 ## 开发
 
@@ -51,9 +52,11 @@ go run ./cmd/muxray detail --tag 0 --pretty sample.flv
 
 CLI 使用 `ScanContext` 按需构建每块 1,024 条的索引，`inspect` 流式导出且不复制整个索引；旧 `Scan` 及其 `Tags` slice 继续兼容。默认和硬上限仍为 1,000,000 个 Tag，诊断默认 1,024 条、允许范围 2–65,536 条。至少保留两条，才能同时提供首个问题和“诊断已截断”标记。更高 Tag 上限和磁盘索引仍未开放。
 
-Go 应用层新增 `internal/session.Open`：一个会话拥有一个后台扫描 worker，支持 `Snapshot/Cancel/Wait/Page/Result/Close`。扫描期间仅发布有界标量进度，结束后才能访问完整或部分索引；文件在扫描结束后自动关闭，等待超时不强制终止底层 I/O。使用方式、错误与资源所有权见 [`后台扫描会话`](docs/background-scan-session.md) 和 [`ADR-009`](docs/decisions/009-background-scan-sessions.md)。这不是新的 CLI/JSON 合同，也尚未实现桌面界面。
+Go 应用层新增 `internal/session.Open`：一个会话拥有一个后台扫描 worker，支持 `Snapshot/Cancel/Wait/Page/Result/Close`。扫描期间仅发布有界标量进度，结束后才能访问完整或部分索引；文件在扫描结束后自动关闭，等待超时不强制终止底层 I/O。使用方式、错误与资源所有权见 [`后台扫描会话`](docs/background-scan-session.md) 和 [`ADR-009`](docs/decisions/009-background-scan-sessions.md)。这不是新的 CLI/JSON 合同。
 
-`internal/desktop` 在会话上提供六个 DTO 接口：异步打开、状态查询、取消、关闭、Tag 分页和诊断分页。应用一次只拥有一个槽位；旧 ID 不能操作新文件，64 位数值通过十进制字符串传输。宿主退出有独立的清理入口，仍保持纯 Go 构建。见 [`桌面适配层说明`](docs/desktop-adapter-v1.md) 和 [`ADR-010`](docs/decisions/010-minimal-desktop-adapter.md)。本批没有接入 Wails/React，也没有可启动的 GUI 窗口。
+`internal/desktop` 在会话上提供六个 DTO 接口：异步打开、状态查询、取消、关闭、Tag 分页和诊断分页。应用一次只拥有一个槽位；旧 ID 不能操作新文件，64 位数值通过十进制字符串传输。宿主退出有独立的清理入口，仍保持纯 Go 构建。见 [`桌面适配层说明`](docs/desktop-adapter-v1.md) 和 [`ADR-010`](docs/decisions/010-minimal-desktop-adapter.md)。
+
+`desktop/` 是独立 Go 模块，接入 Wails v2.14.0 与 React/TypeScript。界面提供原生文件选择、进度、取消/关闭，以及扫描结束后的 Tag/诊断分页（每页 100 条）。根模块不引入 GUI 依赖；Windows 构建、测试和功能边界见 [`桌面开发说明`](desktop/README.md) 与 [`ADR-011`](docs/decisions/011-minimal-wails-shell.md)。
 
 扫描、详情、汇总和输出共用 Ctrl+C 取消上下文，取消退出码为 `130`，不会伪造文件损坏诊断。取消时 stdout 可能不完整，调用方应丢弃；核心返回的部分索引仍可分页读取。取消是协作式的，不能强制中断已阻塞的底层读取或写入。设计依据见 [`ADR-008`](docs/decisions/008-cancellable-chunked-index.md)。
 

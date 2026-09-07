@@ -13,6 +13,12 @@ __pycache__/
 /frontend/node_modules/
 /frontend/dist/
 /desktop/build/bin/
+/desktop/frontend/node_modules/
+/desktop/frontend/package.json.md5
+/desktop/frontend/dist/
+/desktop/frontend/wailsjs/runtime/
+/desktop/frontend/.test-build/
+/desktop/*.syso
 
 # Local analysis artifacts and media corpus
 /.cache/

@@ -1,0 +1,25 @@
+{
+  "name": "muxray-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "test:browser": "node test/browser-smoke.mjs",
+    "build": "npm run typecheck && vite build"
+  },
+  "engines": { "node": ">=22.18.0" },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "typescript": "5.9.3",
+    "vite": "7.3.6"
+  }
+}
