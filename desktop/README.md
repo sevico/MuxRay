@@ -3,6 +3,7 @@
 Wails **v2.14.0** + React **18.3.1** + TypeScript **5.9.3**，构建工具 Vite
 **7.3.6**。这是本地开发预览，不是已完成清权、签名或安装器验收的发行版。
 架构边界见 [ADR-011](../docs/decisions/011-minimal-wails-shell.md)。
+打开响应恢复协议见 [ADR-012](../docs/decisions/012-recoverable-native-open.md)。
 
 ## 范围
 
