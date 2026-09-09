@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -19,8 +20,9 @@ type host struct {
 	stop   sync.Once
 }
 
-// Native exposes exactly one method. Host lifecycle and the Wails context must
-// never become callable from JavaScript through binding reflection.
+// Native exposes only picker commands and their bounded recovery result.
+// Host lifecycle and the Wails context must never become callable from
+// JavaScript through binding reflection.
 type Native struct {
 	mu      sync.Mutex
 	ctx     context.Context
@@ -28,10 +30,14 @@ type Native struct {
 	picking bool
 	dialog  fileDialog
 	api     *desktop.Bindings
+	openID  uint64
+	opened  PickResponse
 }
 
 type PickResponse struct {
 	APIVersion uint8                    `json:"apiVersion"`
+	RequestID  string                   `json:"requestId"`
+	Pending    bool                     `json:"pending"`
 	Canceled   bool                     `json:"canceled"`
 	FileName   string                   `json:"fileName"`
 	Session    *desktop.SessionSnapshot `json:"session"`
@@ -111,50 +117,109 @@ func pickerError(code, message string) PickResponse {
 	return PickResponse{APIVersion: desktop.APIVersion, Error: &desktop.Fault{Code: code, Message: message}}
 }
 
-func (n *Native) OpenFLV() PickResponse {
+func openRequestID(value string) (uint64, bool) {
+	id, err := strconv.ParseUint(value, 10, 64)
+	return id, err == nil && id != 0 && strconv.FormatUint(id, 10) == value
+}
+
+func (n *Native) openResultLocked() PickResponse {
+	result := n.opened
+	if result.Session != nil {
+		current := n.api.GetSession(result.Session.SessionID)
+		result.Session, result.Error = current.Session, current.Error
+	}
+	return result
+}
+
+// GetOpenResult never opens a dialog or source. An unseen request is sealed as
+// canceled, so an OpenFLV invocation delivered after this query cannot create
+// an orphan session. Only the latest monotonically numbered request is kept.
+func (n *Native) GetOpenResult(requestID string) PickResponse {
+	id, valid := openRequestID(requestID)
+	if !valid {
+		return pickerError("invalid_argument", "Invalid open request ID.")
+	}
 	n.mu.Lock()
-	if n.closing {
+	defer n.mu.Unlock()
+	if id < n.openID {
+		result := pickerError("stale_request", "The open request has been superseded.")
+		result.RequestID = requestID
+		return result
+	}
+	if id > n.openID {
+		if n.picking {
+			result := pickerError("busy", "A file dialog is already open.")
+			result.RequestID = requestID
+			return result
+		}
+		n.openID = id
+		n.opened = PickResponse{APIVersion: desktop.APIVersion, RequestID: requestID, Canceled: true}
+	}
+	return n.openResultLocked()
+}
+
+func (n *Native) OpenFLV(requestID string) PickResponse {
+	id, valid := openRequestID(requestID)
+	if !valid {
+		return pickerError("invalid_argument", "Invalid open request ID.")
+	}
+	n.mu.Lock()
+	if id <= n.openID {
+		defer n.mu.Unlock()
+		if id == n.openID {
+			return n.openResultLocked()
+		}
+		result := pickerError("stale_request", "The open request has been superseded.")
+		result.RequestID = requestID
+		return result
+	}
+	fail := func(code, message string) PickResponse {
+		result := pickerError(code, message)
+		result.RequestID = requestID
 		n.mu.Unlock()
-		return pickerError("shutting_down", "The application is shutting down.")
+		return result
+	}
+	if n.closing {
+		return fail("shutting_down", "The application is shutting down.")
 	}
 	if n.ctx == nil {
-		n.mu.Unlock()
-		return pickerError("not_ready", "The desktop window is not ready.")
+		return fail("not_ready", "The desktop window is not ready.")
 	}
 	if n.picking {
-		n.mu.Unlock()
-		return pickerError("busy", "A file dialog is already open.")
+		return fail("busy", "A file dialog is already open.")
 	}
+	n.openID = id
+	n.opened = PickResponse{APIVersion: desktop.APIVersion, RequestID: requestID, Pending: true}
 	n.picking = true
 	ctx := n.ctx
 	n.mu.Unlock()
-	defer func() {
-		n.mu.Lock()
-		n.picking = false
-		n.mu.Unlock()
-	}()
 
 	path, err := n.dialog(ctx)
 	n.mu.Lock()
 	defer n.mu.Unlock()
+	finish := func(result PickResponse) PickResponse {
+		result.RequestID = requestID
+		n.opened, n.picking = result, false
+		return result
+	}
 	if n.closing {
-		return pickerError("shutting_down", "The application is shutting down.")
+		return finish(pickerError("shutting_down", "The application is shutting down."))
 	}
 	if err != nil {
-		return pickerError("dialog_failed", "The file dialog could not be opened.")
+		return finish(pickerError("dialog_failed", "The file dialog could not be opened."))
 	}
 	if path == "" {
-		return PickResponse{APIVersion: desktop.APIVersion, Canceled: true}
+		return finish(PickResponse{APIVersion: desktop.APIVersion, Canceled: true})
 	}
 	// Native pickers return absolute paths. Reject a surprising relative result
 	// instead of making its meaning depend on the process working directory.
 	if !filepath.IsAbs(path) {
-		return pickerError("invalid_argument", "The selected path must be absolute.")
+		return finish(pickerError("invalid_argument", "The selected path must be absolute."))
 	}
 	result := n.api.OpenFile(desktop.OpenRequest{Path: path})
 	response := PickResponse{APIVersion: result.APIVersion, Session: result.Session, Error: result.Error}
 	if result.Error == nil {
 		response.FileName = filepath.Base(path)
 	}
-	return response
+	return finish(response)
 }

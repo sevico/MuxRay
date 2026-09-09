@@ -45,7 +45,7 @@ func TestShutdownMessage(t *testing.T) {
 
 func TestNativeSurface(t *testing.T) {
 	typ := reflect.TypeOf((*Native)(nil))
-	if typ.NumMethod() != 1 || typ.Method(0).Name != "OpenFLV" {
+	if typ.NumMethod() != 2 || typ.Method(0).Name != "GetOpenResult" || typ.Method(1).Name != "OpenFLV" {
 		t.Fatalf("unexpected native surface: %v", typ)
 	}
 }
@@ -63,11 +63,11 @@ func TestPickerOutcomes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newHost(func(context.Context) (string, error) { return tc.path, tc.err })
 			defer h.shutdown(context.Background())
-			if result := h.native.OpenFLV(); result.Error == nil || result.Error.Code != "not_ready" {
+			if result := h.native.OpenFLV("1"); result.Error == nil || result.Error.Code != "not_ready" {
 				t.Fatalf("before startup: %+v", result)
 			}
 			h.startup(context.Background())
-			result := h.native.OpenFLV()
+			result := h.native.OpenFLV("1")
 			if result.APIVersion != 1 || result.Canceled != tc.canceled || result.Session != nil || result.FileName != "" {
 				t.Fatalf("unexpected outcome: %+v", result)
 			}
@@ -89,11 +89,11 @@ func TestPickerOpensOnlyOwnedSlot(t *testing.T) {
 	h := newHost(func(context.Context) (string, error) { return path, nil })
 	defer h.shutdown(context.Background())
 	h.startup(context.Background())
-	result := h.native.OpenFLV()
+	result := h.native.OpenFLV("1")
 	if result.Error != nil || result.Session == nil || result.FileName != "测试.flv" || result.Canceled {
 		t.Fatalf("open: %+v", result)
 	}
-	if second := h.native.OpenFLV(); second.Error == nil || second.Error.Code != "busy" || second.FileName != "" {
+	if second := h.native.OpenFLV("2"); second.Error == nil || second.Error.Code != "busy" || second.FileName != "" {
 		t.Fatalf("second open: %+v", second)
 	}
 	if h.beforeClose(context.Background()) {
@@ -118,9 +118,9 @@ func TestCloseDuringPickerAndConcurrentAdmission(t *testing.T) {
 	defer h.shutdown(context.Background())
 	h.startup(context.Background())
 	done := make(chan PickResponse, 1)
-	go func() { done <- h.native.OpenFLV() }()
+	go func() { done <- h.native.OpenFLV("1") }()
 	<-entered
-	if second := h.native.OpenFLV(); second.Error == nil || second.Error.Code != "busy" {
+	if second := h.native.OpenFLV("2"); second.Error == nil || second.Error.Code != "busy" {
 		t.Fatalf("concurrent dialog: %+v", second)
 	}
 	h.beforeClose(context.Background())
@@ -129,7 +129,7 @@ func TestCloseDuringPickerAndConcurrentAdmission(t *testing.T) {
 	if result := <-done; result.Error == nil || result.Error.Code != "shutting_down" || result.Session != nil {
 		t.Fatalf("late picker: %+v", result)
 	}
-	if result := h.native.OpenFLV(); result.Error == nil || result.Error.Code != "shutting_down" {
+	if result := h.native.OpenFLV("1"); result.Error == nil || result.Error.Code != "shutting_down" {
 		t.Fatalf("shutdown admission: %+v", result)
 	}
 }
@@ -153,7 +153,7 @@ func TestNativeRealScanAndBoundedPages(t *testing.T) {
 			h := newHost(func(context.Context) (string, error) { return path, nil })
 			defer h.shutdown(context.Background())
 			h.startup(context.Background())
-			opened := h.native.OpenFLV()
+			opened := h.native.OpenFLV("1")
 			if opened.Error != nil || opened.Session == nil {
 				t.Fatalf("open: %+v", opened)
 			}

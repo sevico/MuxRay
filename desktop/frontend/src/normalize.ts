@@ -11,7 +11,7 @@ export function sessionResponse(value: desktop.SessionResponse): SessionResponse
   return { apiVersion: value.apiVersion, session: session(value.session), error: value.error ?? null };
 }
 export function pickResponse(value: main.PickResponse): PickResponse {
-  return { ...sessionResponse(value), canceled: value.canceled, fileName: value.fileName };
+  return { ...sessionResponse(value), requestId: value.requestId, pending: value.pending, canceled: value.canceled, fileName: value.fileName };
 }
 export function tagResponse(value: desktop.TagPageResponse): PageResponse<TagPage> {
   return { apiVersion: value.apiVersion, error: value.error ?? null, page: value.page ? {

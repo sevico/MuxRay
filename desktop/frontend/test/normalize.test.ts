@@ -9,7 +9,8 @@ test('normalizes generated optional pointers and real JSON nulls', () => {
     const value = sessionResponse(JSON.parse(`{"apiVersion":1${fields}}`));
     assert.equal(value.session, null); assert.equal(value.error, null);
   }
-  const value = pickResponse(JSON.parse('{"apiVersion":1,"canceled":false,"fileName":"测试.flv","session":{"sessionId":"scan-1","state":"opening","terminal":false,"closed":false,"progress":null,"scan":null,"failure":null},"error":null}'));
+  const value = pickResponse(JSON.parse('{"apiVersion":1,"requestId":"18446744073709551615","pending":false,"canceled":false,"fileName":"测试.flv","session":{"sessionId":"scan-1","state":"opening","terminal":false,"closed":false,"progress":null,"scan":null,"failure":null},"error":null}'));
+  assert.equal(value.requestId, '18446744073709551615'); assert.equal(value.pending, false);
   assert.equal(value.session?.progress, null); assert.equal(value.session?.scan, null);
   assert.equal(value.session?.failure, null); assert.equal(value.fileName, '测试.flv');
 });

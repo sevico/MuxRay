@@ -1,14 +1,15 @@
-import type { API, DiagnosticPage, PageResponse, Session, SessionResponse, TagPage } from './protocol.ts';
+import type { API, DiagnosticPage, PageResponse, PickResponse, Session, SessionResponse, TagPage } from './protocol.ts';
 import { unsigned } from './numbers.ts';
 
 export const PAGE_SIZE = 100;
 export const POLL_MS = 200;
+export const OPEN_REPLY_TIMEOUT_MS = 5000;
 export type Tab = 'tags' | 'diagnostics';
 export type VisiblePage = { tab: 'tags'; data: TagPage } | { tab: 'diagnostics'; data: DiagnosticPage };
 export interface ViewState {
   fileName: string;
   session: Session | null;
-  operation: '' | 'picking' | 'canceling' | 'closing';
+  operation: '' | 'picking' | 'recovering' | 'canceling' | 'closing';
   error: string | null;
   tab: Tab;
   start: string;
@@ -21,6 +22,7 @@ const scheduler: Scheduler = {
 };
 
 class RequestError extends Error {}
+class OpenUnconfirmed extends Error {}
 function check(response: { apiVersion: number; error: { code: string } | null }): void {
   if (response.apiVersion !== 1) throw new RequestError('incompatible_api');
   if (response.error) throw new RequestError(response.error.code);
@@ -55,7 +57,10 @@ export class Controller {
   // A command may reach the host even if its reply is lost. Reconcile its
   // outcome before reading pages, including for a previously terminal scan.
   private refreshStatus = false;
+  private nextOpenID = 0n;
+  private openingID: string | null = null;
   private stopTimer: (() => void) | null = null;
+  private stopOpenReply: (() => void) | null = null;
 
   constructor(api: API, clock: Scheduler = scheduler) { this.api = api; this.clock = clock; }
   getSnapshot = (): ViewState => this.state;
@@ -79,22 +84,65 @@ export class Controller {
   }
   async open(): Promise<void> {
     if (this.disposed || this.state.session || this.state.operation) return;
+    if (this.nextOpenID === 18446744073709551615n) { this.update({ error: 'id_exhausted' }); return; }
+    const requestId = (++this.nextOpenID).toString();
+    this.openingID = requestId;
+    this.pollFailed = false;
     this.update({ operation: 'picking', error: null });
     try {
-      const result = await this.api.open();
+      // Wails may never settle a call whose callback is lost. A timeout only
+      // starts result confirmation; it never repeats or cancels the picker.
+      const result = await this.awaitOpenReply(() => this.api.open(requestId));
       if (this.disposed) return;
-      check(result);
-      if (!result.canceled) {
-        const session = sessionResult(result);
-        this.statusVersion++;
-        this.pageVersion++;
-        this.pollFailed = false;
-        this.refreshStatus = false;
-        this.update({ fileName: result.fileName, tab: 'tags', start: '0', page: null });
-        this.accept(session);
-      }
-    } catch (error) { this.update({ error: errorCode(error) }); }
-    finally { this.update({ operation: '' }); this.schedule(); this.ensurePage(); }
+      this.acceptOpen(result, requestId);
+    } catch (error) {
+      if (!(error instanceof OpenUnconfirmed)) this.update({ error: errorCode(error) });
+    }
+    finally {
+      if (this.openingID) this.update({ operation: 'recovering' });
+      this.schedule(); this.ensurePage();
+    }
+  }
+  private async awaitOpenReply(call: () => Promise<PickResponse>): Promise<PickResponse> {
+    let stopDeadline = () => {};
+    let rejectWait: (error: OpenUnconfirmed) => void = () => {};
+    const deadline = new Promise<never>((_, reject) => {
+      rejectWait = reject;
+      stopDeadline = this.clock.after(() => reject(new OpenUnconfirmed()), OPEN_REPLY_TIMEOUT_MS);
+    });
+    const stopWait = () => { stopDeadline(); rejectWait(new OpenUnconfirmed()); };
+    this.stopOpenReply = stopWait;
+    try {
+      // Confirmation callbacks can also be lost. Racing each wait lets retry
+      // make another query while preventing a late reply from changing state.
+      return await Promise.race([call(), deadline]);
+    } finally {
+      stopDeadline();
+      if (this.stopOpenReply === stopWait) this.stopOpenReply = null;
+    }
+  }
+  private acceptOpen(result: PickResponse, requestId: string): void {
+    if (result.apiVersion !== 1) throw new RequestError('incompatible_api');
+    if (result.requestId !== requestId || typeof result.pending !== 'boolean' || typeof result.canceled !== 'boolean' || (result.session && (result.canceled || result.error))) throw new RequestError('invalid_response');
+    if (result.pending) {
+      if (result.session || result.error || result.canceled) throw new RequestError('invalid_response');
+      this.update({ operation: 'recovering' });
+      return;
+    }
+    // A completed error is authoritative; malformed/mismatched envelopes are
+    // still uncertain and must not release admission to a second open.
+    const session = result.error || result.canceled ? null : sessionResult(result);
+    this.openingID = null;
+    this.update({ operation: '', error: null });
+    check(result);
+    if (session) {
+      this.statusVersion++;
+      this.pageVersion++;
+      this.pollFailed = false;
+      this.refreshStatus = false;
+      this.update({ fileName: result.fileName, tab: 'tags', start: '0', page: null });
+      this.accept(session);
+    }
   }
   async cancel(): Promise<void> { await this.command('canceling'); }
   async close(): Promise<void> { await this.command('closing'); }
@@ -120,9 +168,29 @@ export class Controller {
     finally { this.schedule(); this.ensurePage(); }
   }
   private schedule(): void {
-    if (this.disposed || this.polling || this.stopTimer || this.pollFailed || !this.state.session || (this.state.session.terminal && !this.refreshStatus)) return;
+    if (this.disposed || this.polling || this.stopTimer || this.pollFailed) return;
+    if (this.openingID) {
+      if (this.state.operation === 'recovering') this.stopTimer = this.clock.after(() => { this.stopTimer = null; void this.recoverOpen(); }, POLL_MS);
+      return;
+    }
+    if (!this.state.session || (this.state.session.terminal && !this.refreshStatus)) return;
     if (this.state.operation && !(this.state.operation === 'closing' && this.state.session.closed)) return;
     this.stopTimer = this.clock.after(() => { this.stopTimer = null; void this.poll(); }, POLL_MS);
+  }
+  private async recoverOpen(): Promise<void> {
+    const requestId = this.openingID;
+    if (this.disposed || this.polling || !requestId) return;
+    this.polling = true;
+    try {
+      const result = await this.awaitOpenReply(() => this.api.openResult(requestId));
+      if (!this.disposed && this.openingID === requestId) {
+        this.acceptOpen(result, requestId);
+        this.ensurePage();
+      }
+    } catch (error) {
+      if (!this.disposed && this.openingID === requestId) this.pollFailed = true;
+      this.update({ error: errorCode(error) });
+    } finally { this.polling = false; this.schedule(); }
   }
   private async poll(): Promise<void> {
     const session = this.state.session;
@@ -147,7 +215,7 @@ export class Controller {
   select(tab: Tab, start = '0'): void {
     try { unsigned(start); } catch { this.update({ error: 'invalid_argument' }); return; }
     this.pageVersion++;
-    this.update({ tab, start, page: null, loading: false, error: this.refreshStatus || this.pollFailed ? this.state.error : null });
+    this.update({ tab, start, page: null, loading: false, error: this.openingID || this.refreshStatus || this.pollFailed ? this.state.error : null });
     this.ensurePage();
   }
   private ready(): boolean {
@@ -190,6 +258,7 @@ export class Controller {
     this.disposed = true;
     this.statusVersion++; this.pageVersion++;
     this.stopTimer?.(); this.stopTimer = null;
+    this.stopOpenReply?.(); this.stopOpenReply = null;
     this.listeners.clear();
     // Resource ownership belongs to the host, not an unreliable unload event.
   }

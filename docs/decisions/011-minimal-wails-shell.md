@@ -18,13 +18,32 @@ run explicitly in their own CI job. This increment targets Windows; other
 desktop platforms require separate native build and interaction validation.
 
 Bind the unchanged six-method adapter plus a separate `Native` object with
-only `OpenFLV()`. The latter serializes native dialogs, opens the selected path
+`OpenFLV(requestId)` and `GetOpenResult(requestId)`. The former serializes native dialogs, opens the selected path
 through the adapter, and returns a basename and session envelope (never the
 full path or OS error). Picker cancellation is not a scan failure. Startup,
 window-close cancellation, and shutdown remain unbound host callbacks. Closing
 the window immediately stops admission and cancels work; final shutdown waits
 at most three seconds for cleanup. A timeout does not prove blocked I/O ended;
 the process then exits and the OS reclaims its resources.
+
+The 2026-09-10 recovery amendment adds canonical positive uint64 request IDs
+as decimal strings, increasing within the window's controller lifetime. The
+native host retains only the latest request and its pending/completed outcome.
+Repeating that ID returns its current result without opening another dialog;
+older IDs are rejected. Result confirmation never opens a dialog or file. If
+the request has not arrived, confirmation seals it as canceled before returning,
+so a late original invocation cannot admit an orphan session. It does not
+supersede a different pending picker. Session snapshots are refreshed from the
+adapter, including logical close and terminal cleanup, rather than replaying
+an obsolete session snapshot. No selected full path is retained in this ledger.
+
+The UI waits at most five seconds for each open or confirmation callback. An
+open timeout starts sequential confirmation at the existing 200 ms interval;
+it neither cancels nor repeats the picker. A failed/timed-out confirmation
+stops polling and exposes manual retry of the same ID. Late replies cannot
+replace a recovered or newer session. UI disposal cancels its local waits;
+resource ownership remains with the host. The generated Native binding changes
+with the embedded frontend; the six-method adapter's v1 contract is unchanged.
 
 Production uses embedded assets only, no remote content, API server, arbitrary
 URL opener, updater, persistence of selected paths, or default file drop.

@@ -48,16 +48,19 @@ async function click(text) {
 }
 
 function syntheticHost() {
-  let session, sequence = 0;
+  let session, latestPick, sequence = 0;
   window.smokeMode = 'finished';
   const envelope = () => structuredClone({ apiVersion: 1, session, error: null });
   const span = { byteOffset: '9007199254740993', bitOffset: 0, bitLength: 88 };
-  window.go = { main: { Native: { OpenFLV: async () => {
-    if (window.smokeMode === 'picker-cancel') return { apiVersion: 1, canceled: true, session: null, error: null, fileName: '' };
+  window.go = { main: { Native: { OpenFLV: async requestId => {
+    if (window.smokeMode === 'picker-cancel') return latestPick = { apiVersion: 1, requestId, pending: false, canceled: true, session: null, error: null, fileName: '' };
     session = { sessionId: `synthetic-${++sequence}`, state: window.smokeMode === 'running' ? 'running' : 'finished', terminal: window.smokeMode !== 'running', closed: false,
       progress: { sourceSize: '18446744073709551615', bytesScanned: '9223372036854775807', tagCount: '205', diagnosticCount: 2 },
       scan: window.smokeMode === 'running' ? null : { complete: false, hasErrors: true }, failure: null };
-    return { ...envelope(), canceled: false, fileName: 'browser-synthetic <img onerror=alert(1)>.flv' };
+    return latestPick = { ...envelope(), requestId, pending: false, canceled: false, fileName: 'browser-synthetic <img onerror=alert(1)>.flv' };
+  }, GetOpenResult: async requestId => {
+    if (latestPick?.requestId !== requestId) throw Error('Unexpected synthetic open result request');
+    return structuredClone({ ...latestPick, session: latestPick.canceled ? null : session });
   } } }, desktop: { Bindings: {
     GetSession: async () => envelope(),
     CancelScan: async () => { session.state = 'canceled'; session.terminal = true; session.scan = { complete: false, hasErrors: false }; session.failure = { code: 'canceled', message: 'Canceled.' }; return envelope(); },

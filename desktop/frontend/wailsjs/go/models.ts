@@ -455,6 +455,8 @@ export namespace main {
 	
 	export class PickResponse {
 	    apiVersion: number;
+	    requestId: string;
+	    pending: boolean;
 	    canceled: boolean;
 	    fileName: string;
 	    session?: desktop.SessionSnapshot;
@@ -467,6 +469,8 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.apiVersion = source["apiVersion"];
+	        this.requestId = source["requestId"];
+	        this.pending = source["pending"];
 	        this.canceled = source["canceled"];
 	        this.fileName = source["fileName"];
 	        this.session = this.convertValues(source["session"], desktop.SessionSnapshot);

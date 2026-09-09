@@ -12,7 +12,7 @@ export interface Session {
   failure: Fault | null;
 }
 export interface SessionResponse { apiVersion: number; session: Session | null; error: Fault | null }
-export interface PickResponse extends SessionResponse { canceled: boolean; fileName: string }
+export interface PickResponse extends SessionResponse { requestId: string; pending: boolean; canceled: boolean; fileName: string }
 export interface PageRequest { sessionId: string; start: string; count: number }
 export interface Bounds { start: string; limit: number; total: string; next: string }
 export interface Span { byteOffset: string; bitOffset: number; bitLength: number }
@@ -31,7 +31,8 @@ export interface TagPage { sessionId: string; bounds: Bounds; tags: Tag[] }
 export interface DiagnosticPage { sessionId: string; bounds: Bounds; diagnostics: Diagnostic[] }
 export interface PageResponse<P> { apiVersion: number; page: P | null; error: Fault | null }
 export interface API {
-  open(): Promise<PickResponse>;
+  open(requestId: string): Promise<PickResponse>;
+  openResult(requestId: string): Promise<PickResponse>;
   status(id: string): Promise<SessionResponse>;
   cancel(id: string): Promise<SessionResponse>;
   close(id: string): Promise<SessionResponse>;

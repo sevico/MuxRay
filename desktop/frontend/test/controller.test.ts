@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Controller, PAGE_SIZE, POLL_MS } from '../src/controller.ts';
+import { Controller, PAGE_SIZE, POLL_MS, OPEN_REPLY_TIMEOUT_MS } from '../src/controller.ts';
 import type { Scheduler } from '../src/controller.ts';
-import type { API, DiagnosticPage, PageResponse, Session, SessionResponse, TagPage } from '../src/protocol.ts';
+import type { API, DiagnosticPage, PageResponse, PickResponse, Session, SessionResponse, TagPage } from '../src/protocol.ts';
 
 function deferred<T>() {
   let resolve!: (value: T) => void, reject!: (error: Error) => void;
@@ -12,8 +12,16 @@ function deferred<T>() {
 async function settle() { for (let i = 0; i < 12; i++) await Promise.resolve(); }
 class FakeClock implements Scheduler {
   tasks = new Set<() => void>();
-  after(fn: () => void, ms: number) { assert.equal(ms, POLL_MS); this.tasks.add(fn); return () => { this.tasks.delete(fn); }; }
-  tick() { const tasks = [...this.tasks]; this.tasks.clear(); for (const task of tasks) task(); }
+  delays = new Map<() => void, number>();
+  after(fn: () => void, ms: number) {
+    assert.ok(ms === POLL_MS || ms === OPEN_REPLY_TIMEOUT_MS);
+    this.tasks.add(fn); this.delays.set(fn, ms);
+    return () => { this.tasks.delete(fn); this.delays.delete(fn); };
+  }
+  tick(ms = POLL_MS) {
+    const tasks = [...this.tasks].filter(task => this.delays.get(task) === ms);
+    for (const task of tasks) { this.tasks.delete(task); this.delays.delete(task); task(); }
+  }
 }
 function snapshot(patch: Partial<Session> = {}): Session {
   return { sessionId: 'scan-1', state: 'running', terminal: false, closed: false,
@@ -23,19 +31,22 @@ const terminal = (patch: Partial<Session> = {}) => snapshot({ state: 'finished',
 const response = (session: Session): SessionResponse => ({ apiVersion: 1, error: null, session });
 const tagPage = (sessionId = 'scan-1', start = '0'): PageResponse<TagPage> => ({ apiVersion: 1, error: null, page: { sessionId, bounds: { start, total: '0', next: start, limit: PAGE_SIZE }, tags: [] } });
 const diagnosticPage = (): PageResponse<DiagnosticPage> => ({ apiVersion: 1, error: null, page: { sessionId: 'scan-1', bounds: { start: '0', total: '0', next: '0', limit: PAGE_SIZE }, diagnostics: [] } });
-function setup(override: Partial<API> = {}) {
+type FixturePick = Omit<PickResponse, 'requestId' | 'pending'> & Partial<Pick<PickResponse, 'requestId' | 'pending'>>;
+function setup(override: Partial<Omit<API, 'open'>> & { open?: (requestId: string) => Promise<FixturePick> } = {}) {
   const clock = new FakeClock();
+  const { open = async () => ({ ...response(snapshot()), fileName: 'sample.flv', canceled: false }), ...rest } = override;
   const api: API = {
-    open: async () => ({ ...response(snapshot()), fileName: 'sample.flv', canceled: false }),
+    open: async requestId => ({ requestId, pending: false, ...await open(requestId) }),
+    openResult: async requestId => ({ requestId, pending: false, ...response(terminal()), fileName: 'sample.flv', canceled: false }),
     status: async () => response(terminal()), cancel: async () => response(snapshot({ state: 'canceling' })),
     close: async () => response(terminal({ closed: true })),
-    tags: async () => tagPage(), diagnostics: async () => diagnosticPage(), ...override,
+    tags: async () => tagPage(), diagnostics: async () => diagnosticPage(), ...rest,
   };
   return { controller: new Controller(api, clock), clock, api };
 }
 
 test('open is serialized and dialog cancellation does not create a session', async () => {
-  const opened = deferred<Awaited<ReturnType<API['open']>>>();
+  const opened = deferred<FixturePick>();
   let calls = 0;
   const { controller, clock } = setup({ open: () => { calls++; return opened.promise; } });
   const first = controller.open(); await controller.open();
@@ -289,4 +300,191 @@ test('disposal stops timers and ignores pending replies', async () => {
   await controller.open(); clock.tick(); const before = controller.getSnapshot(); controller.dispose();
   status.resolve(response(terminal())); await settle();
   assert.equal(controller.getSnapshot(), before); assert.equal(clock.tasks.size, 0);
+});
+
+test('lost open reply recovers the original completed session without another open', async () => {
+  let opens = 0, queries = 0;
+  const { controller, clock } = setup({
+    open: async id => { opens++; assert.equal(id, '1'); throw new Error('reply lost after host open'); },
+    openResult: async requestId => { queries++; return { requestId, pending: false, ...response(terminal()), fileName: 'recovered.flv', canceled: false }; },
+  });
+  await controller.open();
+  assert.equal(controller.getSnapshot().operation, 'recovering');
+  await controller.open();
+  clock.tick(); await settle();
+  assert.equal(opens, 1); assert.equal(queries, 1);
+  assert.equal(controller.getSnapshot().session?.sessionId, 'scan-1');
+  assert.equal(controller.getSnapshot().fileName, 'recovered.flv');
+  assert.equal(controller.getSnapshot().page?.tab, 'tags');
+  assert.equal(controller.getSnapshot().error, null);
+  assert.equal(clock.tasks.size, 0);
+});
+
+test('unseen open or canceled picker recovery releases admission with a fresh request ID', async () => {
+  const ids: string[] = [];
+  const { controller, clock } = setup({
+    open: async id => { ids.push(id); throw new Error('delivery uncertain'); },
+    openResult: async requestId => ({ requestId, pending: false, apiVersion: 1, error: null, session: null, canceled: true, fileName: '' }),
+  });
+  await controller.open(); clock.tick(); await settle();
+  assert.equal(controller.getSnapshot().session, null);
+  assert.equal(controller.getSnapshot().operation, '');
+  assert.equal(controller.getSnapshot().error, null);
+  await controller.open();
+  assert.deepEqual(ids, ['1', '2']);
+  controller.dispose();
+});
+
+test('failed open recovery stays blocked until retry and coalesces queries', async () => {
+  const pending = deferred<PickResponse>(); let queries = 0, opens = 0;
+  const { controller, clock } = setup({
+    open: async () => { opens++; throw new Error('reply lost'); },
+    openResult: async () => { if (++queries === 1) throw new Error('status unavailable'); return pending.promise; },
+  });
+  await controller.open(); clock.tick(); await settle();
+  assert.equal(clock.tasks.size, 0);
+  controller.select('tags');
+  assert.equal(controller.getSnapshot().error, 'transport_failed');
+  await controller.open();
+  assert.equal(opens, 1);
+  controller.retry(); controller.retry(); clock.tick();
+  controller.retry(); clock.tick();
+  assert.equal(queries, 2);
+  pending.resolve({ requestId: '1', pending: false, ...response(terminal()), fileName: 'recovered.flv', canceled: false });
+  await settle();
+  assert.equal(controller.getSnapshot().session?.sessionId, 'scan-1');
+  assert.equal(controller.getSnapshot().error, null);
+});
+
+test('pending picker recovery polls sequentially until the original dialog completes', async () => {
+  let queries = 0;
+  const { controller, clock } = setup({
+    open: async () => { throw new Error('reply lost while dialog remains open'); },
+    openResult: async requestId => ++queries === 1
+      ? { requestId, pending: true, apiVersion: 1, error: null, session: null, canceled: false, fileName: '' }
+      : { requestId, pending: false, ...response(snapshot()), fileName: 'sample.flv', canceled: false },
+  });
+  await controller.open(); clock.tick(); await settle();
+  assert.equal(controller.getSnapshot().operation, 'recovering');
+  assert.equal(controller.getSnapshot().session, null);
+  assert.equal(clock.tasks.size, 1);
+  clock.tick(); await settle();
+  assert.equal(controller.getSnapshot().session?.state, 'running');
+  assert.equal(controller.getSnapshot().error, null);
+  controller.dispose();
+});
+
+test('recovery ignores mismatched request IDs and late replies after disposal', async () => {
+  const late = deferred<PickResponse>(); let queries = 0;
+  const { controller, clock } = setup({
+    open: async () => { throw new Error('reply lost'); },
+    openResult: async () => ++queries === 1
+      ? { requestId: '999', pending: false, ...response(terminal()), fileName: 'wrong.flv', canceled: false }
+      : late.promise,
+  });
+  await controller.open(); clock.tick(); await settle();
+  assert.equal(controller.getSnapshot().session, null);
+  assert.equal(controller.getSnapshot().error, 'invalid_response');
+  assert.equal(clock.tasks.size, 0);
+  controller.retry(); clock.tick(); controller.dispose();
+  late.resolve({ requestId: '1', pending: false, ...response(terminal()), fileName: 'late.flv', canceled: false });
+  await settle();
+  assert.equal(controller.getSnapshot().session, null);
+  assert.equal(clock.tasks.size, 0);
+});
+
+test('recovered picker errors release admission and preserve the actual error', async () => {
+  const { controller, clock } = setup({
+    open: async () => { throw new Error('reply lost'); },
+    openResult: async requestId => ({ requestId, pending: false, apiVersion: 1, error: { code: 'dialog_failed', message: 'Failed.' }, session: null, canceled: false, fileName: '' }),
+  });
+  await controller.open(); clock.tick(); await settle();
+  assert.equal(controller.getSnapshot().operation, '');
+  assert.equal(controller.getSnapshot().error, 'dialog_failed');
+  assert.equal(clock.tasks.size, 0);
+});
+
+test('an unsettled open promise times out into confirmation and its late reply cannot overwrite a newer file', async () => {
+  const lost = deferred<FixturePick>(); let opens = 0;
+  const { controller, clock } = setup({
+    open: async () => ++opens === 1 ? lost.promise : { ...response(terminal({ sessionId: 'scan-2' })), fileName: 'new.flv', canceled: false },
+    openResult: async requestId => ({ requestId, pending: false, ...response(terminal()), fileName: 'recovered.flv', canceled: false }),
+    tags: async request => tagPage(request.sessionId),
+  });
+  const opening = controller.open();
+  clock.tick(OPEN_REPLY_TIMEOUT_MS); await settle(); await opening;
+  assert.equal(controller.getSnapshot().operation, 'recovering');
+  assert.equal(controller.getSnapshot().error, null);
+  clock.tick(); await settle();
+  assert.equal(controller.getSnapshot().fileName, 'recovered.flv');
+  await controller.close(); await controller.open(); await settle();
+  lost.resolve({ ...response(terminal()), fileName: 'late.flv', canceled: false });
+  await settle();
+  assert.equal(controller.getSnapshot().session?.sessionId, 'scan-2');
+  assert.equal(controller.getSnapshot().fileName, 'new.flv');
+  assert.equal(opens, 2);
+  assert.equal(clock.tasks.size, 0);
+});
+
+test('an unsettled confirmation times out, retries the same request, and ignores its late reply after a new open', async () => {
+  const lost = deferred<PickResponse>(); let opens = 0;
+  const queriedIDs: string[] = [];
+  const { controller, clock } = setup({
+    open: async () => {
+      if (++opens === 1) throw new Error('open reply lost');
+      return { ...response(terminal({ sessionId: 'scan-2' })), fileName: 'new.flv', canceled: false };
+    },
+    openResult: async requestId => {
+      queriedIDs.push(requestId);
+      return queriedIDs.length === 1 ? lost.promise
+        : { requestId, pending: false, ...response(terminal()), fileName: 'recovered.flv', canceled: false };
+    },
+    tags: async request => tagPage(request.sessionId),
+  });
+  await controller.open(); clock.tick(); await settle();
+  clock.tick(OPEN_REPLY_TIMEOUT_MS); await settle();
+  assert.equal(controller.getSnapshot().operation, 'recovering');
+  assert.equal(controller.getSnapshot().session, null);
+  assert.equal(controller.getSnapshot().error, 'transport_failed');
+  assert.equal(clock.tasks.size, 0);
+  await controller.open();
+  assert.equal(opens, 1, 'an uncertain open must retain admission');
+  controller.retry(); controller.retry(); clock.tick(); await settle();
+  assert.deepEqual(queriedIDs, ['1', '1']);
+  assert.equal(controller.getSnapshot().fileName, 'recovered.flv');
+  assert.equal(controller.getSnapshot().error, null);
+  assert.equal(controller.getSnapshot().page?.tab, 'tags');
+  await controller.close(); await controller.open(); await settle();
+  const beforeLateReply = controller.getSnapshot();
+  lost.resolve({ requestId: '1', pending: false, ...response(terminal()), fileName: 'late.flv', canceled: false });
+  await settle();
+  assert.equal(controller.getSnapshot(), beforeLateReply);
+  assert.equal(controller.getSnapshot().session?.sessionId, 'scan-2');
+  assert.equal(controller.getSnapshot().fileName, 'new.flv');
+  assert.equal(opens, 2);
+  assert.equal(clock.tasks.size, 0);
+});
+
+test('disposal cancels both open and confirmation deadlines without accepting late replies', async () => {
+  for (const recovering of [false, true]) {
+    const late = deferred<PickResponse>();
+    const { controller, clock } = setup({
+      open: async () => {
+        if (recovering) throw new Error('open reply lost');
+        return late.promise;
+      },
+      openResult: () => late.promise,
+    });
+    const opening = controller.open();
+    if (recovering) { await opening; clock.tick(); await settle(); }
+    const before = controller.getSnapshot();
+    assert.equal(clock.tasks.size, 1);
+    controller.dispose();
+    assert.equal(clock.tasks.size, 0, 'dispose must remove the active reply deadline');
+    await opening;
+    late.resolve({ requestId: '1', pending: false, ...response(terminal()), fileName: 'late.flv', canceled: false });
+    await settle();
+    assert.equal(controller.getSnapshot(), before);
+    assert.equal(clock.tasks.size, 0);
+  }
 });

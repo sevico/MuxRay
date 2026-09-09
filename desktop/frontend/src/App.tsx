@@ -15,6 +15,7 @@ const errors: Record<string, string> = {
   invalid_argument: '请求参数无效。', session_closed: '此文件已关闭。', session_not_found: '此会话已失效。',
   incompatible_api: '界面与宿主版本不匹配，请重新构建。', invalid_response: '宿主返回了不匹配的结果。',
   transport_failed: '桌面通信失败，请重试或重新启动应用。',
+  stale_request: '此打开请求已失效，请重新选择文件。', id_exhausted: '打开请求编号已用尽，请重新启动应用。',
 };
 function fault(code: string): string { return errors[code] ?? '请求失败，请重试。'; }
 
@@ -46,7 +47,7 @@ export function App({ controller }: { controller: Controller }) {
           <button onClick={() => void controller.cancel()} disabled={!!operation || session.terminal || session.state === 'canceling'}>取消扫描</button>
           <button onClick={() => void controller.close()} disabled={!!operation}>关闭文件</button>
         </>}
-        <button className="primary" onClick={() => void controller.open()} disabled={!!session || !!operation}>{operation === 'picking' ? '正在选择…' : '打开 FLV 文件'}</button>
+        <button className="primary" onClick={() => void controller.open()} disabled={!!session || !!operation}>{operation === 'picking' ? '正在选择…' : operation === 'recovering' ? '正在确认打开结果…' : '打开 FLV 文件'}</button>
       </div>
     </header>
 
