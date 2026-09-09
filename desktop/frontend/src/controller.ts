@@ -52,6 +52,9 @@ export class Controller {
   private polling = false;
   private paging = false;
   private pollFailed = false;
+  // A command may reach the host even if its reply is lost. Reconcile its
+  // outcome before reading pages, including for a previously terminal scan.
+  private refreshStatus = false;
   private stopTimer: (() => void) | null = null;
 
   constructor(api: API, clock: Scheduler = scheduler) { this.api = api; this.clock = clock; }
@@ -68,6 +71,7 @@ export class Controller {
   private accept(session: Session): void {
     if (session.closed && session.terminal) {
       this.pageVersion++;
+      this.refreshStatus = false;
       this.update({ session: null, fileName: '', operation: '', page: null, loading: false, start: '0' });
     } else {
       this.update({ session, operation: session.closed ? 'closing' : '' });
@@ -85,6 +89,7 @@ export class Controller {
         this.statusVersion++;
         this.pageVersion++;
         this.pollFailed = false;
+        this.refreshStatus = false;
         this.update({ fileName: result.fileName, tab: 'tags', start: '0', page: null });
         this.accept(session);
       }
@@ -103,24 +108,36 @@ export class Controller {
     this.update({ operation, error: null, ...(operation === 'closing' ? { page: null, loading: false } : {}) });
     try {
       const result = await (operation === 'closing' ? this.api.close(session.sessionId) : this.api.cancel(session.sessionId));
-      if (!this.disposed && this.state.session?.sessionId === session.sessionId) this.accept(sessionResult(result, session.sessionId));
-    } catch (error) { this.update({ error: errorCode(error), operation: '' }); }
+      if (!this.disposed && this.state.session?.sessionId === session.sessionId) {
+        const current = sessionResult(result, session.sessionId);
+        this.refreshStatus = false;
+        this.accept(current);
+      }
+    } catch (error) {
+      this.refreshStatus = true;
+      this.update({ error: errorCode(error), operation: '' });
+    }
     finally { this.schedule(); this.ensurePage(); }
   }
   private schedule(): void {
-    if (this.disposed || this.polling || this.stopTimer || this.pollFailed || !this.state.session || this.state.session.terminal) return;
+    if (this.disposed || this.polling || this.stopTimer || this.pollFailed || !this.state.session || (this.state.session.terminal && !this.refreshStatus)) return;
     if (this.state.operation && !(this.state.operation === 'closing' && this.state.session.closed)) return;
     this.stopTimer = this.clock.after(() => { this.stopTimer = null; void this.poll(); }, POLL_MS);
   }
   private async poll(): Promise<void> {
     const session = this.state.session;
-    if (this.disposed || this.polling || !session || session.terminal) return;
+    if (this.disposed || this.polling || !session || (session.terminal && !this.refreshStatus)) return;
     this.polling = true;
     const version = this.statusVersion;
     try {
       const result = await this.api.status(session.sessionId);
       if (!this.disposed && version === this.statusVersion && this.state.session?.sessionId === session.sessionId) {
-        this.accept(sessionResult(result, session.sessionId));
+        const current = sessionResult(result, session.sessionId);
+        if (this.refreshStatus) {
+          this.refreshStatus = false;
+          this.update({ error: null });
+        }
+        this.accept(current);
         this.ensurePage();
       }
     } catch (error) {
@@ -130,7 +147,7 @@ export class Controller {
   select(tab: Tab, start = '0'): void {
     try { unsigned(start); } catch { this.update({ error: 'invalid_argument' }); return; }
     this.pageVersion++;
-    this.update({ tab, start, page: null, loading: false, error: null });
+    this.update({ tab, start, page: null, loading: false, error: this.refreshStatus || this.pollFailed ? this.state.error : null });
     this.ensurePage();
   }
   private ready(): boolean {
@@ -138,7 +155,7 @@ export class Controller {
     return !!session?.terminal && !session.closed && session.scan !== null && this.state.operation !== 'closing';
   }
   private ensurePage(): void {
-    if (this.disposed || this.paging || !this.ready() || this.state.page) return;
+    if (this.disposed || this.paging || this.refreshStatus || this.pollFailed || !this.ready() || this.state.page) return;
     void this.loadPage();
   }
   private async loadPage(): Promise<void> {
@@ -162,8 +179,10 @@ export class Controller {
     }
   }
   retry(): void {
+    if (this.disposed) return;
     this.update({ error: null });
     this.pollFailed = false;
+    if (this.state.session) this.refreshStatus = true;
     this.schedule();
     this.ensurePage();
   }

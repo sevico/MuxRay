@@ -66,14 +66,45 @@ func (h *host) shutdown(context.Context) {
 		h.beforeClose(context.Background())
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		if err := h.app.Shutdown(ctx); err != nil && !errors.Is(err, context.Canceled) {
-			if errors.Is(err, context.DeadlineExceeded) {
-				log.Print("MuxRay cleanup timed out; pending I/O will be reclaimed on process exit.")
-			} else {
-				log.Print("MuxRay scan cleanup reported an error.")
-			}
+		if message := shutdownMessage(h.app.Shutdown(ctx)); message != "" {
+			log.Print(message)
 		}
 	})
+}
+
+func shutdownMessage(err error) string {
+	if err == nil {
+		return ""
+	}
+	// errors.Is(err, context.Canceled) also matches a joined cancellation and
+	// source-close failure. Suppress only context-only trees, never real errors.
+	if !shutdownContextOnly(err) {
+		return "MuxRay scan cleanup reported an error."
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "MuxRay cleanup timed out; pending I/O will be reclaimed on process exit."
+	}
+	return ""
+}
+
+func shutdownContextOnly(err error) bool {
+	if err == context.Canceled || err == context.DeadlineExceeded {
+		return true
+	}
+	switch wrapped := err.(type) {
+	case interface{ Unwrap() []error }:
+		causes := wrapped.Unwrap()
+		for _, cause := range causes {
+			if !shutdownContextOnly(cause) {
+				return false
+			}
+		}
+		return len(causes) > 0
+	case interface{ Unwrap() error }:
+		return shutdownContextOnly(wrapped.Unwrap())
+	default:
+		return false
+	}
 }
 
 func pickerError(code, message string) PickResponse {

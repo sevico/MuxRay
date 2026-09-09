@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -12,6 +13,35 @@ import (
 
 	"github.com/sevico/muxray/internal/desktop"
 )
+
+func TestShutdownMessage(t *testing.T) {
+	const failed = "MuxRay scan cleanup reported an error."
+	const timedOut = "MuxRay cleanup timed out; pending I/O will be reclaimed on process exit."
+	closeErr := errors.New("private path and OS close details")
+	for _, tc := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "success"},
+		{name: "canceled", err: context.Canceled},
+		{name: "wrapped-canceled", err: fmt.Errorf("session: %w", context.Canceled)},
+		{name: "joined-cancellations", err: errors.Join(context.Canceled, fmt.Errorf("scan: %w", context.Canceled))},
+		{name: "deadline", err: context.DeadlineExceeded, want: timedOut},
+		{name: "wrapped-deadline", err: fmt.Errorf("shutdown: %w", context.DeadlineExceeded), want: timedOut},
+		{name: "canceled-and-deadline", err: errors.Join(context.Canceled, context.DeadlineExceeded), want: timedOut},
+		{name: "close-failed", err: closeErr, want: failed},
+		{name: "canceled-and-close-failed", err: errors.Join(context.Canceled, fmt.Errorf("session: close source: %w", closeErr)), want: failed},
+		{name: "nested-canceled-and-close-failed", err: fmt.Errorf("shutdown: %w", errors.Join(fmt.Errorf("scan: %w", context.Canceled), fmt.Errorf("session: close source: %w", closeErr))), want: failed},
+		{name: "deadline-and-close-failed", err: errors.Join(context.DeadlineExceeded, closeErr), want: failed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := shutdownMessage(tc.err); got != tc.want {
+				t.Fatalf("message = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
 
 func TestNativeSurface(t *testing.T) {
 	typ := reflect.TypeOf((*Native)(nil))

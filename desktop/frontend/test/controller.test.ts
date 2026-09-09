@@ -92,6 +92,138 @@ test('close remains occupied until the backend reports cleanup terminal', async 
   assert.equal(controller.getSnapshot().operation, '');
 });
 
+test('a lost close reply is reconciled even when the last known scan was terminal', async () => {
+  let closed = false, closes = 0, polls = 0, pages = 0;
+  const { controller, clock } = setup({
+    open: async () => ({ ...response(terminal()), fileName: 'sample.flv', canceled: false }),
+    close: async () => { closes++; closed = true; throw new Error('reply lost after close'); },
+    status: async () => { polls++; return response(terminal({ closed })); },
+    tags: async () => { pages++; assert.equal(closed, false, 'must reconcile status before requesting another page'); return tagPage(); },
+  });
+  await controller.open(); await settle();
+  assert.equal(pages, 1);
+  await controller.close();
+  assert.equal(controller.getSnapshot().error, 'transport_failed');
+  assert.equal(controller.getSnapshot().page, null);
+  assert.equal(pages, 1);
+  assert.equal(clock.tasks.size, 1);
+  clock.tick(); await settle();
+  assert.equal(controller.getSnapshot().session, null);
+  assert.equal(controller.getSnapshot().fileName, '');
+  assert.equal(controller.getSnapshot().error, null);
+  assert.equal(closes, 1); assert.equal(polls, 1); assert.equal(pages, 1);
+  assert.equal(clock.tasks.size, 0);
+});
+
+test('reconciliation keeps an unclosed file and coalesces retries and selections while status is pending', async () => {
+  const status = deferred<SessionResponse>(); let polls = 0, closes = 0, tags = 0, diagnostics = 0;
+  const { controller, clock } = setup({
+    open: async () => ({ ...response(terminal()), fileName: 'sample.flv', canceled: false }),
+    close: async () => { closes++; throw new Error('request never reached the host'); },
+    status: () => { polls++; return status.promise; },
+    tags: async () => { tags++; return tagPage(); },
+    diagnostics: async () => { diagnostics++; return diagnosticPage(); },
+  });
+  await controller.open(); await settle(); await controller.close(); clock.tick();
+  controller.retry(); controller.retry(); clock.tick();
+  controller.select('tags', '100'); controller.select('diagnostics'); await settle();
+  assert.equal(polls, 1); assert.equal(tags, 1); assert.equal(diagnostics, 0);
+  assert.equal(controller.getSnapshot().page, null);
+  assert.equal(clock.tasks.size, 0);
+  status.resolve(response(terminal())); await settle();
+  assert.equal(controller.getSnapshot().session?.closed, false);
+  assert.equal(controller.getSnapshot().fileName, 'sample.flv');
+  assert.equal(controller.getSnapshot().operation, '');
+  assert.equal(controller.getSnapshot().error, null);
+  assert.equal(controller.getSnapshot().page?.tab, 'diagnostics');
+  assert.equal(closes, 1); assert.equal(polls, 1); assert.equal(tags, 1); assert.equal(diagnostics, 1);
+  assert.equal(clock.tasks.size, 0);
+});
+
+test('failed close reconciliation stops until retry, preserving the error across page selection', async () => {
+  let polls = 0, closes = 0, pages = 0;
+  const { controller, clock } = setup({
+    open: async () => ({ ...response(terminal()), fileName: 'sample.flv', canceled: false }),
+    close: async () => { closes++; throw new Error('reply lost'); },
+    status: async () => { if (++polls === 1) throw new Error('status unavailable'); return response(terminal({ closed: true })); },
+    tags: async () => { pages++; return tagPage(); },
+    diagnostics: async () => { pages++; return diagnosticPage(); },
+  });
+  await controller.open(); await settle(); await controller.close();
+  clock.tick(); await settle();
+  assert.equal(polls, 1); assert.equal(clock.tasks.size, 0);
+  assert.equal(controller.getSnapshot().error, 'transport_failed');
+  controller.select('diagnostics'); await settle();
+  assert.equal(controller.getSnapshot().error, 'transport_failed');
+  assert.equal(pages, 1);
+  controller.retry(); controller.retry();
+  assert.equal(clock.tasks.size, 1);
+  clock.tick(); await settle();
+  assert.equal(controller.getSnapshot().session, null);
+  assert.equal(controller.getSnapshot().error, null);
+  assert.equal(polls, 2); assert.equal(closes, 1); assert.equal(pages, 1);
+  assert.equal(clock.tasks.size, 0);
+});
+
+test('a lost close reply keeps the slot occupied until reconciliation observes cleanup terminal', async () => {
+  let polls = 0, opens = 0;
+  const { controller, clock } = setup({
+    open: async () => { opens++; return { ...response(snapshot()), fileName: 'sample.flv', canceled: false }; },
+    close: async () => { throw new Error('reply lost'); },
+    status: async () => response(++polls === 1 ? snapshot({ closed: true, state: 'canceling' }) : terminal({ closed: true })),
+  });
+  await controller.open(); await controller.close(); await controller.open();
+  assert.equal(opens, 1);
+  clock.tick(); await settle();
+  assert.equal(controller.getSnapshot().operation, 'closing');
+  assert.equal(controller.getSnapshot().session?.closed, true);
+  assert.equal(controller.getSnapshot().error, null);
+  await controller.open(); assert.equal(opens, 1);
+  clock.tick(); await settle();
+  assert.equal(controller.getSnapshot().session, null);
+  assert.equal(clock.tasks.size, 0);
+});
+
+test('a lost cancel reply recovers partial results without repeating cancellation', async () => {
+  let cancels = 0, pages = 0;
+  const { controller, clock } = setup({
+    cancel: async () => { cancels++; throw new Error('reply lost'); },
+    status: async () => response(terminal({ state: 'canceled', scan: { complete: false, hasErrors: false }, failure: { code: 'canceled', message: 'Canceled.' } })),
+    tags: async () => { pages++; return tagPage(); },
+  });
+  await controller.open(); await controller.cancel();
+  assert.equal(controller.getSnapshot().error, 'transport_failed');
+  assert.equal(pages, 0);
+  clock.tick(); await settle();
+  assert.equal(controller.getSnapshot().session?.state, 'canceled');
+  assert.equal(controller.getSnapshot().session?.scan?.complete, false);
+  assert.equal(controller.getSnapshot().page?.tab, 'tags');
+  assert.equal(controller.getSnapshot().error, null);
+  assert.equal(cancels, 1); assert.equal(pages, 1); assert.equal(clock.tasks.size, 0);
+});
+
+test('a stale poll cannot consume a pending close reconciliation', async () => {
+  const old = deferred<SessionResponse>(); let polls = 0, pages = 0;
+  const { controller, clock } = setup({
+    status: () => ++polls === 1 ? old.promise : Promise.resolve(response(terminal({ closed: true }))),
+    cancel: async () => response(terminal({ state: 'canceled', scan: { complete: false, hasErrors: false } })),
+    close: async () => { throw new Error('reply lost'); },
+    tags: async () => { pages++; return tagPage(); },
+  });
+  await controller.open(); clock.tick(); await controller.cancel(); await settle();
+  assert.equal(pages, 1);
+  await controller.close();
+  assert.equal(clock.tasks.size, 0, 'only one status request may be in flight');
+  old.resolve(response(snapshot())); await settle();
+  assert.equal(controller.getSnapshot().session?.state, 'canceled');
+  assert.equal(controller.getSnapshot().page, null);
+  assert.equal(clock.tasks.size, 1);
+  clock.tick(); await settle();
+  assert.equal(controller.getSnapshot().session, null);
+  assert.equal(controller.getSnapshot().error, null);
+  assert.equal(polls, 2); assert.equal(pages, 1);
+});
+
 test('coalesced page selection keeps only the latest view and one request in flight', async () => {
   const page = deferred<PageResponse<TagPage>>(); let tagCalls = 0, diagnosticCalls = 0;
   const { controller } = setup({ open: async () => ({ ...response(terminal()), fileName: 'sample.flv', canceled: false }), tags: () => { tagCalls++; return page.promise; }, diagnostics: async () => { diagnosticCalls++; return diagnosticPage(); } });
@@ -135,11 +267,20 @@ test('mismatched response identity and API version are not displayed', async () 
 });
 
 test('page identity is checked and failed page requests can be retried', async () => {
-  let pages = 0;
-  const { controller } = setup({ open: async () => ({ ...response(terminal()), fileName: 'sample.flv', canceled: false }), tags: async () => ++pages === 1 ? tagPage('old-session') : tagPage() });
+  let pages = 0, polls = 0;
+  const { controller, clock } = setup({
+    open: async () => ({ ...response(terminal()), fileName: 'sample.flv', canceled: false }),
+    status: async () => { polls++; return response(terminal()); },
+    tags: async () => ++pages === 1 ? tagPage('old-session') : tagPage(),
+  });
   await controller.open(); await settle();
   assert.equal(controller.getSnapshot().page, null); assert.equal(controller.getSnapshot().error, 'invalid_response');
-  controller.retry(); await settle(); assert.equal(controller.getSnapshot().page?.tab, 'tags');
+  controller.retry(); await settle();
+  assert.equal(pages, 1, 'retry must refresh terminal status before requesting a page');
+  clock.tick(); await settle();
+  assert.equal(polls, 1); assert.equal(pages, 2);
+  assert.equal(controller.getSnapshot().page?.tab, 'tags');
+  assert.equal(clock.tasks.size, 0);
 });
 
 test('disposal stops timers and ignores pending replies', async () => {
