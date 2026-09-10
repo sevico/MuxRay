@@ -33,4 +33,26 @@ foreach ($invalid in @('2026-09-10T00:36:09.9931234', [DateTime]::SpecifyKind($i
     try { $null = Convert-ReceiptTime $invalid } catch { $rejected = $true }
     if (-not $rejected) { throw 'Ambiguous timezone was accepted.' }
 }
+
+foreach ($mode in @('Scan', 'Detail')) {
+    $gate = [pscustomobject](Get-GateSettings $mode)
+    $entered = [pscustomobject]@{ gateMode = $mode; readCall = $gate.gateReadCall; offset = $gate.gateOffset; committedTags = $gate.committedTags }
+    Assert-GateReceipt $gate $entered
+    foreach ($scenario in @('Cancel', 'Exit', 'DetailClose')) {
+        $shouldPass = ($mode -eq 'Detail') -eq ($scenario -eq 'DetailClose')
+        $accepted = $true
+        try { Assert-GateScenario $gate $scenario } catch { $accepted = $false }
+        if ($accepted -ne $shouldPass) { throw "Wrong mode accepted/rejected for $mode / $scenario." }
+    }
+    $entered.offset++
+    $rejected = $false
+    try { Assert-GateReceipt $gate $entered } catch { $rejected = $true }
+    if (-not $rejected) { throw 'Mismatched gate offset was accepted.' }
+}
+$scanGate = Get-GateSettings 'Scan'
+$detailGate = Get-GateSettings 'Detail'
+if ($scanGate.fixtureBytes -ne 493 -or $scanGate.gateReadCall -ne 23 -or $scanGate.gateOffset -ne 163 -or $scanGate.committedTags -ne 10 -or $detailGate.fixtureBytes -ne 497 -or $detailGate.gateReadCall -ne 67 -or $detailGate.gateOffset -ne 24 -or $detailGate.committedTags -ne 32) {
+    throw 'Stable fixture/gate contract changed.'
+}
 Write-Host "PASS: receipt UTC identity, JSON string/DateTime conversion, 100 ns ordering and 3000.125 ms interval (PowerShell $($PSVersionTable.PSVersion))."
+Write-Host 'PASS: Scan/Detail gate identity and scenario mismatch rejection.'

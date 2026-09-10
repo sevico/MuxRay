@@ -1,10 +1,11 @@
-import type { API, DiagnosticPage, PageResponse, PickResponse, Session, SessionResponse, TagPage } from './protocol.ts';
+import type { API, Detail, DetailRequest, DetailResponse, DiagnosticPage, PageResponse, PickResponse, Session, SessionResponse, Tag, TagPage } from './protocol.ts';
 import { unsigned } from './numbers.ts';
 
 export const PAGE_SIZE = 100;
 export const POLL_MS = 200;
 export const REPLY_TIMEOUT_MS = 5000;
 export const OPEN_REPLY_TIMEOUT_MS = REPLY_TIMEOUT_MS;
+export const DETAIL_POLL_LIMIT = 25;
 export type Tab = 'tags' | 'diagnostics';
 export type VisiblePage = { tab: 'tags'; data: TagPage } | { tab: 'diagnostics'; data: DiagnosticPage };
 export interface ViewState {
@@ -16,6 +17,11 @@ export interface ViewState {
   start: string;
   page: VisiblePage | null;
   loading: boolean;
+  selectedTag: Tag | null;
+  detail: Detail | null;
+  detailState: '' | 'loading' | 'pending' | 'recovering' | 'ready' | 'failed';
+  detailError: string | null;
+  detailRetry: '' | 'confirm' | 'reload';
 }
 export interface Scheduler { after(fn: () => void, ms: number): () => void }
 const scheduler: Scheduler = {
@@ -24,7 +30,7 @@ const scheduler: Scheduler = {
 
 class RequestError extends Error {}
 class ReplyUnconfirmed extends Error {}
-type ReplySlot = 'open' | 'command' | 'status' | 'page';
+type ReplySlot = 'open' | 'command' | 'status' | 'page' | 'detail';
 function check(response: { apiVersion: number; error: { code: string } | null }): void {
   if (response.apiVersion !== 1) throw new RequestError('incompatible_api');
   if (response.error) throw new RequestError(response.error.code);
@@ -42,6 +48,19 @@ function pageResult<P extends { sessionId: string; bounds: { start: string } }>(
 function errorCode(error: unknown): string {
   return error instanceof RequestError ? error.message : 'transport_failed';
 }
+function detailResult(response: DetailResponse, request: DetailRequest): DetailResponse {
+  if (response.apiVersion !== 1) throw new RequestError('incompatible_api');
+  if (response.sessionId !== request.sessionId || response.requestId !== request.requestId ||
+      (response.tagId !== request.tagId && !(response.state === 'failed' && response.error && response.tagId === ''))) throw new RequestError('invalid_response');
+  if (response.state === 'failed') {
+    if (!response.error || response.detail) throw new RequestError('invalid_response');
+  } else if (response.state === 'pending') {
+    if (response.error || response.detail) throw new RequestError('invalid_response');
+  } else if (response.state === 'ready') {
+    if (response.error || !response.detail) throw new RequestError('invalid_response');
+  } else throw new RequestError('invalid_response');
+  return response;
+}
 
 // Framework-independent controller: one poll, one page, one user command at a
 // time. Old replies cannot overwrite a close/cancel/new-session transition.
@@ -49,7 +68,7 @@ export class Controller {
   private api: API;
   private clock: Scheduler;
   private listeners = new Set<() => void>();
-  private state: ViewState = { fileName: '', session: null, operation: '', error: null, tab: 'tags', start: '0', page: null, loading: false };
+  private state: ViewState = { fileName: '', session: null, operation: '', error: null, tab: 'tags', start: '0', page: null, loading: false, selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '' };
   private disposed = false;
   private statusVersion = 0;
   private pageVersion = 0;
@@ -63,6 +82,13 @@ export class Controller {
   private openingID: string | null = null;
   private stopTimer: (() => void) | null = null;
   private replyStops = new Map<ReplySlot, () => void>();
+  private nextDetailID = 0n;
+  private detailRequest: DetailRequest | null = null;
+  private detailPhase: 'start' | 'get' = 'start';
+  private detailBusy = false;
+  private detailPaused = false;
+  private detailPolls = 0;
+  private stopDetailTimer: (() => void) | null = null;
 
   constructor(api: API, clock: Scheduler = scheduler) { this.api = api; this.clock = clock; }
   getSnapshot = (): ViewState => this.state;
@@ -77,12 +103,15 @@ export class Controller {
   }
   private accept(session: Session): void {
     if (session.closed && session.terminal) {
+      this.clearDetail();
       this.pageVersion++;
       this.replyStops.get('page')?.();
       this.refreshStatus = false;
       this.update({ session: null, fileName: '', operation: '', page: null, loading: false, start: '0' });
     } else {
+      if (session.closed) this.clearDetail();
       this.update({ session, operation: session.closed ? 'closing' : '' });
+      this.ensureDetail();
     }
   }
   async open(): Promise<void> {
@@ -139,6 +168,8 @@ export class Controller {
     this.update({ operation: '', error: null });
     check(result);
     if (session) {
+      this.clearDetail();
+      this.nextDetailID = 0n;
       this.statusVersion++;
       this.pageVersion++;
       this.pollFailed = false;
@@ -158,6 +189,7 @@ export class Controller {
     this.pollFailed = false;
     this.refreshStatus = false;
     if (operation === 'closing') {
+      this.clearDetail();
       this.pageVersion++;
       this.replyStops.get('page')?.();
     }
@@ -227,6 +259,7 @@ export class Controller {
   select(tab: Tab, start = '0'): void {
     try { unsigned(start); } catch { this.update({ error: 'invalid_argument' }); return; }
     this.pageVersion++;
+    this.clearDetail();
     this.update({ tab, start, page: null, loading: false, error: this.openingID || this.refreshStatus || this.pollFailed ? this.state.error : null });
     this.ensurePage();
   }
@@ -266,10 +299,91 @@ export class Controller {
     this.schedule();
     this.ensurePage();
   }
+  selectTag(tagId: string): void {
+    if (this.disposed || !this.ready() || this.refreshStatus || this.pollFailed || this.state.page?.tab !== 'tags') return;
+    const tag = this.state.page.data.tags.find(item => item.id === tagId);
+    if (!tag || this.state.selectedTag?.id === tagId) return;
+    if (this.nextDetailID === 18446744073709551615n) { this.update({ detailError: 'id_exhausted' }); return; }
+    this.stopDetailTimer?.(); this.stopDetailTimer = null;
+    this.detailRequest = { sessionId: this.state.session!.sessionId, requestId: (++this.nextDetailID).toString(), tagId };
+    this.detailPhase = 'start'; this.detailPaused = false; this.detailPolls = 0;
+    this.update({ selectedTag: tag, detail: null, detailState: 'loading', detailError: null, detailRetry: '' });
+    // Keep one IPC wait. If an older reply is in flight, coalesce selections
+    // into this latest intent; its finite deadline releases the local slot.
+    this.ensureDetail();
+  }
+  private clearDetail(): void {
+    this.detailRequest = null;
+    this.detailPaused = false;
+    this.stopDetailTimer?.(); this.stopDetailTimer = null;
+    this.replyStops.get('detail')?.();
+    this.update({ selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '' });
+  }
+  private ensureDetail(): void {
+    if (this.disposed || this.detailBusy || this.detailPaused || this.stopDetailTimer || !this.detailRequest || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.detailPhase === 'start') void this.loadDetail();
+    else this.stopDetailTimer = this.clock.after(() => { this.stopDetailTimer = null; void this.loadDetail(); }, POLL_MS);
+  }
+  private currentDetail(request: DetailRequest): boolean {
+    return !this.disposed && this.detailRequest === request && this.state.session?.sessionId === request.sessionId && this.ready();
+  }
+  private async loadDetail(): Promise<void> {
+    const request = this.detailRequest;
+    if (!request || this.detailBusy || this.disposed || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    const phase = this.detailPhase;
+    this.detailBusy = true;
+    try {
+      const raw = await this.awaitReply('detail', () => phase === 'start' ? this.api.startDetail(request) : this.api.detailResult({ sessionId: request.sessionId, requestId: request.requestId }));
+      if (!this.currentDetail(request)) return;
+      const response = detailResult(raw, request);
+      if (response.state === 'ready') {
+        this.detailPaused = true;
+        this.update({ detail: response.detail, detailState: 'ready', detailError: null, detailRetry: '' });
+      } else if (response.state === 'failed') {
+        this.detailPaused = true;
+        const code = response.error!.code;
+        this.update({ detailState: 'failed', detailError: code, detailRetry: code === 'detail_not_found' ? 'confirm' : ['detail_failed', 'deadline_exceeded', 'canceled'].includes(code) ? 'reload' : '' });
+      } else {
+        this.detailPhase = 'get';
+        if (phase === 'get' && ++this.detailPolls >= DETAIL_POLL_LIMIT) {
+          this.detailPaused = true;
+          this.update({ detailState: 'failed', detailError: 'deadline_exceeded', detailRetry: 'confirm' });
+        } else this.update({ detailState: 'pending', detailError: null });
+      }
+    } catch (error) {
+      if (!this.currentDetail(request)) return;
+      if (phase === 'start' && !(error instanceof RequestError)) {
+        // A lost Start reply is uncertain: query that identity, never create
+        // another job automatically. Failed confirmation waits for the user.
+        this.detailPhase = 'get';
+        this.update({ detailState: 'recovering', detailError: null });
+      } else {
+        this.detailPaused = true;
+        this.update({ detailState: 'failed', detailError: errorCode(error), detailRetry: error instanceof RequestError ? '' : 'confirm' });
+      }
+    } finally {
+      this.detailBusy = false;
+      this.ensureDetail();
+    }
+  }
+  retryDetail(): void {
+    if (this.disposed || this.detailBusy || !this.detailPaused || !this.detailRequest || !this.state.detailRetry || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    // Unconfirmed work keeps its identity. An explicitly failed read is cached
+    // by the host, so only a deliberate new read advances the request number.
+    if (this.state.detailRetry === 'reload') {
+      if (this.nextDetailID === 18446744073709551615n) { this.update({ detailError: 'id_exhausted', detailRetry: '' }); return; }
+      this.detailRequest = { ...this.detailRequest, requestId: (++this.nextDetailID).toString() };
+    }
+    this.detailPhase = 'start'; this.detailPaused = false; this.detailPolls = 0;
+    this.update({ detailState: 'loading', detailError: null, detailRetry: '' });
+    this.ensureDetail();
+  }
   dispose(): void {
     this.disposed = true;
     this.statusVersion++; this.pageVersion++;
     this.stopTimer?.(); this.stopTimer = null;
+    this.detailRequest = null;
+    this.stopDetailTimer?.(); this.stopDetailTimer = null;
     for (const stop of this.replyStops.values()) stop();
     this.replyStops.clear();
     this.listeners.clear();

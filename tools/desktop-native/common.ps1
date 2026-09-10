@@ -36,6 +36,28 @@ function Write-NewJSON([string]$Path, $Value) {
 
 function Get-SHA256([string]$Path) { return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() }
 
+function Get-GateSettings([string]$Mode) {
+    switch ($Mode) {
+        'Scan' { return [ordered]@{ gateMode = 'Scan'; gateReadCall = 23; gateOffset = 163; committedTags = 10; fixtureBytes = 493; fixtureTags = 32 } }
+        'Detail' { return [ordered]@{ gateMode = 'Detail'; gateReadCall = 67; gateOffset = 24; committedTags = 32; fixtureBytes = 497; fixtureTags = 32 } }
+        default { throw 'Unsupported gate mode; use Scan or Detail.' }
+    }
+}
+
+function Assert-GateReceipt($Run, $Entered) {
+    if ($Entered.readCall -ne $Run.gateReadCall -or $Entered.offset -ne $Run.gateOffset -or $Entered.committedTags -ne $Run.committedTags) {
+        throw 'The source did not enter the gate described by its build record.'
+    }
+    if ($Entered.PSObject.Properties['gateMode']) {
+        if ($Entered.gateMode -ne $Run.gateMode) { throw 'Gate receipt mode differs from its build record.' }
+    } elseif ($Run.gateMode -ne 'Scan') { throw 'Detail gate receipts must identify their mode.' }
+}
+
+function Assert-GateScenario($Run, [string]$Scenario) {
+    $mode = if ($Scenario -eq 'DetailClose') { 'Detail' } elseif ($Scenario -in @('Cancel', 'Exit')) { 'Scan' } else { throw 'Unknown acceptance scenario.' }
+    if ($Run.gateMode -ne $mode) { throw "$Scenario requires a $mode gate run." }
+}
+
 function Read-Run([string]$Directory) {
     $directoryPath = Get-AbsoluteDirectory $Directory
     $record = Get-Content -LiteralPath (Join-Path $directoryPath 'build-record.json') -Raw | ConvertFrom-Json
@@ -43,6 +65,16 @@ function Read-Run([string]$Directory) {
         throw 'The build record does not identify this acceptance directory.'
     }
     if ($record.runId -notmatch '^[0-9a-f]{32}$') { throw 'Invalid run identity.' }
+    # Original v1 Scan records predate the explicit mode and offset fields.
+    if (-not $record.PSObject.Properties['gateMode']) {
+        $record | Add-Member -NotePropertyName gateMode -NotePropertyValue 'Scan'
+        $record | Add-Member -NotePropertyName gateOffset -NotePropertyValue 163
+        $record | Add-Member -NotePropertyName committedTags -NotePropertyValue $record.committedTagsBeforeGate
+    }
+    $gate = Get-GateSettings $record.gateMode
+    foreach ($key in $gate.Keys) {
+        if ($record.$key -ne $gate[$key]) { throw "Invalid gate setting in build record: $key." }
+    }
     foreach ($entry in @($record.artifacts)) {
         if ($entry.name -ne [IO.Path]::GetFileName($entry.name)) { throw 'Invalid artifact name in build record.' }
         if ((Get-SHA256 (Join-Path $directoryPath $entry.name)) -ne $entry.sha256) {
@@ -57,6 +89,9 @@ function Read-Receipt($Run, [string]$Name) {
     if ($receipt.runId -ne $Run.runId -or $receipt.pid -le 0 -or -not $receipt.processToken) {
         throw "Receipt identity mismatch: $Name"
     }
+    if ($receipt.PSObject.Properties['gateMode']) {
+        if ($receipt.gateMode -ne $Run.gateMode) { throw "Receipt gate mode mismatch: $Name" }
+    } elseif ($Run.gateMode -eq 'Detail') { throw "Detail receipt is missing its gate mode: $Name" }
     return $receipt
 }
 
@@ -98,10 +133,10 @@ function Assert-SameProcess($First, $Second) {
 
 function Assert-ExclusiveFixture($Run) {
     $file = [IO.File]::Open((Join-Path $Run.runDirectory 'native-controlled.flv'), [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::None)
-    try { if ($file.Length -ne 493) { throw 'Fixture size changed.' } } finally { $file.Dispose() }
+    try { if ($file.Length -ne $Run.fixtureBytes) { throw 'Fixture size changed.' } } finally { $file.Dispose() }
 }
 
-function New-Run([string]$Repository, [string]$Directory, [string]$Kind) {
+function New-Run([string]$Repository, [string]$Directory, [string]$Kind, [string]$GateMode = 'Scan') {
     if ($env:OS -ne 'Windows_NT') { throw 'These acceptance tools require Windows.' }
     $repo = Get-AbsoluteDirectory $Repository
     $run = Get-AbsoluteDirectory $Directory
@@ -111,27 +146,31 @@ function New-Run([string]$Repository, [string]$Directory, [string]$Kind) {
     }
     if (Test-Path -LiteralPath $run) { throw 'Run directory already exists; choose a new directory to preserve evidence.' }
     $null = New-Item -ItemType Directory -Path $run
+    $gateSettings = Get-GateSettings $GateMode
     $record = [ordered]@{
         format = 'muxray-native-acceptance-v1'; kind = $Kind; runId = [Guid]::NewGuid().ToString('N')
         createdUTC = [DateTime]::UtcNow.ToString('o'); repository = $repo; runDirectory = $run
-        gateReadCall = 23; committedTagsBeforeGate = 10; fixtureBytes = 493; fixtureTags = 32
     }
-    New-FramingFixture (Join-Path $run 'native-controlled.flv')
-    $sourcePath = Join-Path $repo 'internal\session\session.go'
+    foreach ($key in $gateSettings.Keys) { $record[$key] = $gateSettings[$key] }
+    $record.committedTagsBeforeGate = $record.committedTags
+    New-FramingFixture (Join-Path $run 'native-controlled.flv') $record.gateMode
+    $sourcePath = Join-Path $repo 'internal\document\document.go'
     $original = [IO.File]::ReadAllText($sourcePath)
-    $anchor = 'return start(ctx, source, uint64(info.Size()), options), nil'
-    if ([regex]::Matches($original, [regex]::Escape($anchor)).Count -ne 1) { throw 'Session Open seam changed; review the overlay before rebuilding.' }
-    $modified = $original.Replace($anchor, 'return start(ctx, nativeIOAcceptanceSource(path, source), uint64(info.Size()), options), nil')
+    $anchor = 'return start(ctx, source, info, options), nil'
+    if ([regex]::Matches($original, [regex]::Escape($anchor)).Count -ne 1) { throw 'Document Open seam changed; review the overlay before rebuilding.' }
+    $modified = $original.Replace($anchor, 'return start(ctx, nativeIOAcceptanceSource(path, source), info, options), nil')
     $importAnchor = 'import ('
-    if ([regex]::Matches($original, [regex]::Escape($importAnchor)).Count -ne 1) { throw 'Session imports changed; review the overlay.' }
+    if ([regex]::Matches($original, [regex]::Escape($importAnchor)).Count -ne 1) { throw 'Document imports changed; review the overlay.' }
     foreach ($import in @('encoding/json', 'path/filepath', 'strings', 'time')) {
-        if ($original.Contains('"' + $import + '"')) { throw "Overlay import already present: $import. Review the seam." }
+        if (-not $original.Contains('"' + $import + '"')) {
+            $modified = $modified.Replace($importAnchor, $importAnchor + "`n`t" + '"' + $import + '"')
+        }
     }
-    $modified = $modified.Replace($importAnchor, $importAnchor + "`n`t" + '"encoding/json"' + "`n`t" + '"path/filepath"' + "`n`t" + '"strings"' + "`n`t" + '"time"')
     $gate = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'gate.go.txt'))
     # JSON string quoting is also valid for these Windows paths in Go source.
     $gate = $gate.Replace('__RUN_DIRECTORY__', ($run | ConvertTo-Json -Compress)).Replace('__RUN_ID__', ($record.runId | ConvertTo-Json -Compress))
-    $overlaySource = Join-Path $run 'session_overlay.go'
+    $gate = $gate.Replace('__GATE_MODE__', ($record.gateMode | ConvertTo-Json -Compress)).Replace('__GATE_READ_CALL__', [string]$record.gateReadCall).Replace('__GATE_OFFSET__', [string]$record.gateOffset).Replace('__COMMITTED_TAGS__', [string]$record.committedTags)
+    $overlaySource = Join-Path $run 'document_overlay.go'
     Write-NewText $overlaySource ($modified + "`n" + $gate)
     & gofmt -w $overlaySource
     if ($LASTEXITCODE -ne 0) { throw 'gofmt overlay failed.' }
@@ -142,20 +181,20 @@ function New-Run([string]$Repository, [string]$Directory, [string]$Kind) {
     })
     $record.goInputs = @(Get-GoInputs $repo)
     if ($Kind -eq 'verify') {
-        $testSource = Join-Path $repo 'internal\session\session_test.go'
-        $testOverlay = Join-Path $run 'session_overlay_test.go'
-        Write-NewText $testOverlay ([IO.File]::ReadAllText($testSource) + "`n" + [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'verify_test.go.txt')))
+        $testSource = Join-Path $repo 'internal\document\native_acceptance_test.go'
+        if (Test-Path -LiteralPath $testSource) { throw 'The virtual native acceptance test path is already occupied.' }
+        $testOverlay = Join-Path $run 'document_overlay_test.go'
+        Write-NewText $testOverlay ([IO.File]::ReadAllText((Join-Path $PSScriptRoot 'verify_test.go.txt')))
         & gofmt -w $testOverlay
         if ($LASTEXITCODE -ne 0) { throw 'gofmt test overlay failed.' }
         $replace[$testSource] = $testOverlay
-        $record.testSource = [ordered]@{ path = $testSource; sha256 = Get-SHA256 $testSource }
     }
     Write-NewJSON (Join-Path $run 'overlay.json') @{ Replace = $replace }
     return $record
 }
 
 function Complete-Run($Record) {
-    if ((Get-SHA256 $Record.source.path) -ne $Record.source.sha256) { throw 'Repository session source changed during the run.' }
+    if ((Get-SHA256 $Record.source.path) -ne $Record.source.sha256) { throw 'Repository document source changed during the run.' }
     if ($Record.Contains('testSource') -and (Get-SHA256 $Record.testSource.path) -ne $Record.testSource.sha256) { throw 'Repository test source changed during the run.' }
     if (($Record.goInputs | ConvertTo-Json -Depth 4 -Compress) -ne (@(Get-GoInputs $Record.repository) | ConvertTo-Json -Depth 4 -Compress)) { throw 'Go inputs changed during the run.' }
     if ($Record.Contains('frontendInputs') -and ($Record.frontendInputs | ConvertTo-Json -Depth 4 -Compress) -ne (@(Get-FrontendInputs $Record.repository) | ConvertTo-Json -Depth 4 -Compress)) { throw 'Frontend inputs changed during the run.' }
@@ -196,15 +235,28 @@ function Get-GoInputs([string]$Repository) {
     })
 }
 
-function New-FramingFixture([string]$Path) {
-    # 32 empty script tags: a structural FLV, not playable AMF/audio/video.
-    $bytes = [byte[]]::new(13 + 15 * 32)
+function New-FramingFixture([string]$Path, [string]$GateMode = 'Scan') {
+    # Detail changes only Tag 0 to an AAC-LC sequence header; all other tags
+    # remain empty ScriptData. Neither fixture is playable media.
+    $gate = Get-GateSettings $GateMode
+    $detail = $gate.gateMode -eq 'Detail'
+    $bytes = [byte[]]::new($gate.fixtureBytes)
     [byte[]]$header = 70, 76, 86, 1, 0, 0, 0, 0, 9
+    if ($detail) { $header[4] = 4 }
     [Array]::Copy($header, $bytes, $header.Length)
     for ($index = 0; $index -lt 32; $index++) {
         $offset = 13 + 15 * $index
-        $bytes[$offset] = 18
-        $bytes[$offset + 14] = 11
+        if ($detail -and $index -gt 0) { $offset += 4 }
+        if ($detail -and $index -eq 0) {
+            $bytes[$offset] = 8
+            $bytes[$offset + 3] = 4
+            [byte[]]$asc = 0xaf, 0, 0x12, 0x10
+            [Array]::Copy($asc, 0, $bytes, $offset + 11, 4)
+            $bytes[$offset + 18] = 15
+        } else {
+            $bytes[$offset] = 18
+            $bytes[$offset + 14] = 11
+        }
     }
     $stream = [IO.File]::Open($Path, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::Read)
     try { $stream.Write($bytes, 0, $bytes.Length) } finally { $stream.Dispose() }

@@ -1,5 +1,6 @@
-// Package session owns local files and cancellable background container scans.
-// Index queries are supported only after the worker and source close finish.
+// Package session manages cancellable background container scans. Open owns a
+// local file; Start borrows its source. Index queries require a finished worker
+// and, for Open, a completed source close attempt.
 package session
 
 import (
@@ -31,7 +32,7 @@ const (
 	StateFailed    State = "failed"
 )
 
-// Terminal reports whether scanning and the source close attempt have ended.
+// Terminal reports whether scanning and any owned-source close have ended.
 func (s State) Terminal() bool {
 	return s == StateFinished || s == StateCanceled || s == StateFailed
 }
@@ -90,6 +91,20 @@ type ownedSource interface {
 	io.Closer
 }
 
+// Start borrows source for a background scan. The caller retains ownership and
+// must keep it readable until Wait finishes, then close it itself. Unlike Open,
+// this entry point never closes the supplied source; Close still waits for the
+// scanner to stop before returning. It permits a document owner to retain one
+// file for later, independently canceled detail reads. A nil source is reported
+// as a scan failure by Wait, including when size is zero.
+func Start(ctx context.Context, source io.ReaderAt, size uint64, options flv.Options) *Session {
+	return start(ctx, borrowedSource{ReaderAt: source}, size, options)
+}
+
+type borrowedSource struct{ io.ReaderAt }
+
+func (borrowedSource) Close() error { return nil }
+
 // start transfers exclusive ownership of an already opened source to the
 // worker. Keeping this seam private permits deterministic I/O lifecycle tests
 // without making caller-supplied source ownership another public API.
@@ -107,7 +122,11 @@ func start(ctx context.Context, source ownedSource, size uint64, options flv.Opt
 }
 
 func (s *Session) run(source ownedSource, size uint64, options flv.Options) {
-	result, scanErr := flv.ScanContextWithProgress(s.ctx, source, size, options, func(progress flv.ScanProgress) {
+	reader := io.ReaderAt(source)
+	if borrowed, ok := source.(borrowedSource); ok {
+		reader = borrowed.ReaderAt // preserve the scanner's nil-source validation
+	}
+	result, scanErr := flv.ScanContextWithProgress(s.ctx, reader, size, options, func(progress flv.ScanProgress) {
 		s.mu.Lock()
 		s.snapshot.Progress = progress
 		s.mu.Unlock()
@@ -169,7 +188,8 @@ func (s *Session) cancelLocked() {
 	}
 }
 
-// Wait waits for scanning and source close, returning their recorded error(s).
+// Wait waits for scanning and any owned-source close, returning their recorded
+// error(s). For Start, completion permits the caller to close its borrowed source.
 // Structural diagnostics do not produce a Go error. The wait context controls
 // only this call and never cancels the scan; nil means no deadline. A finished
 // task's error takes precedence over the wait context's cancellation.

@@ -40,7 +40,8 @@ function setup(override: Partial<Omit<API, 'open'>> & { open?: (requestId: strin
     openResult: async requestId => ({ requestId, pending: false, ...response(terminal()), fileName: 'sample.flv', canceled: false }),
     status: async () => response(terminal()), cancel: async () => response(snapshot({ state: 'canceling' })),
     close: async () => response(terminal({ closed: true })),
-    tags: async () => tagPage(), diagnostics: async () => diagnosticPage(), ...rest,
+    tags: async () => tagPage(), diagnostics: async () => diagnosticPage(),
+    startDetail: async () => { throw new Error('unexpected detail request'); }, detailResult: async () => { throw new Error('unexpected detail query'); }, ...rest,
   };
   return { controller: new Controller(api, clock), clock, api };
 }

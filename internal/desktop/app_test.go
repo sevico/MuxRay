@@ -58,9 +58,10 @@ func TestRealFileWorkflow(t *testing.T) {
 	}
 	checkFault(t, b.OpenFile(OpenRequest{Path: path}).Error, CodeBusy)
 	closed := b.CloseFile(id)
-	if closed.Error != nil || !closed.Session.Closed || !closed.Session.Terminal {
+	if closed.Error != nil || !closed.Session.Closed {
 		t.Fatalf("close: %+v", closed)
 	}
+	closeReal(t, app)
 	checkFault(t, b.GetTags(PageRequest{id, "0", 1}).Error, CodeSessionClosed)
 	checkFault(t, b.GetDiagnostics(PageRequest{id, "0", 1}).Error, CodeSessionClosed)
 	checkFault(t, b.CancelScan(id).Error, CodeSessionClosed)
@@ -80,6 +81,8 @@ func TestRealFileWorkflow(t *testing.T) {
 	if snapshot := b.GetSession(newID).Session; snapshot.Closed || snapshot.Failure != nil {
 		t.Fatal("stale request changed new session")
 	}
+	b.CloseFile(newID)
+	closeReal(t, app)
 	if err := os.Remove(path); err != nil {
 		t.Fatalf("real source still open: %v", err)
 	}
@@ -545,6 +548,21 @@ func finishReal(t *testing.T, app *App, id string) SessionResponse {
 	return app.Bindings().GetSession(id)
 }
 
+func closeReal(t *testing.T, app *App) {
+	t.Helper()
+	waitOpened(t, app)
+	app.mu.Lock()
+	scan := app.current.scan
+	app.mu.Unlock()
+	if scan != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := scan.Close(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			t.Fatal(err)
+		}
+	}
+}
+
 func cleanupApp(t *testing.T, app *App) {
 	t.Helper()
 	t.Cleanup(func() {
@@ -603,7 +621,7 @@ func TestBindingSurface(t *testing.T) {
 	for i := range typeOf.NumMethod() {
 		methods = append(methods, typeOf.Method(i).Name)
 	}
-	want := []string{"CancelScan", "CloseFile", "GetDiagnostics", "GetSession", "GetTags", "OpenFile"}
+	want := []string{"CancelScan", "CloseFile", "GetDetail", "GetDiagnostics", "GetSession", "GetTags", "OpenFile", "StartDetail"}
 	if !reflect.DeepEqual(methods, want) {
 		t.Fatalf("unexpected binding exposure: %v", methods)
 	}

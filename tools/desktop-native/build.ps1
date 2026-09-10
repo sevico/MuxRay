@@ -1,10 +1,11 @@
 param(
     [Parameter(Mandatory)][string]$Repository,
-    [Parameter(Mandatory)][string]$RunDirectory
+    [Parameter(Mandatory)][string]$RunDirectory,
+    [ValidateSet('Scan', 'Detail')][string]$GateMode = 'Scan'
 )
 . (Join-Path $PSScriptRoot 'common.ps1')
 
-$record = New-Run $Repository $RunDirectory 'native'
+$record = New-Run $Repository $RunDirectory 'native' $GateMode
 $record.frontendInputs = @(Get-FrontendInputs $record.repository)
 $record.buildTags = 'desktop,wv2runtime.error,production'
 $record.purpose = 'Controlled I/O native acceptance only; never distribute as the production executable.'

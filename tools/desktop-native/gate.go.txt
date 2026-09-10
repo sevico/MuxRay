@@ -2,6 +2,10 @@
 // ACCEPTANCE OVERLAY ONLY. This code never becomes repository production source.
 const nativeIOAcceptanceDirectory = __RUN_DIRECTORY__
 const nativeIOAcceptanceID = __RUN_ID__
+const nativeIOAcceptanceMode = __GATE_MODE__
+const nativeIOAcceptanceReadCall = __GATE_READ_CALL__
+const nativeIOAcceptanceOffset = __GATE_OFFSET__
+const nativeIOAcceptanceCommittedTags = __COMMITTED_TAGS__
 
 var nativeIOAcceptanceProcessToken = fmt.Sprintf("%d-%d", os.Getpid(), time.Now().UnixNano())
 
@@ -11,6 +15,7 @@ type nativeIOAcceptanceReceipt struct {
 	ProcessToken string `json:"processToken"`
 	Executable string `json:"executable"`
 	TimeUTC string `json:"timeUTC"`
+	GateMode string `json:"gateMode"`
 	ReadCall uint64 `json:"readCall,omitempty"`
 	Offset int64 `json:"offset,omitempty"`
 	CommittedTags uint64 `json:"committedTags,omitempty"`
@@ -21,6 +26,7 @@ func nativeIOAcceptanceWrite(name string, receipt nativeIOAcceptanceReceipt) err
 	receipt.RunID = nativeIOAcceptanceID
 	receipt.PID = os.Getpid()
 	receipt.ProcessToken = nativeIOAcceptanceProcessToken
+	receipt.GateMode = nativeIOAcceptanceMode
 	receipt.Executable, _ = os.Executable()
 	receipt.TimeUTC = time.Now().UTC().Format(time.RFC3339Nano)
 	data, err := json.MarshalIndent(receipt, "", "  ")
@@ -35,7 +41,7 @@ func nativeIOAcceptanceWrite(name string, receipt nativeIOAcceptanceReceipt) err
 	return os.Link(f.Name(), filepath.Join(nativeIOAcceptanceDirectory, name))
 }
 
-func nativeIOAcceptanceSource(path string, source *os.File) ownedSource {
+func nativeIOAcceptanceSource(path string, source *os.File) sourceFile {
 	absolute, err := filepath.Abs(path)
 	target := filepath.Join(nativeIOAcceptanceDirectory, "native-controlled.flv")
 	if err != nil || !strings.EqualFold(filepath.Clean(absolute), target) { return source }
@@ -49,17 +55,18 @@ type nativeIOAcceptanceReader struct {
 
 func (r *nativeIOAcceptanceReader) ReadAt(p []byte, offset int64) (int, error) {
 	r.calls++
-	if r.calls == 23 {
-		// Header and PreviousTagSize0 use two reads, then each empty tag uses
-		// two. The next tag header is gated after ten committed records.
-		err := nativeIOAcceptanceWrite("entered.json", nativeIOAcceptanceReceipt{ReadCall:r.calls, Offset:offset, CommittedTags:10})
+	if r.calls == nativeIOAcceptanceReadCall {
+		// Scan: header + PreviousTagSize0 + ten two-read tag records.
+		// Detail: all 32 two-read records, then the first AAC detail header read.
+		if offset != nativeIOAcceptanceOffset { return 0, fmt.Errorf("acceptance: gate offset changed: got %d, want %d", offset, nativeIOAcceptanceOffset) }
+		err := nativeIOAcceptanceWrite("entered.json", nativeIOAcceptanceReceipt{ReadCall:r.calls, Offset:offset, CommittedTags:nativeIOAcceptanceCommittedTags})
 		if err != nil { return 0, fmt.Errorf("acceptance: entered receipt: %w", err) }
 		for {
 			data, err := os.ReadFile(filepath.Join(nativeIOAcceptanceDirectory, "release.json"))
 			if err == nil {
 				var release nativeIOAcceptanceReceipt
 				if err := json.Unmarshal(data, &release); err != nil { return 0, fmt.Errorf("acceptance: release receipt: %w", err) }
-				if release.RunID != nativeIOAcceptanceID || release.PID != os.Getpid() || release.ProcessToken != nativeIOAcceptanceProcessToken {
+				if release.RunID != nativeIOAcceptanceID || release.PID != os.Getpid() || release.ProcessToken != nativeIOAcceptanceProcessToken || release.GateMode != nativeIOAcceptanceMode {
 					return 0, errors.New("acceptance: release identity mismatch")
 				}
 				break

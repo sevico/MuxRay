@@ -1,21 +1,25 @@
 param(
     [Parameter(Mandatory)][string]$RunDirectory,
-    [Parameter(Mandatory)][ValidateSet('Cancel', 'Exit')][string]$Scenario,
-    [ValidateSet('canceled')][string]$ObservedState,
+    [Parameter(Mandatory)][ValidateSet('Cancel', 'Exit', 'DetailClose')][string]$Scenario,
+    [ValidateSet('canceled', 'closing')][string]$ObservedState,
     [int]$ObservedTagCount = -1,
     [ValidateRange(1000, 15000)][int]$MaxExitMilliseconds = 6000
 )
 . (Join-Path $PSScriptRoot 'common.ps1')
 $run = Read-Run $RunDirectory
 if ($run.kind -ne 'native') { throw 'Native acceptance requires a native build run.' }
+Assert-GateScenario $run $Scenario
 $entered = Read-Receipt $run 'entered.json'
-if ($entered.executable -ne (Join-Path $run.runDirectory 'MuxRay-io-acceptance.exe') -or $entered.readCall -ne 23 -or $entered.offset -ne 163 -or $entered.committedTags -ne 10) {
-    throw 'The native source did not enter the expected ten-Tag gate.'
+Assert-GateReceipt $run $entered
+if ($entered.executable -ne (Join-Path $run.runDirectory 'MuxRay-io-acceptance.exe')) {
+    throw 'The gate receipt belongs to a non-native verification process.'
 }
-$result = [ordered]@{ runId = $run.runId; scenario = $Scenario; completedUTC = [DateTime]::UtcNow.ToString('o') }
-if ($Scenario -eq 'Cancel') {
-    if ($ObservedState -ne 'canceled' -or $ObservedTagCount -ne 10) { throw 'Supply the actual native UI observation: -ObservedState canceled -ObservedTagCount 10.' }
-    $command = Read-Receipt $run 'cancel-command.json'
+$result = [ordered]@{ runId = $run.runId; gateMode = $run.gateMode; scenario = $Scenario; completedUTC = [DateTime]::UtcNow.ToString('o') }
+if ($Scenario -ne 'Exit') {
+    $expectedState = if ($Scenario -eq 'DetailClose') { 'closing' } else { 'canceled' }
+    if ($ObservedState -ne $expectedState -or $ObservedTagCount -ne $run.committedTags) { throw "Supply the actual native UI observation: -ObservedState $expectedState -ObservedTagCount $($run.committedTags)." }
+    $commandName = if ($Scenario -eq 'DetailClose') { 'close-command.json' } else { 'cancel-command.json' }
+    $command = Read-Receipt $run $commandName
     $release = Read-Receipt $run 'release.json'
     $released = Read-Receipt $run 'released.json'
     $closed = Read-Receipt $run 'closed.json'
@@ -24,7 +28,9 @@ if ($Scenario -eq 'Cancel') {
     $releaseTime = Convert-ReceiptTime $release.timeUTC
     $releasedTime = Convert-ReceiptTime $released.timeUTC
     $closedTime = Convert-ReceiptTime $closed.timeUTC
-    if ($commandTime -gt $releaseTime -or $releaseTime -gt $releasedTime -or $releasedTime -gt $closedTime) { throw 'Cancellation receipt order is invalid.' }
+    $enteredTime = Convert-ReceiptTime $entered.timeUTC
+    if ($enteredTime -gt $commandTime -or $commandTime -gt $releaseTime -or $releaseTime -gt $releasedTime -or $releasedTime -gt $closedTime) { throw 'Gate/command/release/close receipt order is invalid.' }
+    if ($Scenario -eq 'DetailClose' -and ($commandTime -ge $releaseTime -or $releaseTime -ge $releasedTime -or $releasedTime -ge $closedTime)) { throw 'DetailClose requires strictly ordered close/release/released/closed receipts.' }
     if ($closed.PSObject.Properties['closeError'] -and $closed.closeError) { throw "Source Close failed: $($closed.closeError)" }
     $result.uiObservation = [ordered]@{ source = 'Operator supplied; verify against the native screenshot'; state = $ObservedState; tags = $ObservedTagCount }
     $result.orderlySourceClose = $true

@@ -1,5 +1,5 @@
 import type { desktop, main } from '../wailsjs/go/models';
-import type { DiagnosticPage, PageResponse, PickResponse, Session, SessionResponse, TagPage } from './protocol';
+import type { DetailResponse, DiagnosticPage, PageResponse, PickResponse, Session, SessionResponse, TagPage } from './protocol';
 
 // Wails v2.14 emits optional TS properties for Go pointers. Normalize both
 // undefined (generated declarations) and null (actual JSON) without unsafe
@@ -22,4 +22,15 @@ export function diagnosticResponse(value: desktop.DiagnosticPageResponse): PageR
   return { apiVersion: value.apiVersion, error: value.error ?? null, page: value.page ? {
     ...value.page, diagnostics: value.page.diagnostics.map(item => ({ ...item, expected: item.expected ?? null, actual: item.actual ?? null })),
   } : null };
+}
+export function detailResponse(value: desktop.DetailResponse): DetailResponse {
+  const state = value.state;
+  if (state !== 'pending' && state !== 'ready' && state !== 'failed') throw new Error('Invalid detail response state.');
+  return {
+    ...value, state, error: value.error ?? null, detail: value.detail ? {
+      ...value.detail,
+      fields: value.detail.fields.map(field => ({ ...field, span: field.span ?? null })),
+      diagnostics: value.detail.diagnostics.map(item => ({ ...item, expected: item.expected ?? null, actual: item.actual ?? null })),
+    } : null,
+  };
 }

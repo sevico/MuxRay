@@ -6,6 +6,8 @@ export function CancelScan(arg1:string):Promise<desktop.SessionResponse>;
 
 export function CloseFile(arg1:string):Promise<desktop.SessionResponse>;
 
+export function GetDetail(arg1:desktop.DetailQuery):Promise<desktop.DetailResponse>;
+
 export function GetDiagnostics(arg1:desktop.PageRequest):Promise<desktop.DiagnosticPageResponse>;
 
 export function GetSession(arg1:string):Promise<desktop.SessionResponse>;
@@ -13,3 +15,5 @@ export function GetSession(arg1:string):Promise<desktop.SessionResponse>;
 export function GetTags(arg1:desktop.PageRequest):Promise<desktop.TagPageResponse>;
 
 export function OpenFile(arg1:desktop.OpenRequest):Promise<desktop.SessionResponse>;
+
+export function StartDetail(arg1:desktop.DetailRequest):Promise<desktop.DetailResponse>;

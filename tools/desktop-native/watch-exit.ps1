@@ -5,19 +5,21 @@ param(
 . (Join-Path $PSScriptRoot 'common.ps1')
 $run = Read-Run $RunDirectory
 if ($run.kind -ne 'native') { throw 'Exit observation requires a native build run.' }
+Assert-GateScenario $run 'Exit'
 $entered = Read-Receipt $run 'entered.json'
+Assert-GateReceipt $run $entered
 $process = Get-NativeProcess $run $entered
 $started = [DateTime]::UtcNow.ToString('o')
 try {
     Write-NewJSON (Join-Path $run.runDirectory 'exit-watch-armed.json') ([ordered]@{
         runId = $run.runId; pid = $entered.pid; processToken = $entered.processToken
-        timeUTC = $started; timeoutSeconds = $TimeoutSeconds
+        timeUTC = $started; timeoutSeconds = $TimeoutSeconds; gateMode = $run.gateMode
     })
     Write-Host "Watching process $($entered.pid) for up to $TimeoutSeconds seconds. Record MarkExit, then close the native window without releasing the gate."
     $exited = $process.WaitForExit($TimeoutSeconds * 1000)
     $receipt = [ordered]@{
         runId = $run.runId; pid = $entered.pid; processToken = $entered.processToken
-        timeUTC = [DateTime]::UtcNow.ToString('o'); watchStartedUTC = $started; exited = $exited
+        timeUTC = [DateTime]::UtcNow.ToString('o'); watchStartedUTC = $started; exited = $exited; gateMode = $run.gateMode
     }
     if ($exited) {
         $receipt.exitUTC = $process.ExitTime.ToUniversalTime().ToString('o')

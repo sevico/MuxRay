@@ -1,3 +1,17 @@
+package document
+
+import (
+    "bytes"
+    "context"
+    "errors"
+    "os"
+    "path/filepath"
+    "testing"
+    "time"
+
+    "github.com/sevico/muxray/internal/flv"
+    "github.com/sevico/muxray/internal/session"
+)
 
 func TestNativeAcceptanceOverlayGate(t *testing.T) {
 	path := filepath.Join(nativeIOAcceptanceDirectory, "native-controlled.flv")
@@ -18,23 +32,27 @@ func TestNativeAcceptanceOverlayGate(t *testing.T) {
 		defer cancel()
 		_ = s.Close(ctx)
 	})
+	if nativeIOAcceptanceMode == "Detail" {
+		verifyNativeDetailClose(t, s)
+		return
+	}
 	deadline := time.Now().Add(3*time.Second)
 	for {
 		if _, err := os.Stat(filepath.Join(nativeIOAcceptanceDirectory, "entered.json")); err == nil { break }
 		if time.Now().After(deadline) { t.Fatal("source did not reach gate") }
 		time.Sleep(time.Millisecond)
 	}
-	if got := s.Snapshot(); got.State != StateRunning { t.Fatalf("at gate: %+v", got) }
+    if got := s.Snapshot(); got.State != session.StateRunning { t.Fatalf("at gate: %+v", got) }
 	t.Log("before cancellation: running, gated before read 23 at offset 163")
 	s.Cancel()
-	if got := s.Snapshot(); got.State != StateCanceling { t.Fatalf("before release: %+v", got) }
+    if got := s.Snapshot(); got.State != session.StateCanceling { t.Fatalf("before release: %+v", got) }
 	t.Log("before release: canceling")
 	if err := nativeIOAcceptanceWrite("release.json", nativeIOAcceptanceReceipt{}); err != nil { t.Fatal(err) }
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if err := s.Wait(ctx); !errors.Is(err, context.Canceled) { t.Fatalf("wait: %v", err) }
 	final := s.Snapshot()
-	if final.State != StateCanceled || final.Progress.TagCount != 10 || final.Complete || final.Closed {
+    if final.State != session.StateCanceled || final.Progress.TagCount != 10 || final.Complete || final.Closed {
 		t.Fatalf("canceled prefix: %+v", final)
 	}
 	page, err := s.Page(0, 100)
@@ -42,9 +60,60 @@ func TestNativeAcceptanceOverlayGate(t *testing.T) {
 	for i, tag := range page.Records {
 		if tag.ID != uint64(i) || tag.Offset != uint64(13+15*i) { t.Fatalf("partial tag %d: %+v", i, tag) }
 	}
-	if _, err := os.Stat(filepath.Join(nativeIOAcceptanceDirectory, "closed.json")); err != nil { t.Fatal(err) }
-	t.Logf("after release: canceled, retained IDs 0-9, source closed: %+v", final)
-	if err := s.Close(ctx); !errors.Is(err, context.Canceled) { t.Fatalf("close: %v", err) }
+    if _, err := os.Stat(filepath.Join(nativeIOAcceptanceDirectory, "closed.json")); !errors.Is(err, os.ErrNotExist) { t.Fatalf("scan cancellation closed the retained source: %v", err) }
+    t.Logf("after release: canceled, retained IDs 0-9, source remains owned: %+v", final)
+    if _, err := s.StartDetail(1, 0); err != nil { t.Fatalf("detail of committed prefix: %v", err) }
+    for {
+        detail, err := s.GetDetail(1)
+        if err != nil { t.Fatal(err) }
+        if detail.State != "pending" {
+            if detail.Err != nil || detail.Detail == nil || detail.Detail.Kind != "amf0ScriptData" { t.Fatalf("prefix detail: %+v", detail) }
+            break
+        }
+        if ctx.Err() != nil { t.Fatal("prefix detail did not finish") }
+        time.Sleep(time.Millisecond)
+    }
+    if err := s.Close(ctx); !errors.Is(err, context.Canceled) { t.Fatalf("close: %v", err) }
+    if _, err := os.Stat(filepath.Join(nativeIOAcceptanceDirectory, "closed.json")); err != nil { t.Fatal(err) }
 	if !s.Snapshot().Closed { t.Fatal("session Close was not recorded") }
-	if _, err := s.Page(0, 100); !errors.Is(err, ErrClosed) { t.Fatalf("page after close: %v", err) }
+    if _, err := s.Page(0, 100); !errors.Is(err, session.ErrClosed) { t.Fatalf("page after close: %v", err) }
+}
+
+func verifyNativeDetailClose(t *testing.T, s *Document) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := s.Wait(ctx); err != nil { t.Fatalf("complete scan before detail: %v", err) }
+	if got := s.Snapshot(); !got.State.Terminal() || !got.Complete || got.Closed || got.Progress.TagCount != 32 {
+		t.Fatalf("scan before detail: %+v", got)
+	}
+	for _, name := range []string{"entered.json", "closed.json"} {
+		if _, err := os.Stat(filepath.Join(nativeIOAcceptanceDirectory, name)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("scan unexpectedly produced %s: %v", name, err)
+		}
+	}
+	selected, err := s.StartDetail(1, 0)
+	if err != nil || selected.State != "pending" { t.Fatalf("detail start: %+v %v", selected, err) }
+	for {
+		if _, err := os.Stat(filepath.Join(nativeIOAcceptanceDirectory, "entered.json")); err == nil { break }
+		if ctx.Err() != nil { t.Fatal("detail read did not reach gate") }
+		time.Sleep(time.Millisecond)
+	}
+	t.Log("scan complete: 32 Tags, source retained; AAC detail gated before read 67 at offset 24")
+	if err := nativeIOAcceptanceWrite("close-command.json", nativeIOAcceptanceReceipt{}); err != nil { t.Fatal(err) }
+	poll, stop := context.WithCancel(context.Background())
+	stop()
+	if err := s.Close(poll); !errors.Is(err, context.Canceled) { t.Fatalf("blocked Close must stop waiting: %v", err) }
+	if got := s.Snapshot(); !got.Closed || got.State.Terminal() || got.Progress.TagCount != 32 {
+		t.Fatalf("blocked close advertised a reusable source: %+v", got)
+	}
+	if _, err := os.Stat(filepath.Join(nativeIOAcceptanceDirectory, "closed.json")); !errors.Is(err, os.ErrNotExist) { t.Fatalf("closed while detail read was active: %v", err) }
+	if _, err := s.StartDetail(2, 0); !errors.Is(err, session.ErrClosed) { t.Fatalf("new detail while closing: %v", err) }
+	if _, err := s.GetDetail(1); !errors.Is(err, session.ErrClosed) { t.Fatalf("old detail while closing: %v", err) }
+	if _, err := s.Page(0, 100); !errors.Is(err, session.ErrClosed) { t.Fatalf("page while closing: %v", err) }
+	t.Log("close before release: closed=true, terminal=false, source retained, new details and pages rejected")
+	if err := nativeIOAcceptanceWrite("release.json", nativeIOAcceptanceReceipt{}); err != nil { t.Fatal(err) }
+	if err := s.Close(ctx); err != nil { t.Fatalf("Close after detail release: %v", err) }
+	if got := s.Snapshot(); !got.Closed || !got.State.Terminal() { t.Fatalf("Close never released source: %+v", got) }
+	if _, err := os.Stat(filepath.Join(nativeIOAcceptanceDirectory, "closed.json")); err != nil { t.Fatal(err) }
+	t.Log("release completed the active read; document Close returned nil and source closed")
 }

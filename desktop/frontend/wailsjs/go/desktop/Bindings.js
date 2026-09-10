@@ -10,6 +10,10 @@ export function CloseFile(arg1) {
   return window['go']['desktop']['Bindings']['CloseFile'](arg1);
 }
 
+export function GetDetail(arg1) {
+  return window['go']['desktop']['Bindings']['GetDetail'](arg1);
+}
+
 export function GetDiagnostics(arg1) {
   return window['go']['desktop']['Bindings']['GetDiagnostics'](arg1);
 }
@@ -24,4 +28,8 @@ export function GetTags(arg1) {
 
 export function OpenFile(arg1) {
   return window['go']['desktop']['Bindings']['OpenFile'](arg1);
+}
+
+export function StartDetail(arg1) {
+  return window['go']['desktop']['Bindings']['StartDetail'](arg1);
 }

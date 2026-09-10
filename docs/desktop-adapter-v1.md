@@ -1,5 +1,10 @@
 # 最小桌面 Go 适配层
 
+本文保留 2026-09-06 初始适配层及当时验收范围。当前已接入原生窗口，
+并按 [ADR-013](decisions/013-retained-document-details.md) 增加独立文档所有权、
+`StartDetail`/`GetDetail` 和 AMF0/AAC 有界详情；现行使用说明见
+[desktop/README](../desktop/README.md)。下文“六个方法”“尚无窗口”是历史状态。
+
 本批对应 [ADR-010](decisions/010-minimal-desktop-adapter.md)，在
 [后台扫描会话](background-scan-session.md) 上增加应用级生命周期和前端友好的 DTO。
 代码在 `internal/desktop`；仍是纯 Go，没有新增 Wails/React 依赖，**还没有可启动的

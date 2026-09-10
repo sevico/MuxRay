@@ -12,6 +12,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
+	"github.com/sevico/muxray/internal/document"
 	"github.com/sevico/muxray/internal/flv"
 	"github.com/sevico/muxray/internal/session"
 )
@@ -74,7 +75,7 @@ type slot struct {
 // that lifetime stops work but the host must still call Shutdown for cleanup.
 func New(ctx context.Context) *App {
 	return newApp(ctx, func(ctx context.Context, path string, options flv.Options) (scanSession, error) {
-		scan, err := session.Open(ctx, path, options)
+		scan, err := document.Open(ctx, path, options)
 		if err != nil {
 			return nil, err // do not publish a typed-nil session interface
 		}
@@ -113,6 +114,9 @@ func (b *Bindings) OpenFile(request OpenRequest) SessionResponse {
 	if a.closed || a.ctx.Err() != nil {
 		return failedSession(CodeShuttingDown)
 	}
+	if a.current != nil {
+		a.refreshClosedLocked(a.current)
+	}
 	if a.current != nil && (!a.current.closed || !a.terminalLocked(a.current)) {
 		return failedSession(CodeBusy)
 	}
@@ -141,6 +145,7 @@ func (a *App) openSlot(e *slot, request OpenRequest) {
 	if err != nil {
 		e.cancel()
 	}
+	a.refreshClosedLocked(e)
 	if e.closed && scan != nil {
 		// Close uses an already canceled wait context: ownership is released by
 		// the session when its worker ends, never by a per-request goroutine.
@@ -172,7 +177,11 @@ func (b *Bindings) CancelScan(id string) SessionResponse {
 	if e.closed {
 		return failedSession(CodeSessionClosed)
 	}
-	e.cancel()
+	// Opening has no scan handle yet. Once admitted, cancellation belongs to
+	// the scan alone; the document source must survive for partial details.
+	if e.opening {
+		e.cancel()
+	}
 	if e.scan != nil {
 		e.scan.Cancel()
 	}
@@ -203,7 +212,16 @@ func (a *App) findLocked(id string) *slot {
 	if a.current == nil || id != a.current.id {
 		return nil
 	}
+	a.refreshClosedLocked(a.current)
 	return a.current
+}
+
+func (a *App) refreshClosedLocked(e *slot) {
+	// Cancellation can finish while an opener is returning its document. Its
+	// own logical closure must not be lost merely because publication was late.
+	if e.scan != nil && e.scan.Snapshot().Closed {
+		e.closed = true
+	}
 }
 
 func (a *App) terminalLocked(e *slot) bool {
@@ -211,6 +229,7 @@ func (a *App) terminalLocked(e *slot) bool {
 }
 
 func (a *App) responseLocked(e *slot) SessionResponse {
+	a.refreshClosedLocked(e)
 	view := &SessionSnapshot{SessionID: e.id, State: "opening", Closed: e.closed}
 	if e.opening {
 		if e.ctx.Err() != nil {
@@ -340,7 +359,7 @@ func fault(code string) *Fault {
 	case CodeSessionClosed:
 		message = "The session is closed."
 	case CodeNotReady:
-		message = "The scan and source cleanup have not finished."
+		message = "The scan has not finished."
 	case CodeIDExhausted:
 		message = "The application cannot allocate another session ID."
 	case CodeOpenFailed:

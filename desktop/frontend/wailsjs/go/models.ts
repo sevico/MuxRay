@@ -1,5 +1,91 @@
 export namespace desktop {
 	
+	export class DetailQuery {
+	    sessionId: string;
+	    requestId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DetailQuery(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.requestId = source["requestId"];
+	    }
+	}
+	export class DetailRequest {
+	    sessionId: string;
+	    requestId: string;
+	    tagId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DetailRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.requestId = source["requestId"];
+	        this.tagId = source["tagId"];
+	    }
+	}
+	export class Fault {
+	    code: string;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Fault(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.message = source["message"];
+	    }
+	}
+	export class DetailResponse {
+	    apiVersion: number;
+	    sessionId: string;
+	    requestId: string;
+	    tagId: string;
+	    state: string;
+	    detail?: detailview.Detail;
+	    error?: Fault;
+	
+	    static createFrom(source: any = {}) {
+	        return new DetailResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.apiVersion = source["apiVersion"];
+	        this.sessionId = source["sessionId"];
+	        this.requestId = source["requestId"];
+	        this.tagId = source["tagId"];
+	        this.state = source["state"];
+	        this.detail = this.convertValues(source["detail"], detailview.Detail);
+	        this.error = this.convertValues(source["error"], Fault);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class Diagnostic {
 	    code: string;
 	    severity: string;
@@ -75,20 +161,6 @@ export namespace desktop {
 		    }
 		    return a;
 		}
-	}
-	export class Fault {
-	    code: string;
-	    message: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new Fault(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.code = source["code"];
-	        this.message = source["message"];
-	    }
 	}
 	export class DiagnosticPageResponse {
 	    apiVersion: number;
@@ -448,6 +520,131 @@ export namespace desktop {
 		    return a;
 		}
 	}
+
+}
+
+export namespace detailview {
+	
+	export class Diagnostic {
+	    code: string;
+	    severity: string;
+	    offset: string;
+	    bitOffset: number;
+	    message: string;
+	    expected?: string;
+	    actual?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Diagnostic(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.severity = source["severity"];
+	        this.offset = source["offset"];
+	        this.bitOffset = source["bitOffset"];
+	        this.message = source["message"];
+	        this.expected = source["expected"];
+	        this.actual = source["actual"];
+	    }
+	}
+	export class Span {
+	    byteOffset: string;
+	    bitOffset: number;
+	    bitLength: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Span(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.byteOffset = source["byteOffset"];
+	        this.bitOffset = source["bitOffset"];
+	        this.bitLength = source["bitLength"];
+	    }
+	}
+	export class Field {
+	    id: string;
+	    parentId: string;
+	    name: string;
+	    type: string;
+	    value: string;
+	    span?: Span;
+	
+	    static createFrom(source: any = {}) {
+	        return new Field(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.parentId = source["parentId"];
+	        this.name = source["name"];
+	        this.type = source["type"];
+	        this.value = source["value"];
+	        this.span = this.convertValues(source["span"], Span);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Detail {
+	    kind: string;
+	    complete: boolean;
+	    truncated: boolean;
+	    fields: Field[];
+	    diagnostics: Diagnostic[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Detail(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.complete = source["complete"];
+	        this.truncated = source["truncated"];
+	        this.fields = this.convertValues(source["fields"], Field);
+	        this.diagnostics = this.convertValues(source["diagnostics"], Diagnostic);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
 
 }
 

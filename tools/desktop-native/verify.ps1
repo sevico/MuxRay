@@ -1,10 +1,11 @@
 param(
     [Parameter(Mandatory)][string]$Repository,
-    [Parameter(Mandatory)][string]$RunDirectory
+    [Parameter(Mandatory)][string]$RunDirectory,
+    [ValidateSet('Scan', 'Detail')][string]$GateMode = 'Scan'
 )
 . (Join-Path $PSScriptRoot 'common.ps1')
 
-$record = New-Run $Repository $RunDirectory 'verify'
+$record = New-Run $Repository $RunDirectory 'verify' $GateMode
 Invoke-Offline {
     Push-Location $record.repository
     try {
@@ -13,7 +14,7 @@ Invoke-Offline {
         $savedPreference = $ErrorActionPreference
         try {
             $ErrorActionPreference = 'Continue'
-            $output = & go test -mod=readonly -race -count=1 -timeout=20s -run '^TestNativeAcceptanceOverlayGate$' -v -overlay (Join-Path $record.runDirectory 'overlay.json') ./internal/session 2>&1
+            $output = & go test -mod=readonly -race -count=1 -timeout=20s -run '^TestNativeAcceptanceOverlayGate$' -v -overlay (Join-Path $record.runDirectory 'overlay.json') ./internal/document 2>&1
             $resultCode = $LASTEXITCODE
         } finally { $ErrorActionPreference = $savedPreference }
         Write-NewText (Join-Path $record.runDirectory 'verify.log') (($output | ForEach-Object { "$_" }) -join "`n")
@@ -27,10 +28,11 @@ Complete-Run $record
 $run = Read-Run $record.runDirectory
 $entered = Read-Receipt $run 'entered.json'
 foreach ($name in @('release.json', 'released.json', 'closed.json')) { Assert-SameProcess $entered (Read-Receipt $run $name) }
-if ($entered.readCall -ne 23 -or $entered.offset -ne 163 -or $entered.committedTags -ne 10) { throw 'Unexpected gate location.' }
+Assert-GateReceipt $run $entered
 Assert-ExclusiveFixture $run
+$scenario = if ($run.gateMode -eq 'Detail') { 'non-GUI controlled detail close' } else { 'non-GUI controlled document cancellation' }
 Write-NewJSON (Join-Path $record.runDirectory 'verification.json') ([ordered]@{
-    runId = $run.runId; scenario = 'non-GUI controlled session cancellation'; passed = $true
-    completedUTC = [DateTime]::UtcNow.ToString('o'); retainedTags = 10; exclusiveSourceOpen = $true
+    runId = $run.runId; gateMode = $run.gateMode; scenario = $scenario; passed = $true
+    completedUTC = [DateTime]::UtcNow.ToString('o'); retainedTags = $run.committedTags; exclusiveSourceOpen = $true
 })
-Write-Host "PASS: controlled source gate, canceling -> canceled, ten retained Tags, Close and exclusive file open. $RunDirectory"
+Write-Host "PASS: $scenario, $($run.committedTags) committed Tags, Close and exclusive file open. $RunDirectory"

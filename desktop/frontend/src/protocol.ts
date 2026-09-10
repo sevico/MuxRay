@@ -30,6 +30,14 @@ export interface Diagnostic {
 export interface TagPage { sessionId: string; bounds: Bounds; tags: Tag[] }
 export interface DiagnosticPage { sessionId: string; bounds: Bounds; diagnostics: Diagnostic[] }
 export interface PageResponse<P> { apiVersion: number; page: P | null; error: Fault | null }
+export interface DetailRequest { sessionId: string; requestId: string; tagId: string }
+export interface DetailQuery { sessionId: string; requestId: string }
+export interface DetailField { id: string; parentId: string; name: string; type: string; value: string; span: Span | null }
+export interface Detail { kind: string; complete: boolean; truncated: boolean; fields: DetailField[]; diagnostics: Diagnostic[] }
+export interface DetailResponse {
+  apiVersion: number; sessionId: string; requestId: string; tagId: string;
+  state: 'pending' | 'ready' | 'failed'; detail: Detail | null; error: Fault | null;
+}
 export interface API {
   open(requestId: string): Promise<PickResponse>;
   openResult(requestId: string): Promise<PickResponse>;
@@ -38,4 +46,6 @@ export interface API {
   close(id: string): Promise<SessionResponse>;
   tags(request: PageRequest): Promise<PageResponse<TagPage>>;
   diagnostics(request: PageRequest): Promise<PageResponse<DiagnosticPage>>;
+  startDetail(request: DetailRequest): Promise<DetailResponse>;
+  detailResult(request: DetailQuery): Promise<DetailResponse>;
 }

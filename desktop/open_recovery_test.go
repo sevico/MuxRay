@@ -32,6 +32,7 @@ func TestRecoverOpenAfterLostReply(t *testing.T) {
 	if closed := h.native.GetOpenResult("1"); !closed.Session.Closed {
 		t.Fatal("recovery resurrected closed session")
 	}
+	waitNativeScan(t, h, lost.Session.SessionID) // retained source must finish closing
 	if next := h.native.OpenFLV("2"); next.Session == nil || next.Session.SessionID == lost.Session.SessionID || calls != 2 {
 		t.Fatalf("next open: %+v", next)
 	}

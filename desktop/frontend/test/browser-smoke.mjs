@@ -48,7 +48,7 @@ async function click(text) {
 }
 
 function syntheticHost() {
-  let session, latestPick, sequence = 0;
+  let session, latestPick, latestDetail, sequence = 0;
   window.smokeMode = 'finished';
   const envelope = () => structuredClone({ apiVersion: 1, session, error: null });
   const span = { byteOffset: '9007199254740993', bitOffset: 0, bitLength: 88 };
@@ -77,6 +77,19 @@ function syntheticHost() {
     GetDiagnostics: async request => {
       assertRequest(request);
       return { apiVersion: 1, error: null, page: { sessionId: session.sessionId, bounds: { start: '0', next: '2', total: '2', limit: request.count }, diagnostics: [0, 1].map(i => ({ code: `SYNTHETIC_${i}`, severity: 'error', offset: '18446744073709551615', bitOffset: i, message: '<script>Not executable HTML</script>', expected: null, actual: '9007199254740993' })) } };
+    },
+    StartDetail: async request => {
+      if (!session.terminal || session.closed || request.sessionId !== session.sessionId) throw Error('Unexpected synthetic detail request');
+      latestDetail = { apiVersion: 1, ...request, state: 'ready', error: null, detail: {
+        kind: request.tagId === '0' ? 'amf0ScriptData' : 'aacAudio', complete: request.tagId === '0', truncated: true,
+        fields: [{ id: '0', parentId: '', name: 'synthetic payload', type: 'string', value: '<img onerror=alert(1)>字段值</img>', span: { byteOffset: '18446744073709551615', bitOffset: 3, bitLength: 5 } }],
+        diagnostics: [{ code: 'SYNTHETIC_DETAIL', severity: 'warning', offset: '9007199254740993', bitOffset: 3, message: '<script>plain diagnostic</script>', expected: null, actual: null }],
+      } };
+      return structuredClone(latestDetail);
+    },
+    GetDetail: async request => {
+      if (request.sessionId !== latestDetail.sessionId || request.requestId !== latestDetail.requestId) throw Error('Unexpected synthetic detail query');
+      return structuredClone(latestDetail);
     },
   } } };
   function assertRequest(request) {
@@ -110,6 +123,18 @@ try {
   await click('诊断 (2)');
   await waitFor("document.querySelectorAll('tbody tr').length === 2");
   assert.equal(await evaluate("document.querySelector('tbody p').textContent"), '<script>Not executable HTML</script>');
+  await click('Tag 索引');
+  await waitFor("document.querySelector('tbody tr td')?.textContent === '0'");
+  await click('0');
+  await waitFor("document.querySelector('.detail-heading h2')?.textContent === 'AMF0 Script Data'");
+  assert.equal(await evaluate("document.querySelector('.field-value').textContent"), '<img onerror=alert(1)>字段值</img>');
+  assert.equal(await evaluate("document.querySelector('.detail-panel img') === null"), true);
+  assert.equal(await evaluate("document.querySelector('.detail-fields td:nth-child(4)').textContent"), '18446744073709551615 : 3');
+  assert.equal(await evaluate("document.querySelector('.detail-badges').textContent.includes('语法解析完成') && document.querySelector('.detail-badges').textContent.includes('展示省略')"), true);
+  await click('1');
+  await waitFor("document.querySelector('.detail-heading h2')?.textContent === 'AAC Audio'");
+  assert.equal(await evaluate("document.querySelector('.detail-panel').textContent.includes('不解码音频')"), true);
+  assert.equal(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), true, 'Detail layout keeps horizontal scrolling inside its panes');
   await click('关闭文件');
   await waitFor("document.querySelector('.empty-state') !== null");
   await evaluate("window.smokeMode = 'running'");
@@ -124,7 +149,7 @@ try {
   await click('打开 FLV 文件');
   await waitFor("document.querySelector('.topbar .primary')?.disabled === false");
   assert.equal(await evaluate("document.querySelector('.empty-state') !== null && document.querySelector('[role=alert]') === null"), true);
-  console.log(JSON.stringify({ result: 'passed', host: 'synthetic only; native Wails not verified', checks: ['empty state', '100/100/5 pagination', 'exact large integers', 'escaped diagnostic text', 'partial results', 'cancel', 'close', 'picker cancellation'], screenshot }, null, 2));
+  console.log(JSON.stringify({ result: 'passed', host: 'synthetic only; native Wails not verified', checks: ['empty state', '100/100/5 pagination', 'exact large integers', 'escaped diagnostic text', 'partial results', 'AMF0/AAC detail panes', 'escaped field previews', 'exact byte/bit positions', 'cancel', 'close', 'picker cancellation'], screenshot }, null, 2));
 } finally {
   try { if (target) await call(`/close?target=${target}`); }
   finally { server.close(); }
