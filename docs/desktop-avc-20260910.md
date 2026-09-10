@@ -46,11 +46,20 @@
 | 受控 AVC 非 GUI | `verify.ps1 -GateMode AVCDetail` 的真实文件 race 测试通过 |
 | 工具兼容 | Windows PowerShell 5.1 与 PowerShell 7 的 `self-test.ps1` 均通过，含三种 gate 参数及场景错配拒绝 |
 
-本次未执行依赖 Python `jsonschema` 的独立 schema 命令；该依赖的本机离线环境
-不可用。补查 `python -B -m unittest discover -s tools -p 'test_*.py'` 时，三个
-测试模块均因缺少 `jsonschema` 未能导入，exit 1，详见 `python-tools-tests.log`；
-该项没有通过，不是测试断言失败。仓库已有固定版本与 CI 检查；本批没有修改 CLI
-schemas 或 goldens。新的标准库 AVC 样本生成器已实际运行并由原生流程与 CLI 核验。
+初次验收缺少 Python `jsonschema`，独立 schema 命令未执行，Python 单元测试因三个
+模块无法导入而 exit 1；原始 `python-tools-tests.log` 保留该失败记录。随后按仓库
+`tools/requirements-schema.txt`，用 `python -m pip` 为实际运行测试的 Python 3.13.5
+安装了 `jsonschema==4.25.0`，安装与执行均使用
+`C:\Users\swk01\AppData\Local\Programs\Python\Python313\python.exe`。
+
+复验 `python -B tools/validate_contracts.py` exit 0，21 个登记的 Schema 实例、11 个
+语料清单身份及负向契约检查均通过；`python -B -m unittest discover -s tools -p 'test_*.py'`
+exit 0，14 项中 13 项通过，1 项非 Windows guard 测试按 Windows 平台条件正常跳过。
+安装与复验日志、退出码另存 `outputs\muxray-python-schema`，不覆盖初次证据。
+全局 `python -m pip check` 另报告两项既有 LangChain 版本冲突，涉及的包未在本次
+安装中变更，与本项目依赖无关；该全局检查不计作通过。本次没有修改 CLI schemas、
+goldens 或 Python 依赖版本声明，并已补充本地安装说明。
+新的标准库 AVC 样本生成器已实际运行并由原生流程与 CLI 核验。
 扩展后的浏览器 smoke 脚本通过语法检查，但 Browser 工具连接失败，未实际执行；
 它不计入通过项。下述 Windows 原生流程实际执行，使用真实文件选择器、Wails IPC
 和生产二进制，没有模拟宿主。未重新进行长时间 fuzz、跨平台 GUI、安装器或签名验收。
