@@ -60,12 +60,27 @@ function Read-Receipt($Run, [string]$Name) {
     return $receipt
 }
 
+function Convert-ReceiptTime($Value) {
+    # Windows PowerShell 5.1 keeps JSON timestamps as strings; PowerShell 7
+    # may deserialize them to DateTime. Do not format a DateTime back to text:
+    # that loses its Kind and fractional seconds before Parse sees it.
+    if ($Value -is [DateTimeOffset]) { return $Value.ToUniversalTime() }
+    if ($Value -is [DateTime]) {
+        if ($Value.Kind -eq [DateTimeKind]::Unspecified) { throw 'Receipt time must identify a timezone.' }
+        return ([DateTimeOffset]$Value).ToUniversalTime()
+    }
+    if ($Value -isnot [string] -or $Value -notmatch '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$') {
+        throw 'Receipt time must be an RFC 3339 timestamp with a timezone.'
+    }
+    return [DateTimeOffset]::Parse($Value, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::None).ToUniversalTime()
+}
+
 function Get-NativeProcess($Run, $Entered) {
     $expected = Join-Path $Run.runDirectory 'MuxRay-io-acceptance.exe'
     if ($Entered.executable -ne $expected) { throw 'The entered receipt belongs to a non-native verification process.' }
     $process = Get-Process -Id $Entered.pid -ErrorAction Stop
     try {
-        if ($process.Path -ne $expected -or $process.StartTime.ToUniversalTime() -gt [DateTime]::Parse($Entered.timeUTC).ToUniversalTime()) {
+        if ($process.Path -ne $expected -or (Convert-ReceiptTime $process.StartTime) -gt (Convert-ReceiptTime $Entered.timeUTC)) {
             throw 'The PID was reused or belongs to a different process.'
         }
         # Open and retain the handle before observing exit; subsequent PID reuse

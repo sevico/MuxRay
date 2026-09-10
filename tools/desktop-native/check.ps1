@@ -20,7 +20,11 @@ if ($Scenario -eq 'Cancel') {
     $released = Read-Receipt $run 'released.json'
     $closed = Read-Receipt $run 'closed.json'
     foreach ($item in @($command, $release, $released, $closed)) { Assert-SameProcess $entered $item }
-    if ([DateTime]::Parse($command.timeUTC) -gt [DateTime]::Parse($release.timeUTC) -or [DateTime]::Parse($release.timeUTC) -gt [DateTime]::Parse($released.timeUTC) -or [DateTime]::Parse($released.timeUTC) -gt [DateTime]::Parse($closed.timeUTC)) { throw 'Cancellation receipt order is invalid.' }
+    $commandTime = Convert-ReceiptTime $command.timeUTC
+    $releaseTime = Convert-ReceiptTime $release.timeUTC
+    $releasedTime = Convert-ReceiptTime $released.timeUTC
+    $closedTime = Convert-ReceiptTime $closed.timeUTC
+    if ($commandTime -gt $releaseTime -or $releaseTime -gt $releasedTime -or $releasedTime -gt $closedTime) { throw 'Cancellation receipt order is invalid.' }
     if ($closed.PSObject.Properties['closeError'] -and $closed.closeError) { throw "Source Close failed: $($closed.closeError)" }
     $result.uiObservation = [ordered]@{ source = 'Operator supplied; verify against the native screenshot'; state = $ObservedState; tags = $ObservedTagCount }
     $result.orderlySourceClose = $true
@@ -33,8 +37,9 @@ if ($Scenario -eq 'Cancel') {
     Assert-SameProcess $entered $command
     Assert-SameProcess $entered $observed
     if (-not $observed.exited -or $observed.exitCode -ne 0) { throw 'The native process did not exit successfully.' }
-    if ([DateTime]::Parse($observed.watchStartedUTC) -gt [DateTime]::Parse($command.timeUTC)) { throw 'Start the exit watcher before recording the exit action.' }
-    $elapsed = ([DateTimeOffset]::Parse($observed.exitUTC) - [DateTimeOffset]::Parse($command.timeUTC)).TotalMilliseconds
+    $commandTime = Convert-ReceiptTime $command.timeUTC
+    if ((Convert-ReceiptTime $observed.watchStartedUTC) -gt $commandTime) { throw 'Start the exit watcher before recording the exit action.' }
+    $elapsed = ((Convert-ReceiptTime $observed.exitUTC) - $commandTime).TotalMilliseconds
     if ($elapsed -lt 0 -or $elapsed -gt $MaxExitMilliseconds) { throw "Exit interval $elapsed ms exceeds the selected bound $MaxExitMilliseconds ms." }
     $result.commandToExitMilliseconds = [Math]::Round($elapsed, 3)
     $result.limitMilliseconds = $MaxExitMilliseconds

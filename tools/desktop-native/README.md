@@ -21,12 +21,15 @@ $cancel = 'C:\work\native acceptance\cancel-001'
 $exitRun = 'C:\work\native acceptance\exit-001'
 $scripts = Join-Path $repo 'tools\desktop-native'
 
+& "$scripts\self-test.ps1"
 & "$scripts\verify.ps1" -Repository $repo -RunDirectory $verify
 & "$scripts\build.ps1" -Repository $repo -RunDirectory $cancel
 & "$scripts\build.ps1" -Repository $repo -RunDirectory $exitRun
 ```
 
 `verify.ps1` 不启动 GUI：在独立测试 overlay 中运行带 race 检查的真实文件会话测试，核对完整样本 32 Tag、gate、`running → canceling → canceled`、保留 ID 0–9、source Close、会话 Close 后拒绝分页，以及文件可独占打开。它不能代替以下原生交互验收。
+
+`self-test.ps1` 在内存中验证 JSON 收据时间，覆盖 Windows PowerShell 5.1 的字符串和 PowerShell 7 的 `DateTime` 反序列化，保留 UTC 身份及 .NET 的 100 ns 精度，防止时区偏移导致误判 PID 复用或丢失退出耗时的小数部分。该测试不创建 run 或修改旧收据。
 
 ## 原生取消
 
