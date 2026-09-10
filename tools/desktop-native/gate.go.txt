@@ -1,0 +1,81 @@
+
+// ACCEPTANCE OVERLAY ONLY. This code never becomes repository production source.
+const nativeIOAcceptanceDirectory = __RUN_DIRECTORY__
+const nativeIOAcceptanceID = __RUN_ID__
+
+var nativeIOAcceptanceProcessToken = fmt.Sprintf("%d-%d", os.Getpid(), time.Now().UnixNano())
+
+type nativeIOAcceptanceReceipt struct {
+	RunID string `json:"runId"`
+	PID int `json:"pid"`
+	ProcessToken string `json:"processToken"`
+	Executable string `json:"executable"`
+	TimeUTC string `json:"timeUTC"`
+	ReadCall uint64 `json:"readCall,omitempty"`
+	Offset int64 `json:"offset,omitempty"`
+	CommittedTags uint64 `json:"committedTags,omitempty"`
+	CloseError string `json:"closeError,omitempty"`
+}
+
+func nativeIOAcceptanceWrite(name string, receipt nativeIOAcceptanceReceipt) error {
+	receipt.RunID = nativeIOAcceptanceID
+	receipt.PID = os.Getpid()
+	receipt.ProcessToken = nativeIOAcceptanceProcessToken
+	receipt.Executable, _ = os.Executable()
+	receipt.TimeUTC = time.Now().UTC().Format(time.RFC3339Nano)
+	data, err := json.MarshalIndent(receipt, "", "  ")
+	if err != nil { return err }
+	f, err := os.CreateTemp(nativeIOAcceptanceDirectory, name+"-*.tmp")
+	if err != nil { return err }
+	defer os.Remove(f.Name())
+	_, err = f.Write(append(data, '\n'))
+	if err = errors.Join(err, f.Close()); err != nil { return err }
+	// Publish complete bytes atomically. Link refuses an existing receipt;
+	// unlike os.Rename on Windows it cannot silently replace old evidence.
+	return os.Link(f.Name(), filepath.Join(nativeIOAcceptanceDirectory, name))
+}
+
+func nativeIOAcceptanceSource(path string, source *os.File) ownedSource {
+	absolute, err := filepath.Abs(path)
+	target := filepath.Join(nativeIOAcceptanceDirectory, "native-controlled.flv")
+	if err != nil || !strings.EqualFold(filepath.Clean(absolute), target) { return source }
+	return &nativeIOAcceptanceReader{File: source}
+}
+
+type nativeIOAcceptanceReader struct {
+	*os.File
+	calls uint64
+}
+
+func (r *nativeIOAcceptanceReader) ReadAt(p []byte, offset int64) (int, error) {
+	r.calls++
+	if r.calls == 23 {
+		// Header and PreviousTagSize0 use two reads, then each empty tag uses
+		// two. The next tag header is gated after ten committed records.
+		err := nativeIOAcceptanceWrite("entered.json", nativeIOAcceptanceReceipt{ReadCall:r.calls, Offset:offset, CommittedTags:10})
+		if err != nil { return 0, fmt.Errorf("acceptance: entered receipt: %w", err) }
+		for {
+			data, err := os.ReadFile(filepath.Join(nativeIOAcceptanceDirectory, "release.json"))
+			if err == nil {
+				var release nativeIOAcceptanceReceipt
+				if err := json.Unmarshal(data, &release); err != nil { return 0, fmt.Errorf("acceptance: release receipt: %w", err) }
+				if release.RunID != nativeIOAcceptanceID || release.PID != os.Getpid() || release.ProcessToken != nativeIOAcceptanceProcessToken {
+					return 0, errors.New("acceptance: release identity mismatch")
+				}
+				break
+			}
+			if !errors.Is(err, os.ErrNotExist) { return 0, fmt.Errorf("acceptance: inspect release: %w", err) }
+			// Deliberately ignore cancellation, modelling an in-flight OS read.
+			time.Sleep(25*time.Millisecond)
+		}
+		if err := nativeIOAcceptanceWrite("released.json", nativeIOAcceptanceReceipt{}); err != nil { return 0, err }
+	}
+	return r.File.ReadAt(p, offset)
+}
+
+func (r *nativeIOAcceptanceReader) Close() error {
+	err := r.File.Close()
+	receipt := nativeIOAcceptanceReceipt{}
+	if err != nil { receipt.CloseError = err.Error() }
+	return errors.Join(err, nativeIOAcceptanceWrite("closed.json", receipt))
+}

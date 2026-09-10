@@ -2,6 +2,10 @@
 
 本目录用于保存确定性制样、Golden 更新、差异比较和性能基准辅助工具。Golden 更新必须人工审阅。
 
+## Windows 原生桌面受控验收
+
+[`desktop-native`](desktop-native/README.md) 从新 checkout 离线构建独立的 Go overlay 验收程序，自动生成 493 byte / 32 Tag 的结构 FLV，无需私有媒体。真实窗口选择文件后，在十个已提交 Tag 之后阻塞读取，用于重复验证取消保留部分索引与阻塞中有界退出。提供非 GUI race 验证、gate 控制、进程退出观察和收据检查；每次使用新目录并保留身份与哈希，不覆盖旧证据。需要已准备的 Go/npm 依赖缓存，原生按钮操作需由操作者或 computer-use 执行，不自动进入 CI。
+
 `validate_contracts.py` 使用固定版本的 Draft 2020-12 validator 检查公开 Schema 本身以及已登记的 Golden/manifest 实例。CI 会从 `requirements-schema.txt` 安装该开发期依赖；MuxRay 二进制不依赖 Python。
 
 ## 离线语料验证

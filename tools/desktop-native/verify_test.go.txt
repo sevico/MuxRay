@@ -1,0 +1,50 @@
+
+func TestNativeAcceptanceOverlayGate(t *testing.T) {
+	path := filepath.Join(nativeIOAcceptanceDirectory, "native-controlled.flv")
+	data, err := os.ReadFile(path)
+	if err != nil { t.Fatal(err) }
+	full, err := flv.Scan(bytes.NewReader(data), uint64(len(data)), flv.Options{})
+	if err != nil || !full.Complete || full.HasErrors() || full.Index().Len() != 32 {
+		t.Fatalf("generated structural fixture: %+v, %v", full, err)
+	}
+	s, err := Open(context.Background(), path, flv.Options{})
+	if err != nil { t.Fatal(err) }
+	t.Cleanup(func() {
+		// On failure unblock only this test's gate. Keep all receipts as evidence.
+		if _, err := os.Stat(filepath.Join(nativeIOAcceptanceDirectory, "release.json")); errors.Is(err, os.ErrNotExist) {
+			_ = nativeIOAcceptanceWrite("release.json", nativeIOAcceptanceReceipt{})
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = s.Close(ctx)
+	})
+	deadline := time.Now().Add(3*time.Second)
+	for {
+		if _, err := os.Stat(filepath.Join(nativeIOAcceptanceDirectory, "entered.json")); err == nil { break }
+		if time.Now().After(deadline) { t.Fatal("source did not reach gate") }
+		time.Sleep(time.Millisecond)
+	}
+	if got := s.Snapshot(); got.State != StateRunning { t.Fatalf("at gate: %+v", got) }
+	t.Log("before cancellation: running, gated before read 23 at offset 163")
+	s.Cancel()
+	if got := s.Snapshot(); got.State != StateCanceling { t.Fatalf("before release: %+v", got) }
+	t.Log("before release: canceling")
+	if err := nativeIOAcceptanceWrite("release.json", nativeIOAcceptanceReceipt{}); err != nil { t.Fatal(err) }
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := s.Wait(ctx); !errors.Is(err, context.Canceled) { t.Fatalf("wait: %v", err) }
+	final := s.Snapshot()
+	if final.State != StateCanceled || final.Progress.TagCount != 10 || final.Complete || final.Closed {
+		t.Fatalf("canceled prefix: %+v", final)
+	}
+	page, err := s.Page(0, 100)
+	if err != nil || len(page.Records) != 10 { t.Fatalf("partial page: %+v %v", page, err) }
+	for i, tag := range page.Records {
+		if tag.ID != uint64(i) || tag.Offset != uint64(13+15*i) { t.Fatalf("partial tag %d: %+v", i, tag) }
+	}
+	if _, err := os.Stat(filepath.Join(nativeIOAcceptanceDirectory, "closed.json")); err != nil { t.Fatal(err) }
+	t.Logf("after release: canceled, retained IDs 0-9, source closed: %+v", final)
+	if err := s.Close(ctx); !errors.Is(err, context.Canceled) { t.Fatalf("close: %v", err) }
+	if !s.Snapshot().Closed { t.Fatal("session Close was not recorded") }
+	if _, err := s.Page(0, 100); !errors.Is(err, ErrClosed) { t.Fatalf("page after close: %v", err) }
+}
