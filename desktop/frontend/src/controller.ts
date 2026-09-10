@@ -3,7 +3,8 @@ import { unsigned } from './numbers.ts';
 
 export const PAGE_SIZE = 100;
 export const POLL_MS = 200;
-export const OPEN_REPLY_TIMEOUT_MS = 5000;
+export const REPLY_TIMEOUT_MS = 5000;
+export const OPEN_REPLY_TIMEOUT_MS = REPLY_TIMEOUT_MS;
 export type Tab = 'tags' | 'diagnostics';
 export type VisiblePage = { tab: 'tags'; data: TagPage } | { tab: 'diagnostics'; data: DiagnosticPage };
 export interface ViewState {
@@ -22,7 +23,8 @@ const scheduler: Scheduler = {
 };
 
 class RequestError extends Error {}
-class OpenUnconfirmed extends Error {}
+class ReplyUnconfirmed extends Error {}
+type ReplySlot = 'open' | 'command' | 'status' | 'page';
 function check(response: { apiVersion: number; error: { code: string } | null }): void {
   if (response.apiVersion !== 1) throw new RequestError('incompatible_api');
   if (response.error) throw new RequestError(response.error.code);
@@ -60,7 +62,7 @@ export class Controller {
   private nextOpenID = 0n;
   private openingID: string | null = null;
   private stopTimer: (() => void) | null = null;
-  private stopOpenReply: (() => void) | null = null;
+  private replyStops = new Map<ReplySlot, () => void>();
 
   constructor(api: API, clock: Scheduler = scheduler) { this.api = api; this.clock = clock; }
   getSnapshot = (): ViewState => this.state;
@@ -76,6 +78,7 @@ export class Controller {
   private accept(session: Session): void {
     if (session.closed && session.terminal) {
       this.pageVersion++;
+      this.replyStops.get('page')?.();
       this.refreshStatus = false;
       this.update({ session: null, fileName: '', operation: '', page: null, loading: false, start: '0' });
     } else {
@@ -92,33 +95,33 @@ export class Controller {
     try {
       // Wails may never settle a call whose callback is lost. A timeout only
       // starts result confirmation; it never repeats or cancels the picker.
-      const result = await this.awaitOpenReply(() => this.api.open(requestId));
+      const result = await this.awaitReply('open', () => this.api.open(requestId));
       if (this.disposed) return;
       this.acceptOpen(result, requestId);
     } catch (error) {
-      if (!(error instanceof OpenUnconfirmed)) this.update({ error: errorCode(error) });
+      if (!(error instanceof ReplyUnconfirmed)) this.update({ error: errorCode(error) });
     }
     finally {
       if (this.openingID) this.update({ operation: 'recovering' });
       this.schedule(); this.ensurePage();
     }
   }
-  private async awaitOpenReply(call: () => Promise<PickResponse>): Promise<PickResponse> {
+  private async awaitReply<T>(slot: ReplySlot, call: () => Promise<T>): Promise<T> {
     let stopDeadline = () => {};
-    let rejectWait: (error: OpenUnconfirmed) => void = () => {};
+    let rejectWait: (error: ReplyUnconfirmed) => void = () => {};
     const deadline = new Promise<never>((_, reject) => {
       rejectWait = reject;
-      stopDeadline = this.clock.after(() => reject(new OpenUnconfirmed()), OPEN_REPLY_TIMEOUT_MS);
+      stopDeadline = this.clock.after(() => reject(new ReplyUnconfirmed()), REPLY_TIMEOUT_MS);
     });
-    const stopWait = () => { stopDeadline(); rejectWait(new OpenUnconfirmed()); };
-    this.stopOpenReply = stopWait;
+    const stopWait = () => { stopDeadline(); rejectWait(new ReplyUnconfirmed()); };
+    this.replyStops.set(slot, stopWait);
     try {
-      // Confirmation callbacks can also be lost. Racing each wait lets retry
-      // make another query while preventing a late reply from changing state.
+      // A lost callback must not retain a local request slot indefinitely.
+      // The host call may still finish; only its local wait is abandoned.
       return await Promise.race([call(), deadline]);
     } finally {
       stopDeadline();
-      if (this.stopOpenReply === stopWait) this.stopOpenReply = null;
+      if (this.replyStops.get(slot) === stopWait) this.replyStops.delete(slot);
     }
   }
   private acceptOpen(result: PickResponse, requestId: string): void {
@@ -149,21 +152,30 @@ export class Controller {
   private async command(operation: 'canceling' | 'closing'): Promise<void> {
     const session = this.state.session;
     if (this.disposed || !session || this.state.operation || (operation === 'canceling' && session.terminal)) return;
-    this.statusVersion++;
+    const version = ++this.statusVersion;
     this.stopTimer?.(); this.stopTimer = null;
+    this.replyStops.get('status')?.();
     this.pollFailed = false;
-    if (operation === 'closing') this.pageVersion++;
+    this.refreshStatus = false;
+    if (operation === 'closing') {
+      this.pageVersion++;
+      this.replyStops.get('page')?.();
+    }
     this.update({ operation, error: null, ...(operation === 'closing' ? { page: null, loading: false } : {}) });
     try {
-      const result = await (operation === 'closing' ? this.api.close(session.sessionId) : this.api.cancel(session.sessionId));
-      if (!this.disposed && this.state.session?.sessionId === session.sessionId) {
+      const result = await this.awaitReply('command', () => operation === 'closing' ? this.api.close(session.sessionId) : this.api.cancel(session.sessionId));
+      if (!this.disposed && version === this.statusVersion && this.state.session?.sessionId === session.sessionId) {
         const current = sessionResult(result, session.sessionId);
         this.refreshStatus = false;
         this.accept(current);
       }
     } catch (error) {
-      this.refreshStatus = true;
-      this.update({ error: errorCode(error), operation: '' });
+      if (!this.disposed && version === this.statusVersion && this.state.session?.sessionId === session.sessionId) {
+        this.refreshStatus = true;
+        // Keep commands disabled until a query confirms what actually happened.
+        // Neither a timeout nor retry is permission to repeat a host command.
+        this.update({ error: errorCode(error) });
+      }
     }
     finally { this.schedule(); this.ensurePage(); }
   }
@@ -174,7 +186,7 @@ export class Controller {
       return;
     }
     if (!this.state.session || (this.state.session.terminal && !this.refreshStatus)) return;
-    if (this.state.operation && !(this.state.operation === 'closing' && this.state.session.closed)) return;
+    if (this.state.operation && !this.refreshStatus && !(this.state.operation === 'closing' && this.state.session.closed)) return;
     this.stopTimer = this.clock.after(() => { this.stopTimer = null; void this.poll(); }, POLL_MS);
   }
   private async recoverOpen(): Promise<void> {
@@ -182,7 +194,7 @@ export class Controller {
     if (this.disposed || this.polling || !requestId) return;
     this.polling = true;
     try {
-      const result = await this.awaitOpenReply(() => this.api.openResult(requestId));
+      const result = await this.awaitReply('open', () => this.api.openResult(requestId));
       if (!this.disposed && this.openingID === requestId) {
         this.acceptOpen(result, requestId);
         this.ensurePage();
@@ -198,7 +210,7 @@ export class Controller {
     this.polling = true;
     const version = this.statusVersion;
     try {
-      const result = await this.api.status(session.sessionId);
+      const result = await this.awaitReply('status', () => this.api.status(session.sessionId));
       if (!this.disposed && version === this.statusVersion && this.state.session?.sessionId === session.sessionId) {
         const current = sessionResult(result, session.sessionId);
         if (this.refreshStatus) {
@@ -209,7 +221,7 @@ export class Controller {
         this.ensurePage();
       }
     } catch (error) {
-      if (version === this.statusVersion) { this.pollFailed = true; this.update({ error: errorCode(error) }); }
+      if (!this.disposed && version === this.statusVersion && this.state.session?.sessionId === session.sessionId) { this.pollFailed = true; this.update({ error: errorCode(error) }); }
     } finally { this.polling = false; this.schedule(); }
   }
   select(tab: Tab, start = '0'): void {
@@ -235,11 +247,11 @@ export class Controller {
     try {
       const request = { sessionId: session.sessionId, start, count: PAGE_SIZE };
       const result: VisiblePage = tab === 'tags'
-        ? { tab, data: pageResult(await this.api.tags(request), session.sessionId, start) }
-        : { tab, data: pageResult(await this.api.diagnostics(request), session.sessionId, start) };
-      if (!this.disposed && version === this.pageVersion && this.ready()) this.update({ page: result });
+        ? { tab, data: pageResult(await this.awaitReply('page', () => this.api.tags(request)), session.sessionId, start) }
+        : { tab, data: pageResult(await this.awaitReply('page', () => this.api.diagnostics(request)), session.sessionId, start) };
+      if (!this.disposed && version === this.pageVersion && this.state.session?.sessionId === session.sessionId && this.ready()) this.update({ page: result });
     } catch (error) {
-      if (version === this.pageVersion) this.update({ error: errorCode(error) });
+      if (!this.disposed && version === this.pageVersion && this.state.session?.sessionId === session.sessionId) this.update({ error: errorCode(error) });
     } finally {
       this.paging = false;
       if (version === this.pageVersion) this.update({ loading: false });
@@ -247,7 +259,7 @@ export class Controller {
     }
   }
   retry(): void {
-    if (this.disposed) return;
+    if (this.disposed || this.replyStops.has('command') || this.state.operation === 'picking') return;
     this.update({ error: null });
     this.pollFailed = false;
     if (this.state.session) this.refreshStatus = true;
@@ -258,7 +270,8 @@ export class Controller {
     this.disposed = true;
     this.statusVersion++; this.pageVersion++;
     this.stopTimer?.(); this.stopTimer = null;
-    this.stopOpenReply?.(); this.stopOpenReply = null;
+    for (const stop of this.replyStops.values()) stop();
+    this.replyStops.clear();
     this.listeners.clear();
     // Resource ownership belongs to the host, not an unreliable unload event.
   }

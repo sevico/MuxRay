@@ -64,7 +64,7 @@ test('polling is sequential and stops at terminal status; no live index pages', 
   await controller.open();
   assert.equal(pages, 0);
   clock.tick(); clock.tick(); clock.tick();
-  assert.equal(polls, 1); assert.equal(clock.tasks.size, 0);
+  assert.equal(polls, 1); assert.equal(clock.tasks.size, 1, 'only the current reply deadline remains');
   status.resolve(response(terminal())); await settle();
   assert.equal(pages, 1); assert.equal(clock.tasks.size, 0);
   assert.equal(controller.getSnapshot().page?.tab, 'tags');
@@ -140,7 +140,7 @@ test('reconciliation keeps an unclosed file and coalesces retries and selections
   controller.select('tags', '100'); controller.select('diagnostics'); await settle();
   assert.equal(polls, 1); assert.equal(tags, 1); assert.equal(diagnostics, 0);
   assert.equal(controller.getSnapshot().page, null);
-  assert.equal(clock.tasks.size, 0);
+  assert.equal(clock.tasks.size, 1, 'retry does not add a poll while its reply deadline is active');
   status.resolve(response(terminal())); await settle();
   assert.equal(controller.getSnapshot().session?.closed, false);
   assert.equal(controller.getSnapshot().fileName, 'sample.flv');
@@ -224,7 +224,7 @@ test('a stale poll cannot consume a pending close reconciliation', async () => {
   await controller.open(); clock.tick(); await controller.cancel(); await settle();
   assert.equal(pages, 1);
   await controller.close();
-  assert.equal(clock.tasks.size, 0, 'only one status request may be in flight');
+  assert.equal(clock.tasks.size, 1, 'an invalidated poll must not block command confirmation');
   old.resolve(response(snapshot())); await settle();
   assert.equal(controller.getSnapshot().session?.state, 'canceled');
   assert.equal(controller.getSnapshot().page, null);
@@ -488,3 +488,176 @@ test('disposal cancels both open and confirmation deadlines without accepting la
     assert.equal(clock.tasks.size, 0);
   }
 });
+
+for (const command of ['cancel', 'close'] as const) {
+  for (const delivered of [false, true]) {
+    test(`an unsettled ${command} reply confirms whether the command ${delivered ? 'executed' : 'was not delivered'} without repeating it`, async () => {
+      const late = deferred<SessionResponse>();
+      let commands = 0, polls = 0, opens = 0;
+      const initial = command === 'close' ? terminal() : snapshot();
+      const confirmed = !delivered ? initial : command === 'close'
+        ? terminal({ closed: true })
+        : terminal({ state: 'canceled', scan: { complete: false, hasErrors: false } });
+      const { controller, clock } = setup({
+        open: async () => ({ ...response(++opens === 1 ? initial : snapshot({ sessionId: `scan-${opens}` })), fileName: `file-${opens}.flv`, canceled: false }),
+        [command]: () => { commands++; return late.promise; },
+        status: async () => { polls++; return response(confirmed); },
+      });
+      await controller.open();
+      const commandWait = controller[command]();
+      clock.tick(OPEN_REPLY_TIMEOUT_MS); await settle();
+      assert.equal(controller.getSnapshot().error, 'transport_failed');
+      await commandWait;
+      await controller[command]();
+      assert.equal(commands, 1, 'uncertain commands must be confirmed before accepting another command');
+      clock.tick(); await settle();
+      assert.equal(polls, 1); assert.equal(commands, 1);
+      assert.equal(controller.getSnapshot().error, null);
+      assert.equal(controller.getSnapshot().operation, '');
+      assert.equal(controller.getSnapshot().session?.state ?? null, command === 'close' && delivered ? null : confirmed.state);
+      if (command === 'cancel' && delivered) assert.equal(controller.getSnapshot().page?.tab, 'tags');
+      if (delivered) {
+        if (command === 'cancel') await controller.close();
+        await controller.open();
+        assert.equal(controller.getSnapshot().session?.sessionId, 'scan-2');
+      }
+      const before = controller.getSnapshot();
+      late.resolve(response(terminal({ closed: command === 'close', state: 'canceled' })));
+      await settle();
+      assert.equal(controller.getSnapshot(), before, 'late command replies are obsolete after confirmation');
+      controller.dispose();
+    });
+  }
+}
+
+test('an unsettled status query times out, coalesces retries, and cannot overwrite a new session', async () => {
+  const late = deferred<SessionResponse>(); let polls = 0, opens = 0;
+  const { controller, clock } = setup({
+    open: async () => ({ ...response(snapshot({ sessionId: `scan-${++opens}` })), fileName: `file-${opens}.flv`, canceled: false }),
+    status: async id => ++polls === 1 ? late.promise : response(terminal({ sessionId: id })),
+    tags: async request => tagPage(request.sessionId),
+  });
+  await controller.open(); clock.tick(); await settle();
+  clock.tick(OPEN_REPLY_TIMEOUT_MS); await settle();
+  assert.equal(controller.getSnapshot().error, 'transport_failed');
+  assert.equal(clock.tasks.size, 0);
+  controller.retry(); controller.retry(); clock.tick(); await settle();
+  assert.equal(polls, 2); assert.equal(controller.getSnapshot().session?.terminal, true);
+  assert.equal(controller.getSnapshot().error, null);
+  await controller.close(); await controller.open();
+  const before = controller.getSnapshot();
+  late.reject(new Error('obsolete status failure'));
+  await settle();
+  assert.equal(controller.getSnapshot(), before);
+  assert.equal(controller.getSnapshot().session?.sessionId, 'scan-2');
+  controller.dispose();
+});
+
+for (const tab of ['tags', 'diagnostics'] as const) {
+  test(`an unsettled ${tab} page times out and retries after one status confirmation`, async () => {
+    const late = deferred<never>(); let pages = 0, polls = 0;
+    const { controller, clock } = setup({
+      open: async () => ({ ...response(terminal()), fileName: 'sample.flv', canceled: false }),
+      status: async () => { polls++; return response(terminal()); },
+      [tab]: () => ++pages === 1 ? late.promise : Promise.resolve(tab === 'tags' ? tagPage() : diagnosticPage()),
+    });
+    await controller.open(); await settle();
+    if (tab === 'diagnostics') { controller.select(tab); await settle(); }
+    clock.tick(OPEN_REPLY_TIMEOUT_MS); await settle();
+    assert.equal(controller.getSnapshot().error, 'transport_failed');
+    assert.equal(controller.getSnapshot().loading, false);
+    assert.equal(controller.getSnapshot().page, null);
+    assert.equal(clock.tasks.size, 0);
+    controller.retry(); controller.retry();
+    assert.equal(pages, 1);
+    clock.tick(); await settle();
+    assert.equal(polls, 1); assert.equal(pages, 2);
+    assert.equal(controller.getSnapshot().page?.tab, tab);
+    assert.equal(controller.getSnapshot().error, null);
+    const before = controller.getSnapshot();
+    late.reject(new Error('obsolete page failure')); await settle();
+    assert.equal(controller.getSnapshot(), before);
+    controller.dispose();
+  });
+}
+
+test('closing releases an unsettled page so a new file can load immediately', async () => {
+  const old = deferred<PageResponse<TagPage>>(); let opens = 0, pages = 0;
+  const { controller, clock } = setup({
+    open: async () => ({ ...response(terminal({ sessionId: `scan-${++opens}` })), fileName: `file-${opens}.flv`, canceled: false }),
+    tags: async request => ++pages === 1 ? old.promise : tagPage(request.sessionId),
+  });
+  await controller.open(); await controller.close(); await controller.open(); await settle();
+  assert.equal(pages, 2);
+  assert.equal(controller.getSnapshot().page?.data.sessionId, 'scan-2');
+  assert.equal(controller.getSnapshot().loading, false);
+  assert.equal(clock.tasks.size, 0);
+  const before = controller.getSnapshot();
+  old.resolve(tagPage()); await settle();
+  assert.equal(controller.getSnapshot(), before);
+});
+
+test('a stale page timeout serves the latest selection without adding an obsolete error', async () => {
+  const old = deferred<PageResponse<TagPage>>(); let pages = 0;
+  const { controller, clock } = setup({
+    open: async () => ({ ...response(terminal()), fileName: 'sample.flv', canceled: false }),
+    tags: async request => ++pages === 1 ? old.promise : tagPage(request.sessionId, request.start),
+  });
+  await controller.open(); controller.select('tags', '100'); controller.select('tags', '200');
+  clock.tick(OPEN_REPLY_TIMEOUT_MS); await settle();
+  assert.equal(pages, 2);
+  assert.equal(controller.getSnapshot().page?.data.bounds.start, '200');
+  assert.equal(controller.getSnapshot().error, null);
+  old.resolve(tagPage()); await settle();
+  assert.equal(controller.getSnapshot().page?.data.bounds.start, '200');
+});
+
+test('status and page deadlines are independent and disposal clears every pending wait', async () => {
+  const status = deferred<SessionResponse>(), page = deferred<PageResponse<TagPage>>();
+  const { controller, clock } = setup({
+    open: async () => ({ ...response(terminal()), fileName: 'sample.flv', canceled: false }),
+    status: () => status.promise,
+    tags: () => page.promise,
+  });
+  await controller.open(); controller.retry(); clock.tick(); await settle();
+  assert.equal(clock.tasks.size, 2, 'the status and page waits each require their own deadline');
+  const before = controller.getSnapshot();
+  controller.dispose();
+  assert.equal(clock.tasks.size, 0);
+  await settle();
+  status.resolve(response(terminal())); page.resolve(tagPage()); await settle();
+  assert.equal(controller.getSnapshot(), before);
+});
+
+test('a completed status query leaves the concurrent page deadline armed', async () => {
+  const status = deferred<SessionResponse>(), page = deferred<PageResponse<TagPage>>();
+  const { controller, clock } = setup({
+    open: async () => ({ ...response(terminal()), fileName: 'sample.flv', canceled: false }),
+    status: () => status.promise,
+    tags: () => page.promise,
+  });
+  await controller.open(); controller.retry(); clock.tick(); await settle();
+  assert.equal(clock.tasks.size, 2);
+  status.resolve(response(terminal())); await settle();
+  assert.equal(clock.tasks.size, 1);
+  assert.equal(controller.getSnapshot().loading, true);
+  clock.tick(OPEN_REPLY_TIMEOUT_MS); await settle();
+  assert.equal(controller.getSnapshot().loading, false);
+  assert.equal(controller.getSnapshot().error, 'transport_failed');
+  assert.equal(clock.tasks.size, 0);
+  controller.dispose();
+});
+
+for (const command of ['cancel', 'close'] as const) {
+  test(`disposing an unsettled ${command} releases the local command wait and its deadline`, async () => {
+    const late = deferred<SessionResponse>();
+    const { controller, clock } = setup({ [command]: () => late.promise });
+    await controller.open(); const waiting = controller[command]();
+    assert.equal(clock.tasks.size, 1);
+    const before = controller.getSnapshot(); controller.dispose();
+    assert.equal(clock.tasks.size, 0);
+    await waiting;
+    late.resolve(response(terminal({ closed: command === 'close' }))); await settle();
+    assert.equal(controller.getSnapshot(), before);
+  });
+}
