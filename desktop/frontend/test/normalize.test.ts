@@ -38,3 +38,20 @@ test('normalizes nested page pointers without converting exact integers', () => 
   assert.equal(tagResponse(JSON.parse('{"apiVersion":1,"page":null,"error":null}')).page, null);
   assert.equal(diagnosticResponse(JSON.parse('{"apiVersion":1,"page":null,"error":null}')).page, null);
 });
+
+test('recognizes every supported detail kind and rejects unexpected kinds', () => {
+  const envelope = (kind: string) => JSON.parse(JSON.stringify({ apiVersion: 1, sessionId: 'scan-1', requestId: '1', tagId: '2', state: 'ready', error: null, detail: {
+    kind, complete: true, truncated: false, diagnostics: [], fields: [
+      { id: '0', parentId: '', name: 'nalUnitType', type: 'uint5', value: '5', span: { byteOffset: '18446744073709551615', bitOffset: 3, bitLength: 5 } },
+      { id: '1', parentId: '', name: 'pts', type: 'int64', value: '-9223372036854775808', span: null },
+    ],
+  } }));
+  for (const kind of ['amf0ScriptData', 'aacAudio', 'avcVideo']) {
+    const result = detailResponse(envelope(kind));
+    assert.equal(result.detail?.kind, kind);
+    assert.equal(result.detail?.fields[0].span?.byteOffset, '18446744073709551615');
+    assert.equal(result.detail?.fields[1].value, '-9223372036854775808');
+    assert.equal(result.detail?.fields[1].span, null, 'derived values must not acquire a fabricated source position');
+  }
+  for (const kind of ['avc', '', 'futureCodec']) assert.throws(() => detailResponse(envelope(kind)), /Invalid detail response kind/);
+});

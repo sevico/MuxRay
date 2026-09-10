@@ -41,7 +41,7 @@ def fixtures() -> dict[str, bytes]:
         tag(8, bytes.fromhex("af0111223344"), 23),
         tag(18, amf_string("broken") + b"\x00\x3f"),  # Short AMF number.
         tag(8, bytes.fromhex("af0012")),  # Short ASC.
-        tag(9, bytes.fromhex("1701000000")),  # Unsupported desktop AVC.
+        tag(9, bytes.fromhex("1701000000")),  # AVC NALU without preceding configuration.
         tag(18, amf_string("onPreview") + amf_string("预览" * 200)),
         tag(18, amf_string("onBudget") + b"\x0a" + struct.pack(">I", 600) + b"\x05" * 600),
     ]
@@ -68,7 +68,7 @@ def main() -> None:
     manifest = {"format": "muxray-desktop-details-fixtures-v1", "files": records,
                 "tags": ["AMF0 metadata", "AAC-LC ASC 44100 Hz stereo",
                          "AAC opaque raw", "damaged AMF0", "damaged ASC",
-                         "unsupported AVC", "UTF-8 preview", "field budget"],
+                         "AVC NALU missing configuration", "UTF-8 preview", "field budget"],
                 "truncatedExtraTag": "ID 8: declared 10 bytes, available 2"}
     with (target / "fixtures.json").open("x", encoding="utf-8") as stream:
         json.dump(manifest, stream, ensure_ascii=False, indent=2)

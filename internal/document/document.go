@@ -12,12 +12,18 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sevico/muxray/internal/avccontext"
 	"github.com/sevico/muxray/internal/detailview"
 	"github.com/sevico/muxray/internal/flv"
 	"github.com/sevico/muxray/internal/session"
 )
 
-const DetailTimeout = 3 * time.Second
+const (
+	DetailTimeout                  = 3 * time.Second
+	AVCContextMaxTags       uint64 = 8192
+	AVCContextMaxCandidates uint32 = 32
+	AVCContextMaxBytes      uint64 = 1 << 20
+)
 
 var (
 	ErrSourceChanged  = errors.New("document: source changed")
@@ -94,7 +100,7 @@ func Open(ctx context.Context, path string, options flv.Options) (*Document, err
 }
 
 func start(ctx context.Context, source sourceFile, info os.FileInfo, options flv.Options) *Document {
-	return startWithParser(ctx, source, info, options, detailview.Parse, DetailTimeout)
+	return startWithParser(ctx, source, info, options, nil, DetailTimeout)
 }
 
 func startWithParser(ctx context.Context, source sourceFile, info os.FileInfo, options flv.Options, parse parseDetail, timeout time.Duration) *Document {
@@ -104,6 +110,9 @@ func startWithParser(ctx context.Context, source sourceFile, info os.FileInfo, o
 	ctx, cancel := context.WithCancel(ctx)
 	d := &Document{ctx: ctx, cancel: cancel, source: source, initial: info, parse: parse, timeout: timeout, wake: make(chan struct{}, 1), done: make(chan struct{})}
 	d.scan = session.Start(ctx, source, uint64(info.Size()), options)
+	if d.parse == nil {
+		d.parse = d.parseWithContext
+	}
 	go d.run()
 	return d
 }
@@ -187,6 +196,16 @@ func (d *Document) readDetail(ctx context.Context, tag flv.TagRecord) (*detailvi
 	return detail, err
 }
 
+// parseWithContext runs lookup and projection within the caller's single task
+// deadline and before/after source checks. Each candidate remains payload-bound.
+func (d *Document) parseWithContext(ctx context.Context, source io.ReaderAt, tag flv.TagRecord) (*detailview.Detail, error) {
+	resolution, err := avccontext.Resolve(ctx, source, tag, d.scan.Tag, detailview.DesktopAVCOptions(), avccontext.Limits{MaxTags: AVCContextMaxTags, MaxCandidates: AVCContextMaxCandidates, MaxBytes: AVCContextMaxBytes})
+	if err != nil {
+		return nil, err
+	}
+	return detailview.ParseWithAVCContext(ctx, source, tag, resolution)
+}
+
 // StartDetail fences request generations. There is one active parser and one
 // replaceable pending selection, including while an old ReaderAt is blocked.
 func (d *Document) StartDetail(id, tagID uint64) (DetailResult, error) {
@@ -207,17 +226,13 @@ func (d *Document) StartDetail(id, tagID uint64) (DetailResult, error) {
 		}
 		return cloneResult(d.latest), nil
 	}
-	page, err := d.scan.Page(tagID, 1)
+	tag, err := d.scan.Tag(tagID)
 	if err != nil {
-		if errors.Is(err, session.ErrClosed) || errors.Is(err, session.ErrNotReady) {
-			return DetailResult{}, err
+		if errors.Is(err, session.ErrTagNotFound) {
+			return DetailResult{}, ErrTagNotFound
 		}
-		return DetailResult{}, ErrTagNotFound
+		return DetailResult{}, err
 	}
-	if len(page.Records) != 1 {
-		return DetailResult{}, ErrTagNotFound
-	}
-	tag := page.Records[0]
 	d.latest = DetailResult{RequestID: id, TagID: tagID, State: "pending"}
 	d.pending = &work{id: id, tag: tag}
 	if d.activeCancel != nil {

@@ -5,6 +5,7 @@ Wails **v2.14.0** + React **18.3.1** + TypeScript **5.9.3**，构建工具 Vite
 架构边界见 [ADR-011](../docs/decisions/011-minimal-wails-shell.md)。
 打开响应恢复协议见 [ADR-012](../docs/decisions/012-recoverable-native-open.md)。
 文件所有权和有界详情协议见 [ADR-013](../docs/decisions/013-retained-document-details.md)。
+AVC 上下文查找和准确源位置见 [ADR-014](../docs/decisions/014-bounded-desktop-avc-context.md)。
 
 ## 范围
 
@@ -12,22 +13,37 @@ Wails **v2.14.0** + React **18.3.1** + TypeScript **5.9.3**，构建工具 Vite
 - 单文件后台扫描、200 ms 串行状态轮询、取消、关闭和宿主退出清理。
 - 扫描结束后查看完整或部分 Tag/结构诊断，每页最多 100 条，不缓存历史页。
 - 选择完整的 Tag 查看 AMF0 字段树、AAC 音频头、AudioSpecificConfig 或 raw 包范围，保留原始 byte/bit 位置和语法诊断。
+- AVC Video 包头、有符号 CTS 与派生 PTS、avcC/SPS/PPS 基础摘要、NAL 长度及头字段，并说明所用前置配置的来源。
 - 偏移、DTS、Tag ID 和总数保留十进制字符串；分页和比例计算使用 BigInt。
 - 文件只读，不上传媒体；界面只显示文件名，不存储历史路径。
 
 “扫描结束”不是“媒体语义全部正常”。不完整索引明确显示部分结果，结构
 诊断与打开/读取/通信失败分开。仍使用核心的百万 Tag 上限和诊断预算。
-AVC/MP3 桌面详情、hex、summary、曲线、导出、拖放、多文件、边扫描边分页尚未接入。
+MP3 桌面详情、hex、summary、曲线、导出、拖放、多文件、边扫描边分页尚未接入。
 
 已接纳的扫描结束或取消后，桌面文档保留同一只读源句柄，直到关闭文件或窗口。
 在 opening 阶段取消会取消打开过程；若文件已经打开但文档尚未发布，迟到的
 文档会关闭并清理，不保留详情。界面会收到关闭状态，清理结束后才可重新打开。
 完整的已提交前缀 Tag 可以解析；截断 payload、filtered Tag 和不支持的
-编码会说明原因。AMF0/AAC 语法错误属于所选详情，不影响其他 Tag。
+编码会说明原因。AMF0/AAC/AVC 语法错误属于所选详情，不影响其他 Tag。
 详情每次最多显示 512 字段、64 诊断和每段 256 字节 UTF-8 预览，实际
 详情 JSON 不超过 256 KiB；预算或预览省略会明确显示。AAC raw 不进行音频解码。
 解析预算与显示预算独立：AMF0 最多 32 层、4,096 节点、每个容器 4,096 项，
 单段及累计保留字符串均不超过 64 KiB；AMF0/AAC 各最多保留 64 条解析诊断。
+
+AVC NALU 使用同一文档的已提交索引反向查找最近可用 sequence header，明确显示
+`found/missing/budget_exhausted/not_needed`、来源 Tag、原始长度声明位置与搜索计数。
+每次最多查找 8,192 个前置记录、32 个候选配置和累计 1 MiB 的源读取（含所选包探测）；
+查找与所选详情共享同一任务和协作截止。缺配置或达到查找预算时保留包头与 opaque
+范围，不猜四字节 NAL 长度，也不提供手动覆盖或跨请求配置缓存。不可用的候选可跳过，
+但更深 SPS 语义不完整本身不会否定已经完整的长度声明。
+
+AVC 解析预算为 64 条诊断、64 个 avcC 参数集条目、256 个 NAL、每个参数集 EBSP
+正文 64 KiB（不含 NAL 头），以及每次 4,096 个 RBSP 映射项。
+包内 SPS/PPS 数量受 NAL 上限约束，全部结果仍独立受字段/JSON 展示预算限制。
+FLV/avcC/NAL 的连续原始范围保留精确位置；DTS/PTS、尺寸和 SPS/PPS 摘要等派生字段
+显示“—”，不会把去除防竞争字节后跨段的 RBSP 字段伪装成连续原始 Span。
+NAL 只展开边界与头信息，不解码 slice 或视频画面；FLV keyframe 声明也不证明 IDR。
 
 详情读取前后检查原句柄的文件身份、大小和修改时间，发现改变后要求关闭重开。
 这不是不可变快照，不能识别所有同大小、同时间戳的原位修改。快速切换仅保留
@@ -116,6 +132,9 @@ Go 的 `./...` 不跨越嵌套模块。没有 `go.work`，没有根模块 Wails 
 [2026-09-09 回归记录](../docs/desktop-recovery-20260909.md)。
 其余 IPC 等待上限和验收工具复现结果见
 [2026-09-10 超时与工具记录](../docs/desktop-timeouts-tools-20260910.md)。
+AVC 详情、1 GiB 文件尾部读取与阻塞关闭的本次实测见
+[AVC 原生验收报告](../docs/desktop-avc-20260910.md)。
+
 ADR-013、保留源文件的详情读取和 AMF0/AAC 完整原生流程见
 [2026-09-10 详情验收记录](../docs/desktop-details-20260910.md)。
 

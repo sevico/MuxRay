@@ -33,7 +33,8 @@ export interface PageResponse<P> { apiVersion: number; page: P | null; error: Fa
 export interface DetailRequest { sessionId: string; requestId: string; tagId: string }
 export interface DetailQuery { sessionId: string; requestId: string }
 export interface DetailField { id: string; parentId: string; name: string; type: string; value: string; span: Span | null }
-export interface Detail { kind: string; complete: boolean; truncated: boolean; fields: DetailField[]; diagnostics: Diagnostic[] }
+export type DetailKind = 'amf0ScriptData' | 'aacAudio' | 'avcVideo';
+export interface Detail { kind: DetailKind; complete: boolean; truncated: boolean; fields: DetailField[]; diagnostics: Diagnostic[] }
 export interface DetailResponse {
   apiVersion: number; sessionId: string; requestId: string; tagId: string;
   state: 'pending' | 'ready' | 'failed'; detail: Detail | null; error: Fault | null;

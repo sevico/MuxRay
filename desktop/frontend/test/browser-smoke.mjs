@@ -80,11 +80,25 @@ function syntheticHost() {
     },
     StartDetail: async request => {
       if (!session.terminal || session.closed || request.sessionId !== session.sessionId) throw Error('Unexpected synthetic detail request');
-      latestDetail = { apiVersion: 1, ...request, state: 'ready', error: null, detail: {
+      const preview = {
         kind: request.tagId === '0' ? 'amf0ScriptData' : 'aacAudio', complete: request.tagId === '0', truncated: true,
         fields: [{ id: '0', parentId: '', name: 'synthetic payload', type: 'string', value: '<img onerror=alert(1)>字段值</img>', span: { byteOffset: '18446744073709551615', bitOffset: 3, bitLength: 5 } }],
         diagnostics: [{ code: 'SYNTHETIC_DETAIL', severity: 'warning', offset: '9007199254740993', bitOffset: 3, message: '<script>plain diagnostic</script>', expected: null, actual: null }],
-      } };
+      };
+      if (['2', '3', '4', '5'].includes(request.tagId)) {
+        const missingConfig = request.tagId === '3', contextBudget = request.tagId === '4', nalBudget = request.tagId === '5';
+        preview.kind = 'avcVideo'; preview.complete = !missingConfig && !contextBudget && !nalBudget; preview.truncated = contextBudget || nalBudget;
+        preview.fields = [
+          { id: '0', parentId: '', name: 'AVC context', type: 'context', value: missingConfig ? 'missing' : contextBudget ? 'budget_exhausted' : 'found', span: null },
+          { id: '1', parentId: '', name: 'compositionTime', type: 'int24', value: '-2', span: { byteOffset: '9007199254740993', bitOffset: 0, bitLength: 24 } },
+          { id: '2', parentId: '', name: 'PTS', type: 'int64', value: '-9223372036854775808', span: null },
+          ...missingConfig || contextBudget ? [] : [{ id: '3', parentId: '', name: 'nalUnitType', type: 'uint5', value: '5', span: { byteOffset: '18446744073709551615', bitOffset: 3, bitLength: 5 } }],
+        ];
+        preview.diagnostics = missingConfig ? [{ code: 'AVC_NAL_LENGTH_SIZE_UNAVAILABLE', severity: 'error', offset: '9007199254740993', bitOffset: 0, message: '缺少前置 AVC 配置，保留包头；不猜测 NAL 长度。', expected: null, actual: null }]
+          : contextBudget ? [{ code: 'AVC_CONTEXT_LOOKUP_LIMIT_REACHED', severity: 'error', offset: '9007199254740993', bitOffset: 0, message: '前置配置查找达到预算，不猜测 NAL 长度。', expected: null, actual: null }]
+            : nalBudget ? [{ code: 'AVC_NAL_UNIT_LIMIT_REACHED', severity: 'error', offset: '18446744073709551615', bitOffset: 0, message: 'NAL 数量达到解析预算，保留已解析前缀。', expected: '128', actual: '129' }] : [];
+      }
+      latestDetail = { apiVersion: 1, ...request, state: 'ready', error: null, detail: preview };
       return structuredClone(latestDetail);
     },
     GetDetail: async request => {
@@ -135,6 +149,26 @@ try {
   await waitFor("document.querySelector('.detail-heading h2')?.textContent === 'AAC Audio'");
   assert.equal(await evaluate("document.querySelector('.detail-panel').textContent.includes('不解码音频')"), true);
   assert.equal(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), true, 'Detail layout keeps horizontal scrolling inside its panes');
+  await click('2');
+  await waitFor("document.querySelector('.detail-heading h2')?.textContent === 'AVC Video'");
+  assert.equal(await evaluate("document.querySelector('.detail-panel').textContent.includes('不解码 slice')"), true);
+  assert.equal(await evaluate("document.querySelector('.detail-badges').textContent"), '语法解析完成');
+  assert.deepEqual(await evaluate("(() => { const row = [...document.querySelectorAll('.detail-fields tbody tr')].find(row => row.cells[0].textContent === 'PTS'); return [row.cells[2].textContent, row.cells[3].textContent, row.cells[4].textContent]; })()"), ['-9223372036854775808', '—', '—']);
+  assert.equal(await evaluate("[...document.querySelectorAll('.detail-fields tbody tr')].find(row => row.cells[0].textContent === 'nalUnitType').cells[3].textContent"), '18446744073709551615 : 3');
+  await click('3');
+  await waitFor("document.querySelector('.detail-diagnostics code')?.textContent === 'AVC_NAL_LENGTH_SIZE_UNAVAILABLE'");
+  assert.equal(await evaluate("document.querySelector('.detail-badges').textContent"), '部分解析');
+  assert.equal(await evaluate("document.querySelector('.detail-fields').textContent.includes('nalUnitType')"), false, 'Missing config does not show old NAL fields');
+  assert.equal(await evaluate("document.querySelector('.detail-panel').getAttribute('aria-label')"), 'Tag 3 详情');
+  await click('4');
+  await waitFor("document.querySelector('.detail-diagnostics code')?.textContent === 'AVC_CONTEXT_LOOKUP_LIMIT_REACHED'");
+  assert.equal(await evaluate("document.querySelector('.detail-fields').textContent.includes('budget_exhausted')"), true);
+  assert.equal(await evaluate("document.querySelector('.detail-fields').textContent.includes('nalUnitType')"), false, 'Budget exhaustion does not invent NAL boundaries');
+  await click('5');
+  await waitFor("document.querySelector('.detail-diagnostics code')?.textContent === 'AVC_NAL_UNIT_LIMIT_REACHED'");
+  assert.equal(await evaluate("document.querySelector('.detail-badges').textContent.includes('部分解析') && document.querySelector('.detail-badges').textContent.includes('展示省略')"), true);
+  assert.equal(await evaluate("document.querySelector('.detail-diagnostics td:last-child').textContent"), '128 / 129');
+  assert.equal(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), true, 'AVC fields stay inside the details pane');
   await click('关闭文件');
   await waitFor("document.querySelector('.empty-state') !== null");
   await evaluate("window.smokeMode = 'running'");
@@ -149,7 +183,7 @@ try {
   await click('打开 FLV 文件');
   await waitFor("document.querySelector('.topbar .primary')?.disabled === false");
   assert.equal(await evaluate("document.querySelector('.empty-state') !== null && document.querySelector('[role=alert]') === null"), true);
-  console.log(JSON.stringify({ result: 'passed', host: 'synthetic only; native Wails not verified', checks: ['empty state', '100/100/5 pagination', 'exact large integers', 'escaped diagnostic text', 'partial results', 'AMF0/AAC detail panes', 'escaped field previews', 'exact byte/bit positions', 'cancel', 'close', 'picker cancellation'], screenshot }, null, 2));
+  console.log(JSON.stringify({ result: 'passed', host: 'synthetic only; native Wails not verified', checks: ['empty state', '100/100/5 pagination', 'exact large integers', 'escaped diagnostic text', 'partial results', 'AMF0/AAC/AVC detail panes', 'AVC derived values without fabricated spans', 'AVC missing configuration', 'AVC context lookup budget', 'AVC bounded prefix diagnostics', 'escaped field previews', 'exact byte/bit positions', 'cancel', 'close', 'picker cancellation'], screenshot }, null, 2));
 } finally {
   try { if (target) await call(`/close?target=${target}`); }
   finally { server.close(); }

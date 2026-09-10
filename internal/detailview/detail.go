@@ -14,6 +14,7 @@ import (
 
 	"github.com/sevico/muxray/internal/aac"
 	"github.com/sevico/muxray/internal/amf0"
+	"github.com/sevico/muxray/internal/avccontext"
 	"github.com/sevico/muxray/internal/cursor"
 	"github.com/sevico/muxray/internal/flv"
 )
@@ -73,13 +74,20 @@ type Diagnostic struct {
 // and projection steps; a currently blocked ReaderAt cannot be interrupted here.
 // Malformed syntax returns partial detail, while source failures return errors.
 func Parse(ctx context.Context, source io.ReaderAt, tag flv.TagRecord) (*Detail, error) {
+	return ParseWithAVCContext(ctx, source, tag, avccontext.Resolution{})
+}
+
+// ParseWithAVCContext accepts an already resolved AVC sequence-header context.
+// It does not search or read that context source: all reads stay in the selected
+// payload, while context provenance spans describe the earlier configuration.
+func ParseWithAVCContext(ctx context.Context, source io.ReaderAt, tag flv.TagRecord, resolution avccontext.Resolution) (*Detail, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if tag.Type() != flv.TagTypeScript && tag.Type() != flv.TagTypeAudio {
+	if tag.Type() != flv.TagTypeScript && tag.Type() != flv.TagTypeAudio && tag.Type() != flv.TagTypeVideo {
 		return nil, ErrUnsupported
 	}
 	if tag.Filter() {
@@ -111,7 +119,7 @@ func Parse(ctx context.Context, source io.ReaderAt, tag flv.TagRecord) (*Detail,
 		if err := b.amf(ctx, parsed); err != nil {
 			return nil, err
 		}
-	} else {
+	} else if tag.Type() == flv.TagTypeAudio {
 		parsed, err := flv.ParseAACAudio(reader, tag, aac.Options{MaxDiagnostics: MaxDiagnostics})
 		if errors.Is(err, flv.ErrAACAudioWrongSoundFormat) {
 			return nil, ErrUnsupported
@@ -125,6 +133,10 @@ func Parse(ctx context.Context, source io.ReaderAt, tag flv.TagRecord) (*Detail,
 		}
 		b.add("", "tagId", "uint64", decimal(tag.ID), nil)
 		b.aac(parsed)
+	} else {
+		if err := b.avc(ctx, reader, tag, resolution); err != nil {
+			return nil, err
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

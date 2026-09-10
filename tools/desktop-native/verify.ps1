@@ -1,7 +1,7 @@
 param(
     [Parameter(Mandatory)][string]$Repository,
     [Parameter(Mandatory)][string]$RunDirectory,
-    [ValidateSet('Scan', 'Detail')][string]$GateMode = 'Scan'
+    [ValidateSet('Scan', 'Detail', 'AVCDetail')][string]$GateMode = 'Scan'
 )
 . (Join-Path $PSScriptRoot 'common.ps1')
 
@@ -30,7 +30,7 @@ $entered = Read-Receipt $run 'entered.json'
 foreach ($name in @('release.json', 'released.json', 'closed.json')) { Assert-SameProcess $entered (Read-Receipt $run $name) }
 Assert-GateReceipt $run $entered
 Assert-ExclusiveFixture $run
-$scenario = if ($run.gateMode -eq 'Detail') { 'non-GUI controlled detail close' } else { 'non-GUI controlled document cancellation' }
+$scenario = if ($run.gateMode -ne 'Scan') { 'non-GUI controlled detail close' } else { 'non-GUI controlled document cancellation' }
 Write-NewJSON (Join-Path $record.runDirectory 'verification.json') ([ordered]@{
     runId = $run.runId; gateMode = $run.gateMode; scenario = $scenario; passed = $true
     completedUTC = [DateTime]::UtcNow.ToString('o'); retainedTags = $run.committedTags; exclusiveSourceOpen = $true

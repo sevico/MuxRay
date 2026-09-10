@@ -32,7 +32,7 @@ func TestNativeAcceptanceOverlayGate(t *testing.T) {
 		defer cancel()
 		_ = s.Close(ctx)
 	})
-	if nativeIOAcceptanceMode == "Detail" {
+	if nativeIOAcceptanceMode == "Detail" || nativeIOAcceptanceMode == "AVCDetail" {
 		verifyNativeDetailClose(t, s)
 		return
 	}
@@ -98,7 +98,7 @@ func verifyNativeDetailClose(t *testing.T, s *Document) {
 		if ctx.Err() != nil { t.Fatal("detail read did not reach gate") }
 		time.Sleep(time.Millisecond)
 	}
-	t.Log("scan complete: 32 Tags, source retained; AAC detail gated before read 67 at offset 24")
+	t.Logf("scan complete: 32 Tags, source retained; %s detail gated before read 67 at offset 24", nativeIOAcceptanceMode)
 	if err := nativeIOAcceptanceWrite("close-command.json", nativeIOAcceptanceReceipt{}); err != nil { t.Fatal(err) }
 	poll, stop := context.WithCancel(context.Background())
 	stop()

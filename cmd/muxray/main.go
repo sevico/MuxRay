@@ -12,6 +12,7 @@ import (
 	"github.com/sevico/muxray/internal/aac"
 	"github.com/sevico/muxray/internal/amf0"
 	"github.com/sevico/muxray/internal/avc"
+	"github.com/sevico/muxray/internal/avccontext"
 	"github.com/sevico/muxray/internal/cursor"
 	"github.com/sevico/muxray/internal/flv"
 	"github.com/sevico/muxray/internal/mp3"
@@ -272,55 +273,18 @@ func resolveAVCNALLengthSize(ctx context.Context, source io.ReaderAt, tags flv.T
 	if !indexed {
 		return 0, nil
 	}
-	header, packetType, present, err := readAVCFramingPrefix(source, tag)
-	if err != nil {
-		return 0, err
-	}
-	if !present || header&0x0f != flv.CodecIDAVC || header>>4 == 5 || packetType != uint8(flv.AVCPacketTypeNALU) {
-		return 0, nil
-	}
-
-	options.NALLengthSize = 0
-	for index := selected; index > 0; {
-		if err := ctx.Err(); err != nil {
-			return 0, err
+	resolution, err := avccontext.Resolve(ctx, source, tag, func(id uint64) (flv.TagRecord, error) {
+		candidate, ok := tags.Get(id)
+		if !ok {
+			return flv.TagRecord{}, avccontext.ErrInvalidInput
 		}
-		index--
-		candidate, _ := tags.Get(index)
-		header, candidateType, candidatePresent, readErr := readAVCFramingPrefix(source, candidate)
-		if readErr != nil {
-			return 0, readErr
-		}
-		if !candidatePresent || header&0x0f != flv.CodecIDAVC || header>>4 == 5 || candidateType != uint8(flv.AVCPacketTypeSequenceHeader) {
-			continue
-		}
-		parsed, parseErr := flv.ParseAVCVideo(source, candidate, options)
-		if parseErr != nil {
-			if isDetailSelectionError(parseErr) {
-				continue
-			}
-			return 0, parseErr
-		}
-		if parsed.ConfigPresent && parsed.Config.FramingComplete && (parsed.Config.LengthSize == 1 || parsed.Config.LengthSize == 2 || parsed.Config.LengthSize == 4) {
-			return parsed.Config.LengthSize, nil
-		}
-	}
-	return 0, nil
+		return candidate, nil
+	}, options, avccontext.Limits{}) // CLI retains its complete-index lookup policy.
+	return resolution.NALLengthSize, err
 }
 
 func readAVCFramingPrefix(source io.ReaderAt, tag flv.TagRecord) (header uint8, packetType uint8, present bool, err error) {
-	if tag.Type() != flv.TagTypeVideo || tag.Filter() || !tag.PayloadComplete() || tag.DataSize < 2 {
-		return 0, 0, false, nil
-	}
-	var prefix [2]byte
-	n, readErr := source.ReadAt(prefix[:], int64(tag.PayloadSpan().ByteOffset))
-	if n == len(prefix) {
-		return prefix[0], prefix[1], true, nil
-	}
-	if readErr != nil {
-		return 0, 0, false, readErr
-	}
-	return 0, 0, false, io.ErrUnexpectedEOF
+	return avccontext.ReadFramingPrefix(source, tag)
 }
 
 func isDetailSelectionError(err error) bool {

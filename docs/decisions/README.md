@@ -17,3 +17,4 @@ Repository-wide architecture and compatibility decisions are recorded here. An a
 | [ADR-011](./011-minimal-wails-shell.md) | Accepted | Isolate the Wails host, native picker, and bounded React UI from the pure-Go core |
 | [ADR-012](./012-recoverable-native-open.md) | Accepted | Supersede ADR-011's Native open surface with bounded request outcomes, fencing and timed confirmation |
 | [ADR-013](./013-retained-document-details.md) | Accepted | Retain a document source independently of scans and expose bounded, recoverable AMF0/AAC desktop details |
+| [ADR-014](./014-bounded-desktop-avc-context.md) | Accepted | Reuse AVC context rules with bounded desktop lookup, provenance and truthful syntax spans |

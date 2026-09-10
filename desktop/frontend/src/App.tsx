@@ -19,7 +19,7 @@ const errors: Record<string, string> = {
   transport_failed: '桌面通信失败，请重试或重新启动应用。',
   stale_request: '此打开请求已失效，请重新选择文件。', id_exhausted: '打开请求编号已用尽，请重新启动应用。',
   detail_not_found: '尚未确认详情请求，请重试当前 Tag。',
-  detail_unsupported: '此 Tag 暂不支持详情；当前支持 AMF0 Script Data 和 AAC 音频。',
+  detail_unsupported: '此 Tag 暂不支持详情；当前支持 AMF0 Script Data、AAC 音频和 AVC 视频。',
   detail_filtered: '此 Tag 带有过滤或加密标记，暂不解析详情。',
   detail_truncated: '此 Tag 的 payload 不完整，无法取得详情。',
   source_changed: '文件内容已改变，请关闭后重新打开，以保证字段位置准确。',
@@ -67,7 +67,7 @@ export function App({ controller }: { controller: Controller }) {
         <p>选择本机 FLV 文件，查看 Tag 索引、时间戳和结构诊断。</p>
         <button className="primary" onClick={() => void controller.open()} disabled={!!operation}>选择 FLV 文件</button>
         <div className="empty-features"><span>只读分析</span><span>可取消扫描</span><span>按需分页</span></div>
-        <p className="scope-note">按需查看 AMF0 与 AAC 字段 · 更多解析能力可通过 CLI 使用</p>
+        <p className="scope-note">按需查看 AMF0、AAC 与 AVC 字段 · 更多解析能力可通过 CLI 使用</p>
       </section> : <>
         <section className="scan-card" aria-label="扫描状态">
           <div className="scan-heading"><div><p className="eyebrow">当前文件</p><h2 title={view.fileName}>{view.fileName}</h2></div><span className={`status ${session.scan && !session.scan.complete ? 'partial' : ''}`}>{isClosing ? '正在关闭' : stateNames[session.state] ?? session.state}</span></div>
@@ -120,7 +120,7 @@ function TagTable({ rows, selectedId, disabled, onSelect }: { rows: Tag[]; selec
 
 function DetailPanel({ view, onRetry }: { view: ViewState; onRetry: () => void }) {
   const detail = view.detail;
-  const kind = detail?.kind === 'amf0ScriptData' ? 'AMF0 Script Data' : detail?.kind === 'aacAudio' ? 'AAC Audio' : 'Tag 详情';
+  const kind = detail?.kind === 'amf0ScriptData' ? 'AMF0 Script Data' : detail?.kind === 'aacAudio' ? 'AAC Audio' : detail?.kind === 'avcVideo' ? 'AVC Video' : 'Tag 详情';
   const busy = ['loading', 'pending', 'recovering'].includes(view.detailState);
   return <section id="tag-detail" className="detail-panel" aria-label={`Tag ${view.selectedTag!.id} 详情`} aria-busy={busy}>
     <div className="detail-heading"><div><p className="eyebrow">按需解析 · TAG {view.selectedTag!.id}</p><h2>{kind}</h2></div>
@@ -130,6 +130,7 @@ function DetailPanel({ view, onRetry }: { view: ViewState; onRetry: () => void }
     {view.detailError && <div className="request-error" role="alert"><span>{fault(view.detailError)}</span>{view.detailRetry && <button onClick={onRetry}>{view.detailRetry === 'reload' ? '重新读取详情' : '重试详情查询'}</button>}</div>}
     {detail && <>
       <p className="detail-note">字段位置使用原文件的 byte 偏移和 bit 起点；位长包含字段占用的位数。{detail.kind === 'aacAudio' && ' AAC raw packet 仅显示封装信息与数据范围，不解码音频。'}</p>
+      {detail.kind === 'avcVideo' && <p className="detail-note">AVC NAL 仅显示边界与头信息，不解码 slice 或视频画面。计算得到的字段不标注单一原始位置，以“—”显示。</p>}
       {!detail.complete && <p className="detail-note problem">保留可解析的字段；请结合下方详情诊断检查未完成部分。</p>}
       {detail.truncated && <p className="detail-note">部分内容因截断或展示上限而省略；显示的值是有限预览。</p>}
       <div className="detail-table-area"><table className="detail-fields"><thead><tr><th>字段</th><th>类型</th><th>值 / 预览</th><th>byte : bit</th><th>位长</th></tr></thead><tbody>{detailRows(detail.fields).map(({ field, depth }) => <tr key={field.id}>

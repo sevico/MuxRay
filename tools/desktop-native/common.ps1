@@ -40,7 +40,8 @@ function Get-GateSettings([string]$Mode) {
     switch ($Mode) {
         'Scan' { return [ordered]@{ gateMode = 'Scan'; gateReadCall = 23; gateOffset = 163; committedTags = 10; fixtureBytes = 493; fixtureTags = 32 } }
         'Detail' { return [ordered]@{ gateMode = 'Detail'; gateReadCall = 67; gateOffset = 24; committedTags = 32; fixtureBytes = 497; fixtureTags = 32 } }
-        default { throw 'Unsupported gate mode; use Scan or Detail.' }
+        'AVCDetail' { return [ordered]@{ gateMode = 'AVCDetail'; gateReadCall = 67; gateOffset = 24; committedTags = 32; fixtureBytes = 504; fixtureTags = 32 } }
+        default { throw 'Unsupported gate mode; use Scan, Detail or AVCDetail.' }
     }
 }
 
@@ -54,8 +55,8 @@ function Assert-GateReceipt($Run, $Entered) {
 }
 
 function Assert-GateScenario($Run, [string]$Scenario) {
-    $mode = if ($Scenario -eq 'DetailClose') { 'Detail' } elseif ($Scenario -in @('Cancel', 'Exit')) { 'Scan' } else { throw 'Unknown acceptance scenario.' }
-    if ($Run.gateMode -ne $mode) { throw "$Scenario requires a $mode gate run." }
+    $modes = if ($Scenario -eq 'DetailClose') { @('Detail', 'AVCDetail') } elseif ($Scenario -in @('Cancel', 'Exit')) { @('Scan') } else { throw 'Unknown acceptance scenario.' }
+    if ($Run.gateMode -notin $modes) { throw "$Scenario requires a compatible gate run: $($modes -join ', ')." }
 }
 
 function Read-Run([string]$Directory) {
@@ -91,7 +92,7 @@ function Read-Receipt($Run, [string]$Name) {
     }
     if ($receipt.PSObject.Properties['gateMode']) {
         if ($receipt.gateMode -ne $Run.gateMode) { throw "Receipt gate mode mismatch: $Name" }
-    } elseif ($Run.gateMode -eq 'Detail') { throw "Detail receipt is missing its gate mode: $Name" }
+    } elseif ($Run.gateMode -ne 'Scan') { throw "Detail receipt is missing its gate mode: $Name" }
     return $receipt
 }
 
@@ -236,23 +237,27 @@ function Get-GoInputs([string]$Repository) {
 }
 
 function New-FramingFixture([string]$Path, [string]$GateMode = 'Scan') {
-    # Detail changes only Tag 0 to an AAC-LC sequence header; all other tags
-    # remain empty ScriptData. Neither fixture is playable media.
+    # Detail/AVCDetail change only Tag 0; the remaining 31 tags are empty
+    # ScriptData. These fixtures exercise reads, not playable media.
     $gate = Get-GateSettings $GateMode
-    $detail = $gate.gateMode -eq 'Detail'
+    $detail = $gate.gateMode -ne 'Scan'
+    [byte[]]$payload = @()
+    $tagType = 18
+    if ($gate.gateMode -eq 'Detail') { $payload = [byte[]]@(0xaf, 0, 0x12, 0x10); $tagType = 8 }
+    if ($gate.gateMode -eq 'AVCDetail') { $payload = [byte[]]@(0x17, 1, 0, 0, 0, 0, 0, 0, 2, 0x65, 0x88); $tagType = 9 }
     $bytes = [byte[]]::new($gate.fixtureBytes)
     [byte[]]$header = 70, 76, 86, 1, 0, 0, 0, 0, 9
-    if ($detail) { $header[4] = 4 }
+    if ($gate.gateMode -eq 'Detail') { $header[4] = 4 }
+    if ($gate.gateMode -eq 'AVCDetail') { $header[4] = 1 }
     [Array]::Copy($header, $bytes, $header.Length)
     for ($index = 0; $index -lt 32; $index++) {
         $offset = 13 + 15 * $index
-        if ($detail -and $index -gt 0) { $offset += 4 }
+        if ($detail -and $index -gt 0) { $offset += $payload.Length }
         if ($detail -and $index -eq 0) {
-            $bytes[$offset] = 8
-            $bytes[$offset + 3] = 4
-            [byte[]]$asc = 0xaf, 0, 0x12, 0x10
-            [Array]::Copy($asc, 0, $bytes, $offset + 11, 4)
-            $bytes[$offset + 18] = 15
+            $bytes[$offset] = $tagType
+            $bytes[$offset + 3] = $payload.Length
+            [Array]::Copy($payload, 0, $bytes, $offset + 11, $payload.Length)
+            $bytes[$offset + 14 + $payload.Length] = 11 + $payload.Length
         } else {
             $bytes[$offset] = 18
             $bytes[$offset + 14] = 11

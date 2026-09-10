@@ -16,8 +16,9 @@ import (
 )
 
 var (
-	ErrNotReady = errors.New("session: scan has not finished")
-	ErrClosed   = errors.New("session: session is closed")
+	ErrNotReady    = errors.New("session: scan has not finished")
+	ErrClosed      = errors.New("session: session is closed")
+	ErrTagNotFound = errors.New("session: tag was not indexed")
 )
 
 // State describes task execution, not FLV validity. Finished can have structural
@@ -243,6 +244,20 @@ func (s *Session) Page(start uint64, count uint32) (flv.TagPage, error) {
 	return result.Index().Page(start, count)
 }
 
+// Tag returns one independent record from the final committed index without
+// allocating a page or copying diagnostics. It shares Page's access lifetime.
+func (s *Session) Tag(id uint64) (flv.TagRecord, error) {
+	result, err := s.finishedResult()
+	if err != nil {
+		return flv.TagRecord{}, err
+	}
+	tag, found := result.Index().Get(id)
+	if !found {
+		return flv.TagRecord{}, ErrTagNotFound
+	}
+	return tag, nil
+}
+
 // Result returns a final result with independent diagnostics and a shared
 // immutable chunked index. The access error is separate from the task error
 // returned by Wait. Returned results can outlive Close and retain index memory.
@@ -271,7 +286,7 @@ func cloneDiagnostics(diagnostics []flv.Diagnostic) []flv.Diagnostic {
 	return diagnostics
 }
 
-// Close disables new result/page access, cancels the worker, and releases the
+// Close disables new result/tag/page access, cancels the worker, and releases the
 // session's result references once scanning ends. It waits using ctx and returns
 // the same task/wait error as Wait. If the wait expires, the worker still owns
 // cleanup; no source is forcibly closed while a read is active. Close is

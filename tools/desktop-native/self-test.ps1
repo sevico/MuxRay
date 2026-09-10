@@ -34,12 +34,12 @@ foreach ($invalid in @('2026-09-10T00:36:09.9931234', [DateTime]::SpecifyKind($i
     if (-not $rejected) { throw 'Ambiguous timezone was accepted.' }
 }
 
-foreach ($mode in @('Scan', 'Detail')) {
+foreach ($mode in @('Scan', 'Detail', 'AVCDetail')) {
     $gate = [pscustomobject](Get-GateSettings $mode)
     $entered = [pscustomobject]@{ gateMode = $mode; readCall = $gate.gateReadCall; offset = $gate.gateOffset; committedTags = $gate.committedTags }
     Assert-GateReceipt $gate $entered
     foreach ($scenario in @('Cancel', 'Exit', 'DetailClose')) {
-        $shouldPass = ($mode -eq 'Detail') -eq ($scenario -eq 'DetailClose')
+        $shouldPass = ($mode -ne 'Scan') -eq ($scenario -eq 'DetailClose')
         $accepted = $true
         try { Assert-GateScenario $gate $scenario } catch { $accepted = $false }
         if ($accepted -ne $shouldPass) { throw "Wrong mode accepted/rejected for $mode / $scenario." }
@@ -55,4 +55,6 @@ if ($scanGate.fixtureBytes -ne 493 -or $scanGate.gateReadCall -ne 23 -or $scanGa
     throw 'Stable fixture/gate contract changed.'
 }
 Write-Host "PASS: receipt UTC identity, JSON string/DateTime conversion, 100 ns ordering and 3000.125 ms interval (PowerShell $($PSVersionTable.PSVersion))."
-Write-Host 'PASS: Scan/Detail gate identity and scenario mismatch rejection.'
+$avcGate = Get-GateSettings 'AVCDetail'
+if ($avcGate.fixtureBytes -ne 504 -or $avcGate.gateReadCall -ne 67 -or $avcGate.gateOffset -ne 24 -or $avcGate.committedTags -ne 32) { throw 'AVC detail gate contract changed.' }
+Write-Host 'PASS: Scan/Detail/AVCDetail gate identity and scenario mismatch rejection.'

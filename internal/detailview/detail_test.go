@@ -388,13 +388,13 @@ func TestUnsupportedSelectionAndSourceFailures(t *testing.T) {
 		kind    uint8
 		payload []byte
 		want    error
-	}{{9, []byte{0x17, 0}, ErrUnsupported}, {8, nil, ErrUnsupported}, {8, []byte{0x2f, 1}, ErrUnsupported}, {18 | 0x20, []byte{5}, ErrFiltered}} {
+	}{{9, []byte{0x12, 0}, ErrUnsupported}, {8, nil, ErrUnsupported}, {8, []byte{0x2f, 1}, ErrUnsupported}, {18 | 0x20, []byte{5}, ErrFiltered}} {
 		data, tag := fixture(t, item.kind, item.payload)
 		reader := &trackingReader{source: bytes.NewReader(data)}
 		if _, err := Parse(context.Background(), reader, tag); !errors.Is(err, item.want) {
 			t.Fatalf("selection error: %v want %v", err, item.want)
 		}
-		if item.kind != 8 && reader.reads != 0 {
+		if item.kind != 8 && item.kind != 9 && reader.reads != 0 {
 			t.Fatal("rejected tag read source")
 		}
 	}
