@@ -57,7 +57,7 @@ func (r *nativeIOAcceptanceReader) ReadAt(p []byte, offset int64) (int, error) {
 	r.calls++
 	if r.calls == nativeIOAcceptanceReadCall {
 		// Scan: header + PreviousTagSize0 + ten two-read tag records.
-		// Detail/AVCDetail: all 32 two-read records, then the first codec probe.
+		// Detail/AVCDetail/MP3Detail: all 32 two-read records, then the first codec probe.
 		if offset != nativeIOAcceptanceOffset { return 0, fmt.Errorf("acceptance: gate offset changed: got %d, want %d", offset, nativeIOAcceptanceOffset) }
 		err := nativeIOAcceptanceWrite("entered.json", nativeIOAcceptanceReceipt{ReadCall:r.calls, Offset:offset, CommittedTags:nativeIOAcceptanceCommittedTags})
 		if err != nil { return 0, fmt.Errorf("acceptance: entered receipt: %w", err) }

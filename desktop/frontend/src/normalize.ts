@@ -35,6 +35,6 @@ export function detailResponse(value: desktop.DetailResponse): DetailResponse {
   };
 }
 function detailKind(value: string): DetailKind {
-  if (value === 'amf0ScriptData' || value === 'aacAudio' || value === 'avcVideo') return value;
+  if (value === 'amf0ScriptData' || value === 'aacAudio' || value === 'avcVideo' || value === 'mp3Audio') return value;
   throw new Error('Invalid detail response kind.');
 }

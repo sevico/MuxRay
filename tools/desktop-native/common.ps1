@@ -41,7 +41,8 @@ function Get-GateSettings([string]$Mode) {
         'Scan' { return [ordered]@{ gateMode = 'Scan'; gateReadCall = 23; gateOffset = 163; committedTags = 10; fixtureBytes = 493; fixtureTags = 32 } }
         'Detail' { return [ordered]@{ gateMode = 'Detail'; gateReadCall = 67; gateOffset = 24; committedTags = 32; fixtureBytes = 497; fixtureTags = 32 } }
         'AVCDetail' { return [ordered]@{ gateMode = 'AVCDetail'; gateReadCall = 67; gateOffset = 24; committedTags = 32; fixtureBytes = 504; fixtureTags = 32 } }
-        default { throw 'Unsupported gate mode; use Scan, Detail or AVCDetail.' }
+        'MP3Detail' { return [ordered]@{ gateMode = 'MP3Detail'; gateReadCall = 67; gateOffset = 24; committedTags = 32; fixtureBytes = 498; fixtureTags = 32 } }
+        default { throw 'Unsupported gate mode; use Scan, Detail, AVCDetail or MP3Detail.' }
     }
 }
 
@@ -55,7 +56,7 @@ function Assert-GateReceipt($Run, $Entered) {
 }
 
 function Assert-GateScenario($Run, [string]$Scenario) {
-    $modes = if ($Scenario -eq 'DetailClose') { @('Detail', 'AVCDetail') } elseif ($Scenario -in @('Cancel', 'Exit')) { @('Scan') } else { throw 'Unknown acceptance scenario.' }
+    $modes = if ($Scenario -eq 'DetailClose') { @('Detail', 'AVCDetail', 'MP3Detail') } elseif ($Scenario -in @('Cancel', 'Exit')) { @('Scan') } else { throw 'Unknown acceptance scenario.' }
     if ($Run.gateMode -notin $modes) { throw "$Scenario requires a compatible gate run: $($modes -join ', ')." }
 }
 
@@ -236,8 +237,8 @@ function Get-GoInputs([string]$Repository) {
     })
 }
 
-function New-FramingFixture([string]$Path, [string]$GateMode = 'Scan') {
-    # Detail/AVCDetail change only Tag 0; the remaining 31 tags are empty
+function Get-FramingFixtureBytes([string]$GateMode = 'Scan') {
+    # Detail/AVCDetail/MP3Detail change only Tag 0; the remaining 31 tags are empty
     # ScriptData. These fixtures exercise reads, not playable media.
     $gate = Get-GateSettings $GateMode
     $detail = $gate.gateMode -ne 'Scan'
@@ -245,9 +246,10 @@ function New-FramingFixture([string]$Path, [string]$GateMode = 'Scan') {
     $tagType = 18
     if ($gate.gateMode -eq 'Detail') { $payload = [byte[]]@(0xaf, 0, 0x12, 0x10); $tagType = 8 }
     if ($gate.gateMode -eq 'AVCDetail') { $payload = [byte[]]@(0x17, 1, 0, 0, 0, 0, 0, 0, 2, 0x65, 0x88); $tagType = 9 }
+    if ($gate.gateMode -eq 'MP3Detail') { $payload = [byte[]]@(0x2f, 0xff, 0xfb, 0x90, 0); $tagType = 8 }
     $bytes = [byte[]]::new($gate.fixtureBytes)
     [byte[]]$header = 70, 76, 86, 1, 0, 0, 0, 0, 9
-    if ($gate.gateMode -eq 'Detail') { $header[4] = 4 }
+    if ($gate.gateMode -in @('Detail', 'MP3Detail')) { $header[4] = 4 }
     if ($gate.gateMode -eq 'AVCDetail') { $header[4] = 1 }
     [Array]::Copy($header, $bytes, $header.Length)
     for ($index = 0; $index -lt 32; $index++) {
@@ -263,6 +265,11 @@ function New-FramingFixture([string]$Path, [string]$GateMode = 'Scan') {
             $bytes[$offset + 14] = 11
         }
     }
+    return ,$bytes
+}
+
+function New-FramingFixture([string]$Path, [string]$GateMode = 'Scan') {
+    [byte[]]$bytes = Get-FramingFixtureBytes $GateMode
     $stream = [IO.File]::Open($Path, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::Read)
     try { $stream.Write($bytes, 0, $bytes.Length) } finally { $stream.Dispose() }
 }

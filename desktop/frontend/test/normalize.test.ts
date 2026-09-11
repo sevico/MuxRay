@@ -46,12 +46,37 @@ test('recognizes every supported detail kind and rejects unexpected kinds', () =
       { id: '1', parentId: '', name: 'pts', type: 'int64', value: '-9223372036854775808', span: null },
     ],
   } }));
-  for (const kind of ['amf0ScriptData', 'aacAudio', 'avcVideo']) {
+  for (const kind of ['amf0ScriptData', 'aacAudio', 'avcVideo', 'mp3Audio']) {
     const result = detailResponse(envelope(kind));
     assert.equal(result.detail?.kind, kind);
     assert.equal(result.detail?.fields[0].span?.byteOffset, '18446744073709551615');
     assert.equal(result.detail?.fields[1].value, '-9223372036854775808');
     assert.equal(result.detail?.fields[1].span, null, 'derived values must not acquire a fabricated source position');
   }
-  for (const kind of ['avc', '', 'futureCodec']) assert.throws(() => detailResponse(envelope(kind)), /Invalid detail response kind/);
+  for (const kind of ['avc', 'mp3', '', 'futureCodec']) assert.throws(() => detailResponse(envelope(kind)), /Invalid detail response kind/);
+});
+
+test('MP3 free-format preserves complete header syntax and does not invent unknown bitrate or length', () => {
+  const value = detailResponse(JSON.parse(JSON.stringify({ apiVersion: 1, sessionId: 'scan-1', requestId: '4', tagId: '9007199254740993', state: 'ready', error: null, detail: {
+    kind: 'mp3Audio', complete: true, truncated: false,
+    fields: [
+      { id: '0', parentId: '', name: 'bitrateIndex', type: 'uint4', value: '0 (free-format)', span: { byteOffset: '9007199254740995', bitOffset: 0, bitLength: 4 } },
+      { id: '1', parentId: '', name: 'bitrateMode', type: 'derived', value: 'free', span: null },
+      { id: '2', parentId: '', name: 'samplingFrequencyHz', type: 'derived', value: '44100' },
+    ],
+    diagnostics: [{ code: 'MP3_FREE_FORMAT_UNRESOLVED', severity: 'warning', offset: '9007199254740995', bitOffset: 0, message: 'First fixed header only; bitrate and frame length remain unknown.', expected: null }],
+  } })));
+  assert.equal(value.detail?.kind, 'mp3Audio');
+  assert.equal(value.detail?.complete, true, 'a warning must not turn complete free-format header syntax into a failed parse');
+  assert.equal(value.detail?.truncated, false);
+  assert.equal(value.detail?.fields[0].span?.byteOffset, '9007199254740995');
+  assert.equal(value.detail?.fields[1].value, 'free');
+  assert.equal(value.detail?.fields[2].value, '44100');
+  assert.equal(value.detail?.fields.some(field => field.name === 'bitrateKbps' || field.name === 'frameLengthBytes'), false);
+  assert.equal(value.detail?.fields[1].span, null);
+  assert.equal(value.detail?.fields[2].span, null);
+  assert.equal(value.detail?.diagnostics[0].severity, 'warning');
+  assert.equal(value.detail?.diagnostics[0].offset, '9007199254740995');
+  assert.equal(value.detail?.diagnostics[0].expected, null);
+  assert.equal(value.detail?.diagnostics[0].actual, null);
 });

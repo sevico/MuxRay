@@ -34,8 +34,18 @@ foreach ($invalid in @('2026-09-10T00:36:09.9931234', [DateTime]::SpecifyKind($i
     if (-not $rejected) { throw 'Ambiguous timezone was accepted.' }
 }
 
-foreach ($mode in @('Scan', 'Detail', 'AVCDetail')) {
+$fixtureHashes = @{
+    Scan = '9758dc3635a5e05a780ffe4cd40659b243d2d23a4a9e704762add90fcd4c34fb'
+    Detail = '16346b21c3e84be9a1d398f330a0023b5ba3b5df5a5c74d8756b5cda8f1e4437'
+    AVCDetail = '8b9d282048f76e6cc7fa6821a83ce8c02726a2dd91592b8da493b421ba4cdda9'
+    MP3Detail = 'd6414212c5fb29d116fdf198ae7a1ab66ab688956d6fbfbfee7a16e2cfb10543'
+}
+foreach ($mode in @('Scan', 'Detail', 'AVCDetail', 'MP3Detail')) {
     $gate = [pscustomobject](Get-GateSettings $mode)
+    [byte[]]$fixture = Get-FramingFixtureBytes $mode
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { $hash = [BitConverter]::ToString($sha.ComputeHash($fixture)).Replace('-', '').ToLowerInvariant() } finally { $sha.Dispose() }
+    if ($fixture.Length -ne $gate.fixtureBytes -or $hash -ne $fixtureHashes[$mode]) { throw "Stable $mode fixture bytes changed." }
     $entered = [pscustomobject]@{ gateMode = $mode; readCall = $gate.gateReadCall; offset = $gate.gateOffset; committedTags = $gate.committedTags }
     Assert-GateReceipt $gate $entered
     foreach ($scenario in @('Cancel', 'Exit', 'DetailClose')) {
@@ -48,6 +58,15 @@ foreach ($mode in @('Scan', 'Detail', 'AVCDetail')) {
     $rejected = $false
     try { Assert-GateReceipt $gate $entered } catch { $rejected = $true }
     if (-not $rejected) { throw 'Mismatched gate offset was accepted.' }
+    $entered.offset--
+    $entered.gateMode = 'Other'
+    $rejected = $false
+    try { Assert-GateReceipt $gate $entered } catch { $rejected = $true }
+    if (-not $rejected) { throw 'Mismatched receipt mode was accepted.' }
+    $entered.PSObject.Properties.Remove('gateMode')
+    $accepted = $true
+    try { Assert-GateReceipt $gate $entered } catch { $accepted = $false }
+    if ($accepted -ne ($mode -eq 'Scan')) { throw 'Only legacy Scan receipts may omit their mode.' }
 }
 $scanGate = Get-GateSettings 'Scan'
 $detailGate = Get-GateSettings 'Detail'
@@ -57,4 +76,6 @@ if ($scanGate.fixtureBytes -ne 493 -or $scanGate.gateReadCall -ne 23 -or $scanGa
 Write-Host "PASS: receipt UTC identity, JSON string/DateTime conversion, 100 ns ordering and 3000.125 ms interval (PowerShell $($PSVersionTable.PSVersion))."
 $avcGate = Get-GateSettings 'AVCDetail'
 if ($avcGate.fixtureBytes -ne 504 -or $avcGate.gateReadCall -ne 67 -or $avcGate.gateOffset -ne 24 -or $avcGate.committedTags -ne 32) { throw 'AVC detail gate contract changed.' }
-Write-Host 'PASS: Scan/Detail/AVCDetail gate identity and scenario mismatch rejection.'
+$mp3Gate = Get-GateSettings 'MP3Detail'
+if ($mp3Gate.fixtureBytes -ne 498 -or $mp3Gate.gateReadCall -ne 67 -or $mp3Gate.gateOffset -ne 24 -or $mp3Gate.committedTags -ne 32) { throw 'MP3 detail gate contract changed.' }
+Write-Host 'PASS: Scan/Detail/AVCDetail/MP3Detail fixture SHA-256, gate identity, legacy receipts and scenario mismatch rejection.'

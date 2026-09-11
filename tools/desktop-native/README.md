@@ -2,15 +2,16 @@
 
 这组工具从新 checkout 生成独立的验收程序和结构样本，用真实 Windows 文件选择器、Wails IPC 和文档生命周期复现取消及阻塞退出。正常产品代码不含 gate；工具只通过 Go `-overlay` 替换本次构建读到的 `document.go`，不会修改仓库 Go 源文件。ADR-013 之后扫描终态仍保留源，只有关闭文档才释放句柄。
 
-`build.ps1` 和 `verify.ps1` 的 `-GateMode` 默认为 `Scan`，也可显式选择 `Detail` 或 `AVCDetail`。三种样本均为确定性生成的 FLV，不是可播放媒体。gate 只匹配本 run 的绝对样本路径，故意忽略取消，直到同一进程身份的 release 收据发布；这是受控 I/O 实验，不能称为正常生产程序的自然慢盘实测。
+`build.ps1` 和 `verify.ps1` 的 `-GateMode` 默认为 `Scan`，也可显式选择 `Detail`、`AVCDetail` 或 `MP3Detail`。四种样本均为确定性生成的 FLV，不是可播放媒体。gate 只匹配本 run 的绝对样本路径，故意忽略取消，直到同一进程身份的 release 收据发布；这是受控 I/O 实验，不能称为正常生产程序的自然慢盘实测。
 
 | GateMode | 结构样本 | gate 位置 | 允许的原生检查 |
 | --- | --- | --- | --- |
 | Scan（默认） | 493 byte，32 个空 Script Tag | 第 23 次 ReadAt，offset 163，已提交 10 Tag | Cancel、Exit |
 | Detail | 497 byte，首 Tag 为 `AF 00 12 10` AAC-LC 配置，其余 31 个空 Script Tag，FLV audio 标志置位 | 扫描完成 32 Tag 后，首次详情读取第 67 次 ReadAt，offset 24 | DetailClose |
 | AVCDetail | 504 byte，首 Tag 为 `17 01 00 00 00 00 00 00 02 65 88` 孤立 AVC NALU 包，其余 31 个空 Script Tag，FLV video 标志置位 | 扫描完成 32 Tag 后，首次详情探测第 67 次 ReadAt，offset 24 | DetailClose |
+| MP3Detail | 498 byte，首 Tag 为 `2F FF FB 90 00` FLV MP3 声音头与 MPEG-1 Layer III 固定头，其余 31 个空 Script Tag，FLV audio 标志置位 | 扫描完成 32 Tag 后，首次详情探测第 67 次 ReadAt，offset 24 | DetailClose |
 
-Scan 样本 SHA-256 为 `9758dc3635a5e05a780ffe4cd40659b243d2d23a4a9e704762add90fcd4c34fb`，Detail 样本为 `16346b21c3e84be9a1d398f330a0023b5ba3b5df5a5c74d8756b5cda8f1e4437`，AVCDetail 样本为 `8b9d282048f76e6cc7fa6821a83ce8c02726a2dd91592b8da493b421ba4cdda9`。实际 fixture SHA-256、模式、读取次数、gate 偏移、文件长度和已提交 Tag 数均写入 `build-record.json`；收据和检查必须匹配这些参数。旧 v1 Scan 记录仍可读取，不修改历史 JSON。
+Scan 样本 SHA-256 为 `9758dc3635a5e05a780ffe4cd40659b243d2d23a4a9e704762add90fcd4c34fb`，Detail 样本为 `16346b21c3e84be9a1d398f330a0023b5ba3b5df5a5c74d8756b5cda8f1e4437`，AVCDetail 样本为 `8b9d282048f76e6cc7fa6821a83ce8c02726a2dd91592b8da493b421ba4cdda9`，MP3Detail 样本为 `d6414212c5fb29d116fdf198ae7a1ab66ab688956d6fbfbfee7a16e2cfb10543`。实际 fixture SHA-256、模式、读取次数、gate 偏移、文件长度和已提交 Tag 数均写入 `build-record.json`；收据和检查必须匹配这些参数。旧 v1 Scan 记录仍可读取，不修改历史 JSON。
 
 AVCDetail 首 Tag 没有前置 sequence header。它用于验证 AVC 首次读取阻塞时的文档关闭协议，不用于证明 NAL 长度或视频解码正确；缺配置时产品保留包头并明确报告长度上下文不可用。AVC 上下文与位置语义见 [ADR-014](../../docs/decisions/014-bounded-desktop-avc-context.md)。
 
@@ -39,7 +40,7 @@ $scripts = Join-Path $repo 'tools\desktop-native'
 
 `verify.ps1` 不启动 GUI：在独立测试 overlay 中运行带 race 检查的真实文件文档测试，核对完整样本 32 Tag、gate、`running → canceling → canceled`、保留 ID 0–9、取消后仍可请求前缀 AMF 详情（空 payload 会有语义诊断）、文档 Close 才关闭源、Close 后拒绝分页，以及文件可独占打开。它不能代替以下原生交互验收。
 
-`self-test.ps1` 在内存中验证 JSON 收据时间，覆盖 Windows PowerShell 5.1 的字符串和 PowerShell 7 的 `DateTime` 反序列化，保留 UTC 身份及 .NET 的 100 ns 精度，防止时区偏移导致误判 PID 复用或丢失退出耗时的小数部分。同时验证三种 gate 的固定参数及场景错配拒绝。该测试不创建 run 或修改旧收据。
+`self-test.ps1` 在内存中验证 JSON 收据时间，覆盖 Windows PowerShell 5.1 的字符串和 PowerShell 7 的 `DateTime` 反序列化，保留 UTC 身份及 .NET 的 100 ns 精度，防止时区偏移导致误判 PID 复用或丢失退出耗时的小数部分。同时验证四种 fixture 的固定 SHA-256、gate 参数、旧 Scan 收据兼容与模式/场景错配拒绝。该测试不创建 run 或修改旧收据。
 
 ## 原生取消
 
@@ -65,7 +66,7 @@ $scripts = Join-Path $repo 'tools\desktop-native'
 
 ## 详情读取阻塞时关闭文件
 
-此场景使用单独的 `Detail`（AAC）或 `AVCDetail` run，先完成结构扫描，再阻塞选中 Tag 的详情读取。
+此场景使用单独的 `Detail`（AAC）、`AVCDetail` 或 `MP3Detail` run，先完成结构扫描，再阻塞选中 Tag 的详情读取。
 
 ```powershell
 $detailVerify = 'C:\work\native acceptance\detail-verify-001'
@@ -83,12 +84,21 @@ $detailRun = 'C:\work\native acceptance\avc-detail-close-001'
 & "$scripts\build.ps1" -Repository $repo -RunDirectory $detailRun -GateMode AVCDetail
 ```
 
-两个模式的非 GUI race 测试都先确认 32 Tag 扫描完整、源仍保留，再请求 ID 0 的 AAC 或 AVC 详情到 gate。关闭请求必须立即使文档 `closed=true`、`terminal=false`，拒绝新详情和分页，且不能产生 `closed.json`；释放 gate 后 Close 应返回 nil、源才关闭并可独占打开。
+验证 MP3 时同样使用两个新目录：
+
+```powershell
+$detailVerify = 'C:\work\native acceptance\mp3-detail-verify-001'
+$detailRun = 'C:\work\native acceptance\mp3-detail-close-001'
+& "$scripts\verify.ps1" -Repository $repo -RunDirectory $detailVerify -GateMode MP3Detail
+& "$scripts\build.ps1" -Repository $repo -RunDirectory $detailRun -GateMode MP3Detail
+```
+
+三个详情模式的非 GUI race 测试都先确认 32 Tag 扫描完整、源仍保留，再请求 ID 0 的 AAC、AVC 或 MP3 详情到 gate。关闭请求必须立即使文档 `closed=true`、`terminal=false`，拒绝新详情和分页，且不能产生 `closed.json`；释放 gate 后 Close 应返回 nil、源才关闭并可独占打开。
 
 原生步骤：
 
 1. 启动该 run 的验收 exe，通过真实文件选择器打开该 run 的 `native-controlled.flv`。等待扫描结束，确认 32 Tag；此时应没有 `entered.json`。
-2. 点击 Tag ID **0** 请求 AAC 或 AVC 详情，等待 `entered.json` 和详情读取中界面。该收据必须匹配所选 GateMode，且为 read 67/offset 24/32 Tag。
+2. 点击 Tag ID **0** 请求 AAC、AVC 或 MP3 详情，等待 `entered.json` 和详情读取中界面。该收据必须匹配所选 GateMode，且为 read 67/offset 24/32 Tag。
 3. 运行 MarkClose，然后立即点击真实窗口“关闭文件”。截图确认“正在关闭”，32 Tag 的扫描信息仍在，无法打开新文件，详情被清空；此时不要 Release，且应没有 `closed.json`。
 
 ```powershell
@@ -104,7 +114,7 @@ $detailRun = 'C:\work\native acceptance\avc-detail-close-001'
 & "$scripts\check.ps1" -RunDirectory $detailRun -Scenario DetailClose -ObservedState closing -ObservedTagCount 32
 ```
 
-检查要求 `close-command < release < released < closed`，所有收据属于同一 run 和进程、source Close 无错误、fixture 可独占打开。`closing/32` 是 **Release 前**操作者观察的状态；MarkClose 仅证明操作意图记录，不能代替按钮操作、关闭中截图或释放后的空状态。DetailClose 不能用于 Scan run；Cancel、Exit、MarkCancel、MarkExit 和退出 watcher 也不能用于 Detail 或 AVCDetail run。
+检查要求 `close-command < release < released < closed`，所有收据属于同一 run 和进程、source Close 无错误、fixture 可独占打开。`closing/32` 是 **Release 前**操作者观察的状态；MarkClose 仅证明操作意图记录，不能代替按钮操作、关闭中截图或释放后的空状态。DetailClose 不能用于 Scan run；Cancel、Exit、MarkCancel、MarkExit 和退出 watcher 也不能用于任何详情 gate run。
 
 ## AMF0/AAC 生产窗口流程
 
@@ -171,6 +181,60 @@ python -B tools/desktop-native/avc_fixtures.py --output-dir 'C:\work\avc-large-n
 SHA-256；验收前另用 `Get-Item`、`Get-FileHash -Algorithm SHA256` 读回核对，报告记录
 实际 `bytes`、哈希与选择结果。填充是空字节容器压力数据，不能
 换算成视频解码能力或完整 payload 读取吞吐量。
+
+## MP3 生产窗口流程
+
+```powershell
+python -B tools/desktop-native/mp3_fixtures.py --output-dir 'C:\work\mp3-fixtures-new'
+```
+
+生成器只使用 Python 标准库，要求绝对的新目录，每个文件使用独占创建，拒绝覆盖。
+`fixtures.json` 保存实际写入长度、SHA-256、每个 Tag 的 ID、文件偏移、payload 偏移和
+预期值/诊断。三个默认文件是 `mp3-details.flv`（391 byte，19 Tag）、同内容独立副本
+`mp3-change.flv`（391 byte）以及 `mp3-truncated.flv`（404 byte）。
+
+普通生产窗口打开 `mp3-details.flv`，逐项选择以下 Tag；这些样本只含固定头和少量
+opaque 字节，不代表完整音频帧或可播放音频。
+
+| Tag ID | 预期 |
+| --- | --- |
+| 0 / 1 | MPEG-1 Layer III，128 kbps、44100 Hz，双/单声道，1152 samples/frame，推导长度 417 byte |
+| 2 / 3 | MPEG-2，64 kbps、22050 Hz，双/单声道，576 samples/frame，推导长度 208 byte |
+| 4 / 5 | MPEG-2.5，64 kbps、11025 Hz，双/单声道，576 samples/frame，推导长度 417 byte |
+| 6 | padding=true，推导长度从 417 增加到 418 byte |
+| 7 | free-format；头完整并有 `MP3_FREE_FORMAT_UNRESOLVED` 警告，码率及帧长度未确定，不能显示成 0 |
+| 8 | CRC 保护声明；后续 `12 34 AA BB` 保持 opaque，不能声称验证了 CRC |
+| 9–14 | 依次为损坏同步、保留 version、保留 layer、Layer II、非法 bitrate index、保留频率；显示部分结果及对应 `MP3_*` 错误 |
+| 15 | 保留 emphasis；头仍完整，并显示 `MP3_EMPHASIS_RESERVED` 警告 |
+| 16 / 17 | 仅两字节 MPEG 头 / 空 MP3 正文；`MP3_FRAME_HEADER_TRUNCATED`，保留 FLV 声音头 |
+| 18 | SoundFormat 14 明确 `detail_unsupported`，不能因正文类似 MPEG 头就接受 |
+
+FLV 声音头统一保留 `2F` 声明，MPEG-2/2.5 及单声道样本有意与其频率/声道声明不同；
+应分别显示原始容器位域与 MPEG 头推导值。原始固定头在 `frameHeaderOffset` 开始，
+精确字段可有 byte/bit 位置；推导的码率、频率、声道数、每帧样本数和帧长度没有独立
+原始 span。推导帧长度不证明文件里存在该长度的完整帧，也不能据此跳读后续帧。
+
+`mp3-truncated.flv` 在完整前缀后追加 ID 19，payload 声明 10 byte、仅剩 2 byte，
+应拒绝该 Tag 的详情并返回 `detail_truncated`；前 19 Tag 仍可读。打开独立的
+`mp3-change.flv` 后受控改变其大小或修改时间，再选择 Tag 应为 `source_changed`。
+关闭文件后详情清空、源句柄释放。
+
+可选 `--large-mib` 默认为 0（不生成），允许 64–4096，采用与 AVC 生成器相同的顺序
+物理写入方式，每次最多持有约 1 MiB 写入块，不 seek、不创建稀疏文件、不加载全文。
+参数仅指定前置 Script Tag **填充 payload** 的 MiB，另加 FLV framing 和一个带固定
+MP3 头、**8 MiB opaque 正文**的尾 Tag。
+
+```powershell
+python -B tools/desktop-native/mp3_fixtures.py --output-dir 'C:\work\mp3-large-new' --large-mib 1024
+```
+
+1024 MiB 填充产生的 `mp3-large.flv` 为 1,082,131,440 byte，共 66 Tag；尾 Tag ID 65，
+offset 1,073,742,812，仍在默认 100 条首页。以清单 `tailTag` 的位置选择它，核对
+MPEG-1、128 kbps、44100 Hz、双声道、推导长度 417 byte，以及完整 opaque 范围。
+详情只读取首个固定 MPEG 头，opaque 正文无需读取或解码。
+验收前使用 `Get-Item` 与 `Get-FileHash -Algorithm SHA256` 独立读回，和清单的实际
+`bytes`、SHA-256 核对；大文件成功扫描或选中尾 Tag不能解读为音频解码能力或完整
+payload 读取吞吐量。
 
 ## 阻塞中退出
 

@@ -10,7 +10,7 @@ MuxRay 是一个面向 FLV 和音视频码流的跨平台诊断工具。项目�
 - Go 后台扫描会话、标量进度快照、取消/等待/关闭和结束后分页；
 - 最小桌面 Go 适配层：单会话管理、旧请求隔离、精确整数 DTO 和 Tag/诊断分页；
 - 独立 Wails/React 最小桌面壳：原生文件选择、进度、取消/关闭和有界结果页；
-- 独立文件生命周期及 AMF0/AAC/AVC 桌面详情：取消后完整前缀可读、请求恢复、字段与位级源位置；
+- 独立文件生命周期及 AMF0/AAC/AVC/MP3 桌面详情：取消后完整前缀可读、请求恢复、字段与位级源位置；
 - AVC 桌面有界前置配置查找、NAL 长度来源、SPS/PPS 摘要与不伪造的派生字段位置；
 - 按 Tag、资源有界的通用详情分发；
 - AMF0 ScriptData 详情解析；
@@ -23,7 +23,7 @@ MuxRay 是一个面向 FLV 和音视频码流的跨平台诊断工具。项目�
 - 正常、边界、损坏样本的 unit、Golden 与 fuzz 测试；
 - 离线语料身份/差分校验与实际落盘大文件的扫描测量工具。
 
-MP3 桌面详情、hex/summary、完整 VUI/PPS/slice 等深层 H.264 语义、MP3 多帧/VBR/CRC 深层分析、分页帧级曲线和实时 RTMP/HTTP-FLV 将在后续阶段加入。
+hex/summary 桌面视图、完整 VUI/PPS/slice 等深层 H.264 语义、MP3 多帧/VBR/CRC 深层分析、分页帧级曲线和实时 RTMP/HTTP-FLV 将在后续阶段加入。
 
 ## 开发
 
@@ -58,7 +58,7 @@ Go 应用层新增 `internal/session.Open`：一个会话拥有一个后台扫�
 
 `internal/desktop` 提供异步打开、状态查询、取消、关闭、Tag/诊断分页及详情启动/查询 DTO。`internal/document` 保留同一只读文件至关闭，扫描和详情使用独立取消上下文。应用一次只拥有一个槽位；旧 ID 不能操作新文件，64 位数值通过十进制字符串传输。宿主退出有独立的清理入口，仍保持纯 Go 构建。初始适配层见 [`桌面适配层说明`](docs/desktop-adapter-v1.md)，详情与源生命周期的现行决策见 [`ADR-013`](docs/decisions/013-retained-document-details.md)。
 
-`desktop/` 是独立 Go 模块，接入 Wails v2.14.0 与 React/TypeScript。界面提供原生文件选择、进度、取消/关闭，以及扫描结束后的 Tag/诊断分页（每页 100 条）和 AMF0/AAC/AVC 按需详情。AVC NAL 长度由有界查找前置可用 sequence header 取得，缺失或达到预算时保留包头并明确诊断，不猜测长度；SPS/PPS 摘要和其他派生值不伪造连续源位置。根模块不引入 GUI 依赖；Windows 构建、测试和功能边界见 [`桌面开发说明`](desktop/README.md)、[`ADR-011`](docs/decisions/011-minimal-wails-shell.md) 与 [`ADR-014`](docs/decisions/014-bounded-desktop-avc-context.md)。
+`desktop/` 是独立 Go 模块，接入 Wails v2.14.0 与 React/TypeScript。界面提供原生文件选择、进度、取消/关闭，以及扫描结束后的 Tag/诊断分页（每页 100 条）和 AMF0/AAC/AVC/MP3 按需详情。AVC NAL 长度由有界查找前置可用 sequence header 取得，缺失或达到预算时保留包头并明确诊断，不猜测长度；SPS/PPS 摘要和其他派生值不伪造连续源位置。MP3 只解析首个 MPEG 固定帧头，free-format 不虚构码率或帧长，CRC 标志不代表校验通过。根模块不引入 GUI 依赖；Windows 构建、测试和功能边界见 [`桌面开发说明`](desktop/README.md)、[`ADR-011`](docs/decisions/011-minimal-wails-shell.md) 与 [`ADR-014`](docs/decisions/014-bounded-desktop-avc-context.md)。
 
 扫描、详情、汇总和输出共用 Ctrl+C 取消上下文，取消退出码为 `130`，不会伪造文件损坏诊断。取消时 stdout 可能不完整，调用方应丢弃；核心返回的部分索引仍可分页读取。取消是协作式的，不能强制中断已阻塞的底层读取或写入。设计依据见 [`ADR-008`](docs/decisions/008-cancellable-chunked-index.md)。
 

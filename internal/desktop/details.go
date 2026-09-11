@@ -176,7 +176,7 @@ func detailFault(code string) *Fault {
 	case CodeSourceChanged:
 		message = "The source file changed; close it and reopen to rebuild the index."
 	case CodeDetailUnsupported:
-		message = "Details are supported for AMF0, AAC and AVC tags only."
+		message = "Details are supported for AMF0, AAC, MP3 and AVC tags only."
 	case CodeDetailFiltered:
 		message = "Filtered tag payloads cannot be inspected."
 	case CodeDetailTruncated:

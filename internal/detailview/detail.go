@@ -17,6 +17,7 @@ import (
 	"github.com/sevico/muxray/internal/avccontext"
 	"github.com/sevico/muxray/internal/cursor"
 	"github.com/sevico/muxray/internal/flv"
+	"github.com/sevico/muxray/internal/mp3"
 )
 
 const (
@@ -120,19 +121,36 @@ func ParseWithAVCContext(ctx context.Context, source io.ReaderAt, tag flv.TagRec
 			return nil, err
 		}
 	} else if tag.Type() == flv.TagTypeAudio {
-		parsed, err := flv.ParseAACAudio(reader, tag, aac.Options{MaxDiagnostics: MaxDiagnostics})
-		if errors.Is(err, flv.ErrAACAudioWrongSoundFormat) {
+		audioSource := &checkedAudioReader{source: reader}
+		parsed, err := flv.ParseTagDetail(audioSource, tag, flv.DetailOptions{
+			AAC: aac.Options{MaxDiagnostics: MaxDiagnostics},
+			MP3: mp3.Options{MaxDiagnostics: MaxDiagnostics},
+		})
+		if audioSource.failure != nil {
+			return nil, audioSource.failure
+		}
+		if errors.Is(err, flv.ErrAACAudioWrongSoundFormat) || errors.Is(err, flv.ErrMP3AudioWrongSoundFormat) {
 			return nil, ErrUnsupported
 		}
 		if err != nil {
 			return nil, err
 		}
-		b.detail.Kind, b.detail.Complete = string(flv.DetailKindAACAudio), parsed.Complete
-		for _, d := range parsed.Diagnostics {
-			b.diagnostic(d.Code, string(d.Severity), d.Offset, d.BitOffset, d.Message, d.Expected, d.Actual)
-		}
+		b.detail.Kind, b.detail.Complete = string(parsed.DetailKind()), parsed.IsComplete()
 		b.add("", "tagId", "uint64", decimal(tag.ID), nil)
-		b.aac(parsed)
+		switch audio := parsed.(type) {
+		case flv.AACAudio:
+			for _, d := range audio.Diagnostics {
+				b.diagnostic(d.Code, string(d.Severity), d.Offset, d.BitOffset, d.Message, d.Expected, d.Actual)
+			}
+			b.aac(audio)
+		case flv.MP3Audio:
+			for _, d := range audio.Diagnostics {
+				b.diagnostic(d.Code, string(d.Severity), d.Offset, d.BitOffset, d.Message, d.Expected, d.Actual)
+			}
+			b.mp3(audio)
+		default:
+			return nil, ErrUnsupported
+		}
 	} else {
 		if err := b.avc(ctx, reader, tag, resolution); err != nil {
 			return nil, err
@@ -142,6 +160,36 @@ func ParseWithAVCContext(ctx context.Context, source io.ReaderAt, tag flv.TagRec
 		return nil, err
 	}
 	return &b.detail, nil
+}
+
+// The CLI dispatcher tolerates failed probes and some core parsers accept a
+// full read despite its error. Desktop requests must retain the first source
+// failure instead of silently succeeding on a subsequent read. Full EOF is a
+// legal ReaderAt result; other errors and short reads remain request failures.
+type checkedAudioReader struct {
+	source  io.ReaderAt
+	failure error
+}
+
+func (r *checkedAudioReader) ReadAt(p []byte, off int64) (int, error) {
+	if r.failure != nil {
+		return 0, r.failure
+	}
+	n, err := r.source.ReadAt(p, off)
+	if n < 0 || n > len(p) {
+		r.failure = ErrInvalidInput
+		return 0, r.failure
+	}
+	if n == len(p) && errors.Is(err, io.EOF) {
+		return n, nil
+	}
+	if n != len(p) && err == nil {
+		err = io.ErrUnexpectedEOF
+	}
+	if err != nil {
+		r.failure = err
+	}
+	return n, err
 }
 
 type contextReader struct {
