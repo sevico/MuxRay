@@ -1,7 +1,7 @@
-import { CancelScan, CloseFile, GetDetail, GetDiagnostics, GetSession, GetTags, StartDetail } from '../wailsjs/go/desktop/Bindings';
+import { CancelScan, CloseFile, GetDetail, GetDiagnostics, GetHex, GetSession, GetTags, StartDetail, StartHex } from '../wailsjs/go/desktop/Bindings';
 import { OpenFLV, GetOpenResult } from '../wailsjs/go/main/Native';
 import type { API } from './protocol';
-import { detailResponse, diagnosticResponse, pickResponse, sessionResponse, tagResponse } from './normalize';
+import { detailResponse, diagnosticResponse, hexResponse, pickResponse, sessionResponse, tagResponse } from './normalize';
 
 // Actual generated bindings, not a mock HTTP API. No arbitrary URL, filesystem,
 // runtime lifecycle, or full-index endpoint is added to the UI.
@@ -15,4 +15,6 @@ export const api: API = {
   diagnostics: async request => diagnosticResponse(await GetDiagnostics(request)),
   startDetail: async request => detailResponse(await StartDetail(request)),
   detailResult: async request => detailResponse(await GetDetail(request)),
+  startHex: async request => hexResponse(await StartHex(request)),
+  hexResult: async request => hexResponse(await GetHex(request)),
 };

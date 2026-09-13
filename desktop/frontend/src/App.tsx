@@ -1,9 +1,12 @@
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Controller, PAGE_SIZE } from './controller';
 import type { Diagnostic, Session, Tag } from './protocol';
 import type { ViewState } from './controller';
 import { detailRows, fieldValue } from './details';
 import { byteSize, previousStart, progressPercent, unsigned } from './numbers';
+import { selectionFromSpan } from './hex';
+import type { HexSelection } from './hex';
+import { HexPanel } from './HexPanel';
 
 const stateNames: Record<string, string> = {
   opening: '正在打开', running: '扫描中', canceling: '正在取消', finished: '扫描结束', canceled: '已取消', failed: '扫描失败',
@@ -17,15 +20,18 @@ const errors: Record<string, string> = {
   invalid_argument: '请求参数无效。', session_closed: '此文件已关闭。', session_not_found: '此会话已失效。',
   incompatible_api: '界面与宿主版本不匹配，请重新构建。', invalid_response: '宿主返回了不匹配的结果。',
   transport_failed: '桌面通信失败，请重试或重新启动应用。',
-  stale_request: '此打开请求已失效，请重新选择文件。', id_exhausted: '打开请求编号已用尽，请重新启动应用。',
+  stale_request: '此请求已被较新的操作取代。', id_exhausted: '请求编号已用尽，请重新启动应用。',
   detail_not_found: '尚未确认详情请求，请重试当前 Tag。',
   detail_unsupported: '此 Tag 暂不支持详情；当前支持 AMF0 Script Data、AAC 音频、AVC 视频和 MP3 音频。',
   detail_filtered: '此 Tag 带有过滤或加密标记，暂不解析详情。',
   detail_truncated: '此 Tag 的 payload 不完整，无法取得详情。',
   source_changed: '文件内容已改变，请关闭后重新打开，以保证字段位置准确。',
   tag_not_found: '当前索引中没有这个 Tag。', detail_failed: '详情解析失败，请重试当前 Tag。',
+  detail_superseded: '已切换到原始字节读取；可重新读取此 Tag 的详情。',
+  hex_not_found: '尚未确认原始字节请求，请重试查询。', hex_failed: '原始字节读取失败，请重试。',
+  hex_unsupported: '当前源不支持原始字节读取。',
 };
-function fault(code: string): string { return errors[code] ?? '请求失败，请重试。'; }
+export function fault(code: string): string { return errors[code] ?? '请求失败，请重试。'; }
 
 function scanNote(session: Session): string {
   if (session.closed) return '正在释放当前文件；底层 I/O 结束后才能打开下一个文件。';
@@ -40,9 +46,10 @@ function scanNote(session: Session): string {
 export function App({ controller }: { controller: Controller }) {
   const view = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   useEffect(() => () => controller.dispose(), [controller]);
+  const [tagId, setTagId] = useState('');
   const { session, operation, page } = view;
   const progress = session?.progress;
-  const canPage = !!session?.terminal && !session.closed && session.scan !== null;
+  const canPage = !!session?.terminal && !session.closed && session.scan !== null && !view.sourceChanged;
   const bounds = page?.data.bounds;
   const percent = progress ? progressPercent(progress.bytesScanned, progress.sourceSize) : 0;
   const isClosing = operation === 'closing' || session?.closed;
@@ -60,7 +67,7 @@ export function App({ controller }: { controller: Controller }) {
     </header>
 
     <main>
-      {view.error && <div className="request-error" role="alert"><span>{fault(view.error)}</span><button onClick={() => controller.retry()}>重试查询</button></div>}
+      {view.error && <div className="request-error" role="alert"><span>{fault(view.error)}</span>{!view.sourceChanged && <button onClick={() => controller.retry()}>重试查询</button>}</div>}
       {!session ? <section className="empty-state">
         <div className="file-symbol" aria-hidden="true">FLV</div>
         <h2>从一个文件开始，看清码流结构</h2>
@@ -91,9 +98,13 @@ export function App({ controller }: { controller: Controller }) {
             <span className="table-hint">每页最多 {PAGE_SIZE} 条 · 偏移单位 byte</span>
             {view.selectedTag && <a className="detail-jump" href="#tag-detail">当前详情 ↓</a>}
           </div>
+          <form className="tag-jump-form" onSubmit={event => { event.preventDefault(); controller.jumpTag(tagId); }}>
+            <label htmlFor="tag-id-input">Tag ID</label><input id="tag-id-input" inputMode="numeric" value={tagId} onChange={event => setTagId(event.target.value)} placeholder="精确 ID" disabled={!canPage || !!isClosing} />
+            <button disabled={!canPage || !!isClosing}>跳转 Tag</button>{view.tagJumpError && <span className="problem" role="alert">{fault(view.tagJumpError)}</span>}
+          </form>
           <div className="table-area" role="tabpanel" aria-busy={view.loading}>
             {view.loading ? <div className="result-placeholder" role="status">正在读取当前页…</div> : page ? <>
-              {page.tab === 'tags' ? <TagTable rows={page.data.tags} selectedId={view.selectedTag?.id ?? null} disabled={!!isClosing} onSelect={id => controller.selectTag(id)} /> : <DiagnosticTable rows={page.data.diagnostics} />}
+              {page.tab === 'tags' ? <TagTable rows={page.data.tags} selectedId={view.selectedTag?.id ?? null} disabled={!!isClosing || !canPage} onSelect={id => controller.selectTag(id)} onLocate={selection => controller.showHex(selection)} /> : <DiagnosticTable rows={page.data.diagnostics} onLocate={selection => controller.showHex(selection)} />}
             </> : <div className="result-placeholder">{canPage ? '暂无可显示的页，请重试查询。' : '扫描结束后，完整或部分结果会显示在这里。'}</div>}
           </div>
           <div className="pagination"><span>{bounds ? `起点 ${bounds.start} · 本页 ${unsigned(bounds.next) - unsigned(bounds.start)} 条 · 共 ${bounds.total} 条` : '尚无结果页'}</span><div>
@@ -102,23 +113,24 @@ export function App({ controller }: { controller: Controller }) {
             <button disabled={!bounds || view.loading || unsigned(bounds.next) >= unsigned(bounds.total) || !!isClosing} onClick={() => bounds && controller.select(view.tab, bounds.next)}>下一页</button>
           </div></div>
         </section>
-        {view.selectedTag && <DetailPanel view={view} onRetry={() => controller.retryDetail()} />}
+        {view.selectedTag && <DetailPanel view={view} onRetry={() => controller.retryDetail()} onLocate={selection => controller.showHex(selection)} />}
         </div>
+        <HexPanel view={view} controller={controller} disabled={!canPage || !!isClosing} message={fault} />
       </>}
     </main>
     <footer><span><i aria-hidden="true" /> 本地只读 · 不上传媒体</span><span>桌面预览版 / 单文件会话</span></footer>
   </div>;
 }
 
-function TagTable({ rows, selectedId, disabled, onSelect }: { rows: Tag[]; selectedId: string | null; disabled: boolean; onSelect: (id: string) => void }) {
+function TagTable({ rows, selectedId, disabled, onSelect, onLocate }: { rows: Tag[]; selectedId: string | null; disabled: boolean; onSelect: (id: string) => void; onLocate: (selection: HexSelection) => void }) {
   if (!rows.length) return <div className="result-placeholder">当前索引没有 Tag。</div>;
   return <table><thead><tr><th>ID / 详情</th><th>类型</th><th>偏移</th><th>DTS (ms)</th><th>Payload (byte)</th><th>Payload</th><th>PreviousTagSize</th></tr></thead><tbody>{rows.map(tag => <tr key={tag.id} className={selectedId === tag.id ? 'selected-tag' : ''}>
-    <td><button className="tag-select" aria-label={`查看 Tag ${tag.id} 详情`} aria-pressed={selectedId === tag.id} disabled={disabled} onClick={() => onSelect(tag.id)}>{tag.id}</button></td><td><span className={`tag-type type-${tag.typeCode}`}>{tag.typeName}</span>{tag.filter && ' · filtered'}</td><td>{tag.offset}</td><td>{tag.dts}</td><td>{tag.availableDataSize} / {tag.dataSize}</td>
+    <td><button className="tag-select" aria-label={`查看 Tag ${tag.id} 详情`} aria-pressed={selectedId === tag.id} disabled={disabled} onClick={() => onSelect(tag.id)}>{tag.id}</button></td><td><span className={`tag-type type-${tag.typeCode}`}>{tag.typeName}</span>{tag.filter && ' · filtered'}</td><td><button className="source-link" aria-label={`查看 Tag ${tag.id} 原始字节`} disabled={disabled} onClick={() => onLocate(selectionFromSpan(tag.span, `Tag ${tag.id} 范围`))}>{tag.offset}</button></td><td>{tag.dts}</td><td><button className="source-link" aria-label={`定位 Tag ${tag.id} payload`} disabled={disabled} onClick={() => onLocate(selectionFromSpan(tag.payloadSpan, `Tag ${tag.id} payload（实际 ${tag.availableDataSize} / 声明 ${tag.dataSize} byte）`))}>{tag.availableDataSize} / {tag.dataSize}</button></td>
     <td className={tag.payloadComplete ? '' : 'problem'}>{tag.payloadComplete ? '完整' : '截断'}</td><td className={tag.previousTagSize.valid ? '' : 'problem'}>{!tag.previousTagSize.present ? '缺失' : tag.previousTagSize.valid ? '一致' : `${tag.previousTagSize.value} ≠ ${tag.previousTagSize.expected}`}</td>
   </tr>)}</tbody></table>;
 }
 
-function DetailPanel({ view, onRetry }: { view: ViewState; onRetry: () => void }) {
+function DetailPanel({ view, onRetry, onLocate }: { view: ViewState; onRetry: () => void; onLocate: (selection: HexSelection) => void }) {
   const detail = view.detail;
   const kind = detail?.kind === 'amf0ScriptData' ? 'AMF0 Script Data' : detail?.kind === 'aacAudio' ? 'AAC Audio' : detail?.kind === 'avcVideo' ? 'AVC Video' : detail?.kind === 'mp3Audio' ? 'MP3 Audio' : 'Tag 详情';
   const busy = ['loading', 'pending', 'recovering'].includes(view.detailState);
@@ -138,16 +150,16 @@ function DetailPanel({ view, onRetry }: { view: ViewState; onRetry: () => void }
       {!detail.complete && <p className="detail-note problem">保留可解析的字段；请结合下方详情诊断检查未完成部分。</p>}
       {detail.truncated && <p className="detail-note">部分内容因截断或展示上限而省略；显示的值是有限预览。</p>}
       <div className="detail-table-area"><table className="detail-fields"><thead><tr><th>字段</th><th>类型</th><th>值 / 预览</th><th>byte : bit</th><th>位长</th></tr></thead><tbody>{detailRows(detail.fields).map(({ field, depth }) => <tr key={field.id}>
-        <td><span className={`field-name depth-${depth}`}>{depth > 0 && <span aria-hidden="true">└ </span>}{field.name}</span></td><td>{field.type}</td><td className="field-value">{fieldValue(field)}</td><td>{field.span ? `${field.span.byteOffset} : ${field.span.bitOffset}` : '—'}</td><td>{field.span?.bitLength ?? '—'}</td>
+        <td><span className={`field-name depth-${depth}`}>{depth > 0 && <span aria-hidden="true">└ </span>}{field.name}</span></td><td>{field.type}</td><td className="field-value">{fieldValue(field)}</td><td>{field.span ? <button className="source-link" aria-label={`定位字段 ${field.name}`} onClick={() => onLocate(selectionFromSpan(field.span!, field.name))}>{field.span.byteOffset} : {field.span.bitOffset}</button> : '—'}</td><td>{field.span?.bitLength ?? '—'}</td>
       </tr>)}</tbody></table>{!detail.fields.length && <p className="detail-note">没有可展示的字段。</p>}</div>
-      <div className="detail-diagnostics"><h3>详情诊断 <span>({detail.diagnostics.length})</span></h3>{detail.diagnostics.length ? <div className="detail-table-area"><DiagnosticTable rows={detail.diagnostics} /></div> : <p className="detail-note">没有保留的详情诊断。</p>}</div>
+      <div className="detail-diagnostics"><h3>详情诊断 <span>({detail.diagnostics.length})</span></h3>{detail.diagnostics.length ? <div className="detail-table-area"><DiagnosticTable rows={detail.diagnostics} onLocate={onLocate} /></div> : <p className="detail-note">没有保留的详情诊断。</p>}</div>
     </>}
   </section>;
 }
 
-function DiagnosticTable({ rows }: { rows: Diagnostic[] }) {
+function DiagnosticTable({ rows, onLocate }: { rows: Diagnostic[]; onLocate: (selection: HexSelection) => void }) {
   if (!rows.length) return <div className="result-placeholder">没有保留的结构诊断。</div>;
   return <table className="diagnostics"><thead><tr><th>级别</th><th>代码 / 消息</th><th>偏移 : bit</th><th>期望 / 实际</th></tr></thead><tbody>{rows.map((item, index) => <tr key={`${item.code}-${item.offset}-${index}`}>
-    <td><span className={`severity severity-${item.severity}`}>{item.severity}</span></td><td><code>{item.code}</code><p>{item.message}</p></td><td>{item.offset} : {item.bitOffset}</td><td>{item.expected ?? '—'} / {item.actual ?? '—'}</td>
+    <td><span className={`severity severity-${item.severity}`}>{item.severity}</span></td><td><code>{item.code}</code><p>{item.message}</p></td><td><button className="source-link" aria-label={`定位诊断 ${item.code}`} onClick={() => onLocate({ offset: item.offset, bitOffset: item.bitOffset, bitLength: null, label: `诊断 ${item.code}` })}>{item.offset} : {item.bitOffset}</button></td><td>{item.expected ?? '—'} / {item.actual ?? '—'}</td>
   </tr>)}</tbody></table>;
 }

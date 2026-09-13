@@ -48,8 +48,9 @@ async function click(text) {
 }
 
 function syntheticHost() {
-  let session, latestPick, latestDetail, sequence = 0;
+  let session, latestPick, latestDetail, latestHex, sequence = 0;
   window.smokeMode = 'finished';
+  window.smokeReads = [];
   const envelope = () => structuredClone({ apiVersion: 1, session, error: null });
   const span = { byteOffset: '9007199254740993', bitOffset: 0, bitLength: 88 };
   window.go = { main: { Native: { OpenFLV: async requestId => {
@@ -69,7 +70,7 @@ function syntheticHost() {
       assertRequest(request);
       const start = Number(request.start), next = Math.min(start + request.count, 205);
       return { apiVersion: 1, error: null, page: { sessionId: session.sessionId, bounds: { start: request.start, next: String(next), total: '205', limit: request.count }, tags: Array.from({ length: next - start }, (_, index) => ({
-        id: String(start + index), typeCode: start + index >= 6 && start + index <= 9 ? 8 : 9, typeName: start + index >= 6 && start + index <= 9 ? 'audio' : 'video', offset: String(9007199254740993n + BigInt(start + index)), span, headerSpan: span, payloadSpan: span,
+        id: String(start + index), typeCode: start + index >= 6 && start + index <= 9 ? 8 : 9, typeName: start + index >= 6 && start + index <= 9 ? 'audio' : 'video', offset: String(9007199254740993n + BigInt(start + index)), span: { ...span, byteOffset: String(9007199254740993n + BigInt(start + index)) }, headerSpan: span, payloadSpan: span,
         rawTypeFlags: start + index >= 6 && start + index <= 9 ? 8 : 9, filter: false, dataSize: 64, availableDataSize: 64, dts: '-9223372036854775808', streamId: 0, payloadComplete: true,
         previousTagSize: { present: true, span, value: 75, expected: 75, valid: true },
       })) } };
@@ -80,6 +81,7 @@ function syntheticHost() {
     },
     StartDetail: async request => {
       if (!session.terminal || session.closed || request.sessionId !== session.sessionId) throw Error('Unexpected synthetic detail request');
+      window.smokeReads.push({ kind: 'detail', ...request });
       if (request.tagId === '9') {
         latestDetail = { apiVersion: 1, ...request, state: 'failed', error: { code: 'detail_unsupported', message: 'Synthetic SoundFormat=14 remains unsupported.' }, detail: null };
         return structuredClone(latestDetail);
@@ -116,12 +118,33 @@ function syntheticHost() {
         preview.diagnostics = malformed ? [{ code: 'MP3_BITRATE_INDEX_INVALID', severity: 'error', offset: '9007199254740995', bitOffset: 0, message: 'Reserved bitrate index; retain fixed header fields.', expected: null, actual: '15' }]
           : freeFormat ? [{ code: 'MP3_FREE_FORMAT_UNRESOLVED', severity: 'warning', offset: '9007199254740995', bitOffset: 0, message: 'Free-format bitrate and frame length are unknown.', expected: null, actual: null }] : [];
       }
+      if (request.tagId === '10') {
+        preview.kind = 'amf0ScriptData'; preview.complete = true; preview.truncated = false;
+        preview.fields = [
+          { id: '0', parentId: '', name: 'cross-window', type: 'bytes', value: '1024 byte range', span: { byteOffset: '9007199254740993', bitOffset: 0, bitLength: 8192 } },
+          { id: '1', parentId: '', name: 'cross-byte', type: 'uint5', value: '7', span: { byteOffset: '9007199254740993', bitOffset: 6, bitLength: 5 } },
+          { id: '2', parentId: '', name: 'derived', type: 'number', value: '3', span: null },
+        ];
+      }
       latestDetail = { apiVersion: 1, ...request, state: 'ready', error: null, detail: preview };
       return structuredClone(latestDetail);
     },
     GetDetail: async request => {
       if (request.sessionId !== latestDetail.sessionId || request.requestId !== latestDetail.requestId) throw Error('Unexpected synthetic detail query');
       return structuredClone(latestDetail);
+    },
+    StartHex: async request => {
+      if (!session.terminal || session.closed || request.sessionId !== session.sessionId || request.count !== 512) throw Error('Unexpected synthetic Hex request');
+      window.smokeReads.push({ kind: 'hex', ...request });
+      if (window.smokeMode === 'source-changed') return { apiVersion: 1, ...request, state: 'failed', window: null, error: { code: 'source_changed', message: 'Synthetic change' } };
+      const remain = BigInt(session.progress.sourceSize) - BigInt(request.offset), count = remain < 512n ? Number(remain) : 512;
+      if (remain < 0n) throw Error('Hex offset beyond EOF');
+      latestHex = { apiVersion: 1, ...request, state: 'ready', error: null, window: { offset: request.offset, sourceSize: session.progress.sourceSize, hex: Array.from({ length: count }, (_, i) => (i % 256).toString(16).padStart(2, '0')).join(''), eof: remain <= 512n } };
+      return structuredClone(latestHex);
+    },
+    GetHex: async request => {
+      if (request.sessionId !== latestHex.sessionId || request.requestId !== latestHex.requestId) throw Error('Unexpected synthetic Hex query');
+      return structuredClone(latestHex);
     },
   } } };
   function assertRequest(request) {
@@ -207,6 +230,41 @@ try {
   await click('9');
   await waitFor("document.querySelector('.detail-panel [role=alert]')?.textContent.includes('当前支持 AMF0 Script Data、AAC 音频、AVC 视频和 MP3 音频')");
   assert.equal(await evaluate("document.querySelector('.detail-fields') === null"), true, 'Unsupported audio clears the preceding MP3 detail');
+  const beforeRaw = await evaluate('window.smokeReads.length');
+  await evaluate("document.querySelector('[aria-label=\"查看 Tag 9 原始字节\"]').click()");
+  await waitFor("document.querySelector('.hex-grid tbody tr') !== null");
+  assert.deepEqual(await evaluate(`window.smokeReads.slice(${beforeRaw}).map(r => [r.kind,r.offset,r.count])`), [['hex', '9007199254741002', 512]], 'Raw Tag action does not start a detail job');
+  assert.equal(await evaluate("document.querySelectorAll('.hex-grid tbody tr').length"), 32);
+  await evaluate("document.querySelector('[aria-label=\"查看 Tag 10 详情\"]').click()");
+  await waitFor("document.querySelector('[aria-label=\"定位字段 cross-window\"]') !== null");
+  assert.equal(await evaluate("document.querySelector('.hex-grid') === null"), true, 'New Tag clears old byte window');
+  assert.equal(await evaluate("[...document.querySelectorAll('.detail-fields tr')].find(r => r.textContent.includes('derived')).querySelector('button') === null"), true);
+  await evaluate("document.querySelector('[aria-label=\"定位字段 cross-window\"]').click()");
+  await waitFor("document.querySelector('.hex-grid tbody th')?.textContent === '9007199254740993'");
+  assert.equal(await evaluate("document.querySelector('.hex-selection').textContent.includes('超出当前窗口')"), true);
+  assert.equal(await evaluate("document.querySelectorAll('.hex-byte.range-selected').length"), 512);
+  await click('后一窗口');
+  await waitFor("document.querySelector('.hex-grid tbody th')?.textContent === '9007199254741505'");
+  assert.equal(await evaluate("document.querySelector('.hex-selection').textContent.includes('9007199254740993')"), true, 'Paging retains original field selection');
+  await evaluate("document.querySelector('[aria-label=\"定位字段 cross-byte\"]').click()");
+  await waitFor("document.querySelectorAll('.hex-byte.range-selected').length === 2");
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('.hex-bits .range-selected')].map(n=>n.getAttribute('aria-label'))"), ['bit 6 范围内', 'bit 7 范围内']);
+  await evaluate("document.querySelector('[aria-label=\"定位诊断 SYNTHETIC_DETAIL\"]').click()");
+  await waitFor("document.querySelector('.hex-selection').textContent.includes('仅标记位置')");
+  assert.equal(await evaluate("document.querySelectorAll('.hex-byte.range-selected').length"), 0);
+  assert.equal(await evaluate("document.querySelectorAll('.hex-byte.point-selected').length"), 1);
+  assert.equal(await evaluate("document.querySelector('.hex-panel img') === null && document.documentElement.scrollWidth <= window.innerWidth"), true);
+  await evaluate("(() => { const input=document.querySelector('#hex-offset-input'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'18446744073709551615'); input.dispatchEvent(new Event('input',{bubbles:true})); })()");
+  await click('跳转偏移');
+  await waitFor("document.querySelector('[aria-label=\"Hex 实际窗口\"]')?.textContent.includes('0 byte')");
+  assert.equal(await evaluate("document.querySelector('.hex-grid') === null && document.querySelector('.hex-panel').textContent.includes('此位置没有字节')"), true);
+  await evaluate("(() => { const input=document.querySelector('#tag-id-input'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'105'); input.dispatchEvent(new Event('input',{bubbles:true})); })()");
+  await click('跳转 Tag');
+  await waitFor("document.querySelector('.selected-tag .tag-select')?.textContent === '105'");
+  assert.equal(await evaluate("document.querySelector('.results tbody tr td')?.textContent"), '100');
+  await evaluate("window.smokeMode='source-changed'; document.querySelector('[aria-label=\"查看 Tag 105 原始字节\"]').click()");
+  await waitFor("document.querySelector('main > [role=alert]')?.textContent.includes('文件内容已改变')");
+  assert.equal(await evaluate("document.querySelector('.detail-fields') === null && document.querySelector('.hex-grid') === null && document.querySelector('#hex-offset-input').disabled"), true, 'Source change invalidates both views');
   await click('关闭文件');
   await waitFor("document.querySelector('.empty-state') !== null");
   await evaluate("window.smokeMode = 'running'");
@@ -221,7 +279,7 @@ try {
   await click('打开 FLV 文件');
   await waitFor("document.querySelector('.topbar .primary')?.disabled === false");
   assert.equal(await evaluate("document.querySelector('.empty-state') !== null && document.querySelector('[role=alert]') === null"), true);
-  console.log(JSON.stringify({ result: 'passed', host: 'synthetic only; native Wails not verified', checks: ['empty state', '100/100/5 pagination', 'exact large integers', 'escaped diagnostic text', 'partial results', 'AMF0/AAC/AVC/MP3 detail panes', 'AVC derived values without fabricated spans', 'AVC missing configuration', 'AVC context lookup budget', 'AVC bounded prefix diagnostics', 'MP3 fixed-header scope', 'MP3 free-format unknown derived values', 'MP3 malformed header and unsupported audio clear stale values', 'escaped field previews', 'exact byte/bit positions', 'cancel', 'close', 'picker cancellation'], screenshot }, null, 2));
+  console.log(JSON.stringify({ result: 'passed', host: 'synthetic only; native Wails not verified', checks: ['empty state', '100/100/5 pagination', 'exact large integers', 'escaped diagnostic text', 'partial results', 'AMF0/AAC/AVC/MP3 detail panes', 'AVC derived values without fabricated spans', 'AVC missing configuration', 'AVC context lookup budget', 'AVC bounded prefix diagnostics', 'MP3 fixed-header scope', 'MP3 free-format unknown derived values', 'MP3 malformed header and unsupported audio clear stale values', 'escaped field previews', 'exact byte/bit positions', '512-byte Hex windows', 'raw unsupported Tag without detail parse', 'cross-window and cross-byte selection', 'diagnostic point without range', 'empty EOF', 'Tag ID jump', 'source change invalidates both views', 'cancel', 'close', 'picker cancellation'], screenshot }, null, 2));
 } finally {
   try { if (target) await call(`/close?target=${target}`); }
   finally { server.close(); }

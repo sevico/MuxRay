@@ -1,4 +1,4 @@
-// Package document owns a read-only file across scanning and selected details.
+// Package document owns a read-only file across scanning, details and hex reads.
 // Scan completion leaves the source open; Close ends all work before closing it.
 package document
 
@@ -27,9 +27,9 @@ const (
 
 var (
 	ErrSourceChanged  = errors.New("document: source changed")
-	ErrStaleRequest   = errors.New("document: detail request superseded")
-	ErrUnknownRequest = errors.New("document: detail request not found")
-	ErrInvalidRequest = errors.New("document: invalid detail request")
+	ErrStaleRequest   = errors.New("document: request superseded")
+	ErrUnknownRequest = errors.New("document: request not found")
+	ErrInvalidRequest = errors.New("document: invalid request")
 	ErrTagNotFound    = errors.New("document: tag not indexed")
 )
 
@@ -41,9 +41,19 @@ type sourceFile interface {
 
 type parseDetail func(context.Context, io.ReaderAt, flv.TagRecord) (*detailview.Detail, error)
 
+type workKind uint8
+
+const (
+	detailWork workKind = iota
+	hexWork
+)
+
 type work struct {
-	id  uint64
-	tag flv.TagRecord
+	id     uint64
+	kind   workKind
+	tag    flv.TagRecord
+	offset uint64
+	count  uint32
 }
 
 // DetailResult is the latest selected request. Its value is copied on return;
@@ -71,7 +81,9 @@ type Document struct {
 	released     bool
 	closeErr     error
 	changed      bool
+	request      work
 	latest       DetailResult
+	hex          HexResult
 	pending      *work
 	activeCancel context.CancelFunc
 }
@@ -125,6 +137,7 @@ func (d *Document) run() {
 			d.closed = true
 			d.pending = nil
 			d.latest.Detail = nil
+			d.hex.Window = nil
 			d.mu.Unlock()
 			// This single worker owns closure. No read or parse remains active.
 			_ = d.scan.Close(context.Background())
@@ -149,14 +162,28 @@ func (d *Document) run() {
 		d.activeCancel = cancel
 		d.mu.Unlock()
 
-		detail, err := d.readDetail(ctx, selected.tag)
+		var detail *detailview.Detail
+		var window *HexWindow
+		var err error
+		if selected.kind == hexWork {
+			window, err = d.readHex(ctx, selected.offset, selected.count)
+		} else {
+			detail, err = d.readDetail(ctx, selected.tag)
+		}
 		cancel()
 		d.mu.Lock()
 		d.activeCancel = nil
-		if !d.closed && d.latest.RequestID == selected.id {
-			d.latest.Detail, d.latest.Err, d.latest.State = detail, err, "ready"
-			if err != nil {
-				d.latest.Detail, d.latest.State = nil, "failed"
+		if !d.closed && d.request.id == selected.id {
+			if selected.kind == hexWork {
+				d.hex.Window, d.hex.Err, d.hex.State = window, err, "ready"
+				if err != nil {
+					d.hex.Window, d.hex.State = nil, "failed"
+				}
+			} else {
+				d.latest.Detail, d.latest.Err, d.latest.State = detail, err, "ready"
+				if err != nil {
+					d.latest.Detail, d.latest.State = nil, "failed"
+				}
 			}
 		}
 		d.mu.Unlock()
@@ -206,8 +233,8 @@ func (d *Document) parseWithContext(ctx context.Context, source io.ReaderAt, tag
 	return detailview.ParseWithAVCContext(ctx, source, tag, resolution)
 }
 
-// StartDetail fences request generations. There is one active parser and one
-// replaceable pending selection, including while an old ReaderAt is blocked.
+// StartDetail shares request generations with StartHex. There is one active
+// read task and one replaceable pending selection, even during blocked I/O.
 func (d *Document) StartDetail(id, tagID uint64) (DetailResult, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -217,11 +244,11 @@ func (d *Document) StartDetail(id, tagID uint64) (DetailResult, error) {
 	if id == 0 {
 		return DetailResult{}, ErrInvalidRequest
 	}
-	if id < d.latest.RequestID {
+	if id < d.request.id {
 		return DetailResult{}, ErrStaleRequest
 	}
-	if id == d.latest.RequestID {
-		if tagID != d.latest.TagID {
+	if id == d.request.id {
+		if d.request.kind != detailWork || tagID != d.request.tag.ID {
 			return DetailResult{}, ErrInvalidRequest
 		}
 		return cloneResult(d.latest), nil
@@ -233,8 +260,21 @@ func (d *Document) StartDetail(id, tagID uint64) (DetailResult, error) {
 		}
 		return DetailResult{}, err
 	}
-	d.latest = DetailResult{RequestID: id, TagID: tagID, State: "pending"}
-	d.pending = &work{id: id, tag: tag}
+	d.admitLocked(work{id: id, kind: detailWork, tag: tag})
+	return cloneResult(d.latest), nil
+}
+
+// admitLocked replaces the pending task without bypassing the active worker.
+// Superseded results are dropped; a caller already holding a copy may keep it.
+func (d *Document) admitLocked(task work) {
+	d.request = task
+	d.pending = &task
+	d.latest, d.hex = DetailResult{}, HexResult{}
+	if task.kind == hexWork {
+		d.hex = HexResult{RequestID: task.id, Offset: task.offset, Count: task.count, State: "pending"}
+	} else {
+		d.latest = DetailResult{RequestID: task.id, TagID: task.tag.ID, State: "pending"}
+	}
 	if d.activeCancel != nil {
 		d.activeCancel()
 	}
@@ -242,7 +282,6 @@ func (d *Document) StartDetail(id, tagID uint64) (DetailResult, error) {
 	case d.wake <- struct{}{}:
 	default:
 	}
-	return cloneResult(d.latest), nil
 }
 
 func (d *Document) GetDetail(id uint64) (DetailResult, error) {
@@ -254,11 +293,14 @@ func (d *Document) GetDetail(id uint64) (DetailResult, error) {
 	if id == 0 {
 		return DetailResult{}, ErrInvalidRequest
 	}
-	if id < d.latest.RequestID {
+	if id < d.request.id {
 		return DetailResult{}, ErrStaleRequest
 	}
-	if id != d.latest.RequestID {
+	if id != d.request.id {
 		return DetailResult{}, ErrUnknownRequest
+	}
+	if d.request.kind != detailWork {
+		return DetailResult{}, ErrInvalidRequest
 	}
 	return cloneResult(d.latest), nil
 }
@@ -323,6 +365,7 @@ func (d *Document) Close(ctx context.Context) error {
 	d.cancel()
 	d.pending = nil
 	d.latest.Detail = nil
+	d.hex.Window = nil
 	if d.activeCancel != nil {
 		d.activeCancel()
 	}

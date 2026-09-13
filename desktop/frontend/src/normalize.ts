@@ -1,5 +1,6 @@
 import type { desktop, main } from '../wailsjs/go/models';
-import type { DetailKind, DetailResponse, DiagnosticPage, PageResponse, PickResponse, Session, SessionResponse, TagPage } from './protocol';
+import type { DetailKind, DetailResponse, DiagnosticPage, HexResponse, PageResponse, PickResponse, Session, SessionResponse, TagPage } from './protocol';
+import { validateHexWindow } from './hex.ts';
 
 // Wails v2.14 emits optional TS properties for Go pointers. Normalize both
 // undefined (generated declarations) and null (actual JSON) without unsafe
@@ -37,4 +38,11 @@ export function detailResponse(value: desktop.DetailResponse): DetailResponse {
 function detailKind(value: string): DetailKind {
   if (value === 'amf0ScriptData' || value === 'aacAudio' || value === 'avcVideo' || value === 'mp3Audio') return value;
   throw new Error('Invalid detail response kind.');
+}
+export function hexResponse(value: desktop.HexResponse): HexResponse {
+  const state = value.state;
+  if (state !== 'pending' && state !== 'ready' && state !== 'failed') throw new Error('Invalid Hex response state.');
+  const window = value.window ?? null;
+  if (window) validateHexWindow(window, value.count);
+  return { ...value, state, window, error: value.error ?? null };
 }

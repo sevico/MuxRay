@@ -111,3 +111,30 @@ footer i { display: inline-block; width: 6px; height: 6px; background: #7aafa2; 
 .detail-diagnostics h3 span { color: #8190a2; font-weight: 400; }
 @media (max-width: 1050px) { .result-layout.has-detail { grid-template-columns: minmax(0, 1fr); } .detail-jump { display: inline; } .detail-panel { padding: 17px; } }
 @media (max-width: 1250px) { .detail-heading { align-items: flex-start; flex-wrap: wrap; } .detail-badges { justify-content: flex-start; } }
+.source-link { border: 0; background: transparent; padding: 0; color: #126c83; text-align: left; font-size: inherit; text-decoration: underline; text-decoration-color: #a7c8d2; text-underline-offset: 3px; overflow-wrap: anywhere; }
+input { min-width: 0; font: inherit; border: 1px solid #cbd7e2; border-radius: 5px; padding: 7px 9px; background: #fff; color: #243347; }
+input:focus-visible { outline: 3px solid #7bc9dd; outline-offset: 1px; }
+.tag-jump-form { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 17px; border-bottom: 1px solid #e6ebf1; font-size: 12px; }
+.tag-jump-form input { width: 145px; } .tag-jump-form button { padding: 6px 10px; }
+.pagination { flex-wrap: wrap; }
+.hex-panel { min-width: 0; padding: 20px; margin-top: 22px; background: #fff; border: 1px solid #dfe6ee; border-radius: 9px; scroll-margin-top: 16px; }
+.hex-heading, .hex-window-heading { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+.hex-heading h2 { font-size: 18px; margin: 0; } .hex-heading a { font-size: 12px; color: #126c83; }
+.hex-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin: 16px 0 12px; }
+.hex-controls input { width: 205px; font-family: Consolas, monospace; } .hex-controls > span { font-size: 12px; color: #7a8899; }
+.hex-selection, .hex-window-heading p, .hex-legend { font-size: 12px; color: #617389; line-height: 1.7; overflow-wrap: anywhere; }
+.hex-selection { padding: 9px 12px; background: #eef6f8; border-radius: 5px; }
+.hex-window-heading > div { display: flex; gap: 8px; } .hex-window-heading button { padding: 6px 10px; font-size: 12px; }
+.hex-grid-scroll { max-height: 420px; overflow: auto; border: 1px solid #e1e9ef; border-radius: 5px; }
+.hex-grid { width: auto; min-width: 100%; font-family: Consolas, monospace; }
+.hex-grid th, .hex-grid td { padding: 4px 3px; text-align: center; }
+.hex-grid th:first-child { min-width: 105px; text-align: right; padding: 4px 12px; }
+.hex-grid tbody th { position: static; background: #f8fafc; color: #6c7e92; font-weight: 400; }
+.hex-byte { padding: 4px 3px; min-width: 25px; border: 1px solid transparent; border-radius: 3px; font: inherit; }
+.hex-byte[aria-pressed="true"] { border-color: #126c83; }
+.range-selected { background: #cee8ee; color: #124c5b; }
+.point-selected { text-decoration: underline; text-decoration-color: #b76625; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.hex-grid .hex-ascii { padding: 5px 12px; text-align: left; letter-spacing: 1px; white-space: pre; }
+.hex-bits { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 10px 0; font-size: 12px; }
+.hex-bits code { display: flex; gap: 4px; font: 15px Consolas, monospace; } .hex-bits code span { display: inline-block; padding: 3px 7px; border: 1px solid #dfebef; border-radius: 3px; }
+.hex-panel .request-error { margin: 12px 0; }

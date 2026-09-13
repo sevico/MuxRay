@@ -10,6 +10,8 @@ export function GetDetail(arg1:desktop.DetailQuery):Promise<desktop.DetailRespon
 
 export function GetDiagnostics(arg1:desktop.PageRequest):Promise<desktop.DiagnosticPageResponse>;
 
+export function GetHex(arg1:desktop.HexQuery):Promise<desktop.HexResponse>;
+
 export function GetSession(arg1:string):Promise<desktop.SessionResponse>;
 
 export function GetTags(arg1:desktop.PageRequest):Promise<desktop.TagPageResponse>;
@@ -17,3 +19,5 @@ export function GetTags(arg1:desktop.PageRequest):Promise<desktop.TagPageRespons
 export function OpenFile(arg1:desktop.OpenRequest):Promise<desktop.SessionResponse>;
 
 export function StartDetail(arg1:desktop.DetailRequest):Promise<desktop.DetailResponse>;
+
+export function StartHex(arg1:desktop.HexRequest):Promise<desktop.HexResponse>;

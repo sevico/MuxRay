@@ -1,9 +1,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { detailResponse, diagnosticResponse, pickResponse, sessionResponse, tagResponse } from '../src/normalize.ts';
+import { detailResponse, diagnosticResponse, hexResponse, pickResponse, sessionResponse, tagResponse } from '../src/normalize.ts';
 
 // JSON.parse models plain IPC objects, not generated class instances. No
 // generated constructors are called by Wails' JS method wrappers at runtime.
+test('normalizes Hex generated null pointers and rejects malformed or oversized byte windows', () => {
+  for (const state of ['pending', 'failed']) {
+    const value = hexResponse(JSON.parse(JSON.stringify({ apiVersion: 1, sessionId: 's', requestId: '1', offset: '', count: 0, state })));
+    assert.equal(value.window, null); assert.equal(value.error, null);
+  }
+  const envelope = { apiVersion: 1, sessionId: 's', requestId: '9007199254740993', offset: '9007199254740993', count: 512, state: 'ready', window: { offset: '9007199254740993', sourceSize: '9007199254740995', hex: '00ff', eof: true } };
+  const value = hexResponse(JSON.parse(JSON.stringify(envelope)));
+  assert.equal(value.window?.offset, envelope.offset); assert.equal(value.window?.hex, '00ff'); assert.equal(value.error, null);
+  for (const hex of ['f', 'FF', '00'.repeat(513)]) assert.throws(() => hexResponse(JSON.parse(JSON.stringify({ ...envelope, window: { ...envelope.window, hex } }))));
+  assert.throws(() => hexResponse(JSON.parse('{"state":"unknown"}')));
+});
 test('normalizes generated optional pointers and real JSON nulls', () => {
   for (const fields of ['', ',"session":null,"error":null']) {
     const value = sessionResponse(JSON.parse(`{"apiVersion":1${fields}}`));

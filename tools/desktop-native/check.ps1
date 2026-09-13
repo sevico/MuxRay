@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory)][string]$RunDirectory,
-    [Parameter(Mandatory)][ValidateSet('Cancel', 'Exit', 'DetailClose')][string]$Scenario,
+    [Parameter(Mandatory)][ValidateSet('Cancel', 'Exit', 'DetailClose', 'HexClose')][string]$Scenario,
     [ValidateSet('canceled', 'closing')][string]$ObservedState,
     [int]$ObservedTagCount = -1,
     [ValidateRange(1000, 15000)][int]$MaxExitMilliseconds = 6000
@@ -16,9 +16,10 @@ if ($entered.executable -ne (Join-Path $run.runDirectory 'MuxRay-io-acceptance.e
 }
 $result = [ordered]@{ runId = $run.runId; gateMode = $run.gateMode; scenario = $Scenario; completedUTC = [DateTime]::UtcNow.ToString('o') }
 if ($Scenario -ne 'Exit') {
-    $expectedState = if ($Scenario -eq 'DetailClose') { 'closing' } else { 'canceled' }
+    $isClose = $Scenario -in @('DetailClose', 'HexClose')
+    $expectedState = if ($isClose) { 'closing' } else { 'canceled' }
     if ($ObservedState -ne $expectedState -or $ObservedTagCount -ne $run.committedTags) { throw "Supply the actual native UI observation: -ObservedState $expectedState -ObservedTagCount $($run.committedTags)." }
-    $commandName = if ($Scenario -eq 'DetailClose') { 'close-command.json' } else { 'cancel-command.json' }
+    $commandName = if ($isClose) { 'close-command.json' } else { 'cancel-command.json' }
     $command = Read-Receipt $run $commandName
     $release = Read-Receipt $run 'release.json'
     $released = Read-Receipt $run 'released.json'
@@ -30,7 +31,7 @@ if ($Scenario -ne 'Exit') {
     $closedTime = Convert-ReceiptTime $closed.timeUTC
     $enteredTime = Convert-ReceiptTime $entered.timeUTC
     if ($enteredTime -gt $commandTime -or $commandTime -gt $releaseTime -or $releaseTime -gt $releasedTime -or $releasedTime -gt $closedTime) { throw 'Gate/command/release/close receipt order is invalid.' }
-    if ($Scenario -eq 'DetailClose' -and ($commandTime -ge $releaseTime -or $releaseTime -ge $releasedTime -or $releasedTime -ge $closedTime)) { throw 'DetailClose requires strictly ordered close/release/released/closed receipts.' }
+    if ($isClose -and ($commandTime -ge $releaseTime -or $releaseTime -ge $releasedTime -or $releasedTime -ge $closedTime)) { throw "$Scenario requires strictly ordered close/release/released/closed receipts." }
     if ($closed.PSObject.Properties['closeError'] -and $closed.closeError) { throw "Source Close failed: $($closed.closeError)" }
     $result.uiObservation = [ordered]@{ source = 'Operator supplied; verify against the native screenshot'; state = $ObservedState; tags = $ObservedTagCount }
     $result.orderlySourceClose = $true

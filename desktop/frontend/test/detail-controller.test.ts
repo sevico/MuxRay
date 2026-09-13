@@ -35,7 +35,8 @@ function setup(overrides: Partial<API> = {}) {
     close: async id => ({ apiVersion: 1, session: { ...terminal(id), closed: true }, error: null }),
     tags: async request => ({ apiVersion: 1, error: null, page: { sessionId: request.sessionId, bounds: { start: request.start, total: '3', next: '3', limit: 100 }, tags: ['0', '1', '9007199254740993'].map(tag) } }),
     diagnostics: async request => ({ apiVersion: 1, error: null, page: { sessionId: request.sessionId, bounds: { start: request.start, total: '0', next: '0', limit: 100 }, diagnostics: [] } }),
-    startDetail: async request => ready(request), detailResult: async () => { throw Error('unexpected detail poll'); }, ...overrides,
+    startDetail: async request => ready(request), detailResult: async () => { throw Error('unexpected detail poll'); },
+    startHex: async () => { throw Error('unexpected Hex request'); }, hexResult: async () => { throw Error('unexpected Hex query'); }, ...overrides,
   };
   return { controller: new Controller(api, clock), clock };
 }

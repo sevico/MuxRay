@@ -2,7 +2,7 @@
 
 这组工具从新 checkout 生成独立的验收程序和结构样本，用真实 Windows 文件选择器、Wails IPC 和文档生命周期复现取消及阻塞退出。正常产品代码不含 gate；工具只通过 Go `-overlay` 替换本次构建读到的 `document.go`，不会修改仓库 Go 源文件。ADR-013 之后扫描终态仍保留源，只有关闭文档才释放句柄。
 
-`build.ps1` 和 `verify.ps1` 的 `-GateMode` 默认为 `Scan`，也可显式选择 `Detail`、`AVCDetail` 或 `MP3Detail`。四种样本均为确定性生成的 FLV，不是可播放媒体。gate 只匹配本 run 的绝对样本路径，故意忽略取消，直到同一进程身份的 release 收据发布；这是受控 I/O 实验，不能称为正常生产程序的自然慢盘实测。
+`build.ps1` 和 `verify.ps1` 的 `-GateMode` 默认为 `Scan`，也可显式选择 `Detail`、`AVCDetail`、`MP3Detail` 或 `Hex`。五种模式使用确定性生成的 FLV，不是可播放媒体。gate 只匹配本 run 的绝对样本路径，故意忽略取消，直到同一进程身份的 release 收据发布；这是受控 I/O 实验，不能称为正常生产程序的自然慢盘实测。
 
 | GateMode | 结构样本 | gate 位置 | 允许的原生检查 |
 | --- | --- | --- | --- |
@@ -10,8 +10,11 @@
 | Detail | 497 byte，首 Tag 为 `AF 00 12 10` AAC-LC 配置，其余 31 个空 Script Tag，FLV audio 标志置位 | 扫描完成 32 Tag 后，首次详情读取第 67 次 ReadAt，offset 24 | DetailClose |
 | AVCDetail | 504 byte，首 Tag 为 `17 01 00 00 00 00 00 00 02 65 88` 孤立 AVC NALU 包，其余 31 个空 Script Tag，FLV video 标志置位 | 扫描完成 32 Tag 后，首次详情探测第 67 次 ReadAt，offset 24 | DetailClose |
 | MP3Detail | 498 byte，首 Tag 为 `2F FF FB 90 00` FLV MP3 声音头与 MPEG-1 Layer III 固定头，其余 31 个空 Script Tag，FLV audio 标志置位 | 扫描完成 32 Tag 后，首次详情探测第 67 次 ReadAt，offset 24 | DetailClose |
+| Hex | 493 byte，与 Scan 样本字节相同 | 扫描完成 32 Tag 后，点击 Tag 0 偏移，首次 Hex 读取第 67 次 ReadAt，offset 13 | HexClose |
 
 Scan 样本 SHA-256 为 `9758dc3635a5e05a780ffe4cd40659b243d2d23a4a9e704762add90fcd4c34fb`，Detail 样本为 `16346b21c3e84be9a1d398f330a0023b5ba3b5df5a5c74d8756b5cda8f1e4437`，AVCDetail 样本为 `8b9d282048f76e6cc7fa6821a83ce8c02726a2dd91592b8da493b421ba4cdda9`，MP3Detail 样本为 `d6414212c5fb29d116fdf198ae7a1ab66ab688956d6fbfbfee7a16e2cfb10543`。实际 fixture SHA-256、模式、读取次数、gate 偏移、文件长度和已提交 Tag 数均写入 `build-record.json`；收据和检查必须匹配这些参数。旧 v1 Scan 记录仍可读取，不修改历史 JSON。
+
+Hex 样本沿用 Scan 的 SHA-256；模式及 gate 参数独立校验，不能混用两种 run 的收据。
 
 AVCDetail 首 Tag 没有前置 sequence header。它用于验证 AVC 首次读取阻塞时的文档关闭协议，不用于证明 NAL 长度或视频解码正确；缺配置时产品保留包头并明确报告长度上下文不可用。AVC 上下文与位置语义见 [ADR-014](../../docs/decisions/014-bounded-desktop-avc-context.md)。
 
@@ -40,7 +43,7 @@ $scripts = Join-Path $repo 'tools\desktop-native'
 
 `verify.ps1` 不启动 GUI：在独立测试 overlay 中运行带 race 检查的真实文件文档测试，核对完整样本 32 Tag、gate、`running → canceling → canceled`、保留 ID 0–9、取消后仍可请求前缀 AMF 详情（空 payload 会有语义诊断）、文档 Close 才关闭源、Close 后拒绝分页，以及文件可独占打开。它不能代替以下原生交互验收。
 
-`self-test.ps1` 在内存中验证 JSON 收据时间，覆盖 Windows PowerShell 5.1 的字符串和 PowerShell 7 的 `DateTime` 反序列化，保留 UTC 身份及 .NET 的 100 ns 精度，防止时区偏移导致误判 PID 复用或丢失退出耗时的小数部分。同时验证四种 fixture 的固定 SHA-256、gate 参数、旧 Scan 收据兼容与模式/场景错配拒绝。该测试不创建 run 或修改旧收据。
+`self-test.ps1` 在内存中验证 JSON 收据时间，覆盖 Windows PowerShell 5.1 的字符串和 PowerShell 7 的 `DateTime` 反序列化，保留 UTC 身份及 .NET 的 100 ns 精度，防止时区偏移导致误判 PID 复用或丢失退出耗时的小数部分。同时验证五种模式的固定 fixture SHA-256、gate 参数、旧 Scan 收据兼容与模式/场景错配拒绝。该测试不创建 run 或修改旧收据。
 
 ## 原生取消
 
@@ -115,6 +118,91 @@ $detailRun = 'C:\work\native acceptance\mp3-detail-close-001'
 ```
 
 检查要求 `close-command < release < released < closed`，所有收据属于同一 run 和进程、source Close 无错误、fixture 可独占打开。`closing/32` 是 **Release 前**操作者观察的状态；MarkClose 仅证明操作意图记录，不能代替按钮操作、关闭中截图或释放后的空状态。DetailClose 不能用于 Scan run；Cancel、Exit、MarkCancel、MarkExit 和退出 watcher 也不能用于任何详情 gate run。
+
+## Hex 读取阻塞时关闭文件
+
+Hex 使用独立 run。样本与 Scan 相同，先扫描完整 32 Tag，再通过 Tag 表中的偏移按钮
+请求原始范围；此时才进入 gate。
+
+```powershell
+$hexVerify = 'C:\work\native acceptance\hex-verify-001'
+$hexRun = 'C:\work\native acceptance\hex-close-001'
+& "$scripts\verify.ps1" -Repository $repo -RunDirectory $hexVerify -GateMode Hex
+& "$scripts\build.ps1" -Repository $repo -RunDirectory $hexRun -GateMode Hex
+```
+
+非 GUI race 验证调用 `StartHex(1, 13, 512)`，实测在第 67 次 ReadAt、offset 13 进入
+gate。已提交 32 Tag；剩余文件只有 480 byte，实际读取范围受 EOF 限制。
+关闭请求必须立即使文档 `closed=true`、`terminal=false`，拒绝新/旧 Hex 查询、详情
+和分页；释放 gate 后 Close 返回 nil、源关闭且文件可独占打开。
+
+原生验收步骤：
+
+1. 启动该 run 的 exe，通过原生选择器打开 `native-controlled.flv`，等待 32 Tag 扫描结束，确认没有 `entered.json`。
+2. 首次读取操作必须点击 **Tag 0 的偏移 13** 按钮。不要先点击 Tag ID 请求详情，也不要跳到其他地址；gate 使用固定读取序号，错误操作会使 run 失败并保留证据。
+3. 等待 Hex 读取中和 `entered.json`，确认模式 Hex、read 67、offset 13、32 Tag。运行 MarkClose 后立即点击真实窗口“关闭文件”，截图确认“正在关闭”、详情与 Hex 内容清空且无法发起新请求。
+
+```powershell
+& "$scripts\control.ps1" -RunDirectory $hexRun -Action Status
+& "$scripts\control.ps1" -RunDirectory $hexRun -Action MarkClose
+# 现在点击真实窗口“关闭文件”，截图确认关闭中；此时应没有 closed.json。
+& "$scripts\control.ps1" -RunDirectory $hexRun -Action Release
+```
+
+4. 等待 `closed.json` 和窗口空状态，再运行检查，最后正常关闭程序。
+
+```powershell
+& "$scripts\check.ps1" -RunDirectory $hexRun -Scenario HexClose -ObservedState closing -ObservedTagCount 32
+```
+
+HexClose 与 DetailClose 使用相同的严格 `close-command < release < released < closed`
+顺序和进程/产物身份检查，但各自只接受兼容的 gate 模式。MarkClose 仍只是操作意图，
+`closing/32` 来自 Release 前操作者的真实观察，必须保留截图。Cancel、Exit 和
+DetailClose 均不能用于 Hex run；控制器没有 reset 或自动 GUI 操作。
+
+## Hex 生产窗口与联动样本
+
+```powershell
+python -B tools/desktop-native/hex_fixtures.py --output-dir 'C:\work\hex-fixtures-new'
+python -B -m unittest discover -s tools/desktop-native -p 'hex_fixtures_test.py' -v
+```
+
+生成器只用标准库，拒绝相对路径和已有目录，不生成大文件。默认产物如下；
+`fixtures.json` 保存文件长度/SHA-256、所有 Tag 的 ID/偏移、可点击字段名称与
+byte/bit span、诊断位置，以及请求窗口的预期十六进制字节、长度与 EOF 标志。
+字段的 `links` 为 null 表示派生值没有原始位置，不能提供跳转按钮。
+
+| 文件 | 长度 | 预期 |
+| --- | ---: | --- |
+| `hex-details.flv` | 4776 byte | 106 Tag，包含四种详情编码、未知 Tag 和短 AAC 语法诊断；结构索引完整，未知类型会有警告 |
+| `hex-change.flv` | 4776 byte | 独立的相同内容副本，打开后受控改变大小/mtime，后续 Hex 请求应为 `source_changed` |
+| `hex-truncated.flv` | 4789 byte | 追加 ID 106，payload 声明 10 byte、仅有 `AF 00`；详情拒绝，Hex 可读取现存原始字节 |
+
+普通生产窗口打开 `hex-details.flv`。先在 Tag 表点击偏移，再选择 Tag 详情和字段
+位置，核对内容身份、Hex 高亮与下表位置。Hex 请求会与详情共用单个读取 worker；
+快速切换不能把旧文件、旧 Tag 或旧窗口的迟到结果显示出来。
+
+| Tag ID / 点击目标 | 原始位置与预期 |
+| --- | --- |
+| 0：`boundary` 下的 `value` | byte 51、bit 0、8192 bit；1024 个 `0123456789ABCDEF` 循环字节。字段预览有省略，但原始 span 完整；从 51 读取 512 byte，下一窗口从 563 开始，均应保留字段高亮 |
+| 1：`initialAudioObjectType` / `samplingFrequencyIndex` | byte 1095，前者从 bit 0 起共 5 bit，后者从 bit 5 起共 4 bit；后者跨到 byte 1096，值为 4 |
+| 2：`lengthSizeMinusOne` | byte 1121、bit 6、2 bit，值 3；`SPS summary` 属于派生字段，没有可跳转 span |
+| 3：`syncWord` | byte 1171、bit 0、11 bit，值 0x7ff；派生 `bitrateKbps`、`frameLengthBytes` 没有跳转位置 |
+| 4：`nalUnitType` | byte 1199、bit 3、5 bit，值 5；来自 Tag 2 的配置上下文 |
+| 5：未知 Tag / 结构诊断 | Tag offset 1205，payload offset 1216、2048 byte，为 `00..FF` 循环。详情不支持，原始范围与 `FLV_TAG_TYPE_UNKNOWN` 诊断位置仍可跳转 |
+| 6：短 AAC 诊断 | `AAC_SAMPLING_FREQUENCY_INDEX_TRUNCATED` 位于 byte 3282、bit 0，是 ASC payload 后首次不可用的位置；Hex 显示的是这里真实存在的 FLV PreviousTagSize 字节，不能把它当作 ASC 内容 |
+| 105：第二页 MP3 | Tag offset 4756，payload `2F FF FB 92 C0`；`padding` 在 byte 4770、bit 6、1 bit。跳至 ID 105 后应切到包含该 Tag 的索引页，不能仍显示首页 Tag 的内容 |
+
+使用地址输入和前后窗口按钮覆盖跨窗、EOF 与未索引数据：主样本地址 4771 请求
+512 byte 实际只剩 `C0 00 00 00 10`；地址 4776 是合法 EOF 空窗口，不能伪造字节。
+截断副本地址 4787 只剩 `AF 00`，即使该 Tag 不能解析详情也可在 Hex 中检查。
+超过文件末尾的地址必须拒绝。清单另给出 4096 byte 上限窗口和超限请求，供协议层
+回归使用；原生界面默认使用 512 byte 窗口。
+
+大文件场景可直接复用此前生成并验证过的 `mp3-large.flv`，不必再次生成。1024 MiB
+填充版本为 1,082,131,440 byte，尾 Tag 65 offset 1,073,742,812；核对既有清单及
+SHA-256 后，通过尾 Tag 或精确地址读取 512 byte，确认地址没有精度损失。
+读取末尾窗口只检查请求范围，不代表加载全文或解码音频。
 
 ## AMF0/AAC 生产窗口流程
 

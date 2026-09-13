@@ -18,6 +18,10 @@ export function GetDiagnostics(arg1) {
   return window['go']['desktop']['Bindings']['GetDiagnostics'](arg1);
 }
 
+export function GetHex(arg1) {
+  return window['go']['desktop']['Bindings']['GetHex'](arg1);
+}
+
 export function GetSession(arg1) {
   return window['go']['desktop']['Bindings']['GetSession'](arg1);
 }
@@ -32,4 +36,8 @@ export function OpenFile(arg1) {
 
 export function StartDetail(arg1) {
   return window['go']['desktop']['Bindings']['StartDetail'](arg1);
+}
+
+export function StartHex(arg1) {
+  return window['go']['desktop']['Bindings']['StartHex'](arg1);
 }

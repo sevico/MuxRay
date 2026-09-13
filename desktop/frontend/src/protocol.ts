@@ -39,6 +39,12 @@ export interface DetailResponse {
   apiVersion: number; sessionId: string; requestId: string; tagId: string;
   state: 'pending' | 'ready' | 'failed'; detail: Detail | null; error: Fault | null;
 }
+export interface HexRequest { sessionId: string; requestId: string; offset: string; count: number }
+export interface HexWindow { offset: string; sourceSize: string; hex: string; eof: boolean }
+export interface HexResponse {
+  apiVersion: number; sessionId: string; requestId: string; offset: string; count: number;
+  state: 'pending' | 'ready' | 'failed'; window: HexWindow | null; error: Fault | null;
+}
 export interface API {
   open(requestId: string): Promise<PickResponse>;
   openResult(requestId: string): Promise<PickResponse>;
@@ -49,4 +55,6 @@ export interface API {
   diagnostics(request: PageRequest): Promise<PageResponse<DiagnosticPage>>;
   startDetail(request: DetailRequest): Promise<DetailResponse>;
   detailResult(request: DetailQuery): Promise<DetailResponse>;
+  startHex(request: HexRequest): Promise<HexResponse>;
+  hexResult(request: DetailQuery): Promise<HexResponse>;
 }

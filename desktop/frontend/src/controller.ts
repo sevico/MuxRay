@@ -1,5 +1,7 @@
-import type { API, Detail, DetailRequest, DetailResponse, DiagnosticPage, PageResponse, PickResponse, Session, SessionResponse, Tag, TagPage } from './protocol.ts';
+import type { API, Detail, DetailRequest, DetailResponse, DiagnosticPage, HexRequest, HexResponse, HexWindow, PageResponse, PickResponse, Session, SessionResponse, Tag, TagPage } from './protocol.ts';
 import { unsigned } from './numbers.ts';
+import { HEX_WINDOW_BYTES, validateHexWindow, validateSelection } from './hex.ts';
+import type { HexSelection } from './hex.ts';
 
 export const PAGE_SIZE = 100;
 export const POLL_MS = 200;
@@ -22,6 +24,13 @@ export interface ViewState {
   detailState: '' | 'loading' | 'pending' | 'recovering' | 'ready' | 'failed';
   detailError: string | null;
   detailRetry: '' | 'confirm' | 'reload';
+  hex: HexWindow | null;
+  hexSelection: HexSelection | null;
+  hexState: '' | 'loading' | 'pending' | 'recovering' | 'ready' | 'failed';
+  hexError: string | null;
+  hexRetry: '' | 'confirm' | 'reload';
+  tagJumpError: string | null;
+  sourceChanged: boolean;
 }
 export interface Scheduler { after(fn: () => void, ms: number): () => void }
 const scheduler: Scheduler = {
@@ -30,7 +39,7 @@ const scheduler: Scheduler = {
 
 class RequestError extends Error {}
 class ReplyUnconfirmed extends Error {}
-type ReplySlot = 'open' | 'command' | 'status' | 'page' | 'detail';
+type ReplySlot = 'open' | 'command' | 'status' | 'page' | 'detail' | 'hex';
 function check(response: { apiVersion: number; error: { code: string } | null }): void {
   if (response.apiVersion !== 1) throw new RequestError('incompatible_api');
   if (response.error) throw new RequestError(response.error.code);
@@ -62,13 +71,29 @@ function detailResult(response: DetailResponse, request: DetailRequest): DetailR
   return response;
 }
 
+function hexResult(response: HexResponse, request: HexRequest): HexResponse {
+  if (response.apiVersion !== 1) throw new RequestError('incompatible_api');
+  const initialFailure = response.state === 'failed' && response.error && response.count === 0 && (response.offset === '' || response.offset === request.offset);
+  if (response.sessionId !== request.sessionId || response.requestId !== request.requestId ||
+      (!initialFailure && (response.offset !== request.offset || response.count !== request.count))) throw new RequestError('invalid_response');
+  if (response.state === 'failed') {
+    if (!response.error || response.window) throw new RequestError('invalid_response');
+  } else if (response.state === 'pending') {
+    if (response.error || response.window) throw new RequestError('invalid_response');
+  } else if (response.state === 'ready') {
+    if (response.error || !response.window || response.window.offset !== request.offset) throw new RequestError('invalid_response');
+    try { validateHexWindow(response.window, request.count); } catch { throw new RequestError('invalid_response'); }
+  } else throw new RequestError('invalid_response');
+  return response;
+}
+
 // Framework-independent controller: one poll, one page, one user command at a
 // time. Old replies cannot overwrite a close/cancel/new-session transition.
 export class Controller {
   private api: API;
   private clock: Scheduler;
   private listeners = new Set<() => void>();
-  private state: ViewState = { fileName: '', session: null, operation: '', error: null, tab: 'tags', start: '0', page: null, loading: false, selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '' };
+  private state: ViewState = { fileName: '', session: null, operation: '', error: null, tab: 'tags', start: '0', page: null, loading: false, selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '', hex: null, hexSelection: null, hexState: '', hexError: null, hexRetry: '', tagJumpError: null, sourceChanged: false };
   private disposed = false;
   private statusVersion = 0;
   private pageVersion = 0;
@@ -82,13 +107,20 @@ export class Controller {
   private openingID: string | null = null;
   private stopTimer: (() => void) | null = null;
   private replyStops = new Map<ReplySlot, () => void>();
-  private nextDetailID = 0n;
+  private nextReadID = 0n;
   private detailRequest: DetailRequest | null = null;
   private detailPhase: 'start' | 'get' = 'start';
   private detailBusy = false;
   private detailPaused = false;
   private detailPolls = 0;
   private stopDetailTimer: (() => void) | null = null;
+  private jumpTagId: string | null = null;
+  private hexRequest: HexRequest | null = null;
+  private hexPhase: 'start' | 'get' = 'start';
+  private hexBusy = false;
+  private hexPaused = false;
+  private hexPolls = 0;
+  private stopHexTimer: (() => void) | null = null;
 
   constructor(api: API, clock: Scheduler = scheduler) { this.api = api; this.clock = clock; }
   getSnapshot = (): ViewState => this.state;
@@ -107,11 +139,13 @@ export class Controller {
       this.pageVersion++;
       this.replyStops.get('page')?.();
       this.refreshStatus = false;
-      this.update({ session: null, fileName: '', operation: '', page: null, loading: false, start: '0' });
+      this.jumpTagId = null;
+      this.update({ session: null, fileName: '', operation: '', page: null, loading: false, start: '0', sourceChanged: false, error: null });
     } else {
       if (session.closed) this.clearDetail();
       this.update({ session, operation: session.closed ? 'closing' : '' });
       this.ensureDetail();
+      this.ensureHex();
     }
   }
   async open(): Promise<void> {
@@ -169,12 +203,12 @@ export class Controller {
     check(result);
     if (session) {
       this.clearDetail();
-      this.nextDetailID = 0n;
+      this.nextReadID = 0n;
       this.statusVersion++;
       this.pageVersion++;
       this.pollFailed = false;
       this.refreshStatus = false;
-      this.update({ fileName: result.fileName, tab: 'tags', start: '0', page: null });
+      this.update({ fileName: result.fileName, tab: 'tags', start: '0', page: null, sourceChanged: false });
       this.accept(session);
     }
   }
@@ -259,13 +293,14 @@ export class Controller {
   select(tab: Tab, start = '0'): void {
     try { unsigned(start); } catch { this.update({ error: 'invalid_argument' }); return; }
     this.pageVersion++;
+    this.jumpTagId = null;
     this.clearDetail();
     this.update({ tab, start, page: null, loading: false, error: this.openingID || this.refreshStatus || this.pollFailed ? this.state.error : null });
     this.ensurePage();
   }
   private ready(): boolean {
     const session = this.state.session;
-    return !!session?.terminal && !session.closed && session.scan !== null && this.state.operation !== 'closing';
+    return !!session?.terminal && !session.closed && session.scan !== null && this.state.operation !== 'closing' && !this.state.sourceChanged;
   }
   private ensurePage(): void {
     if (this.disposed || this.paging || this.refreshStatus || this.pollFailed || !this.ready() || this.state.page) return;
@@ -282,7 +317,13 @@ export class Controller {
       const result: VisiblePage = tab === 'tags'
         ? { tab, data: pageResult(await this.awaitReply('page', () => this.api.tags(request)), session.sessionId, start) }
         : { tab, data: pageResult(await this.awaitReply('page', () => this.api.diagnostics(request)), session.sessionId, start) };
-      if (!this.disposed && version === this.pageVersion && this.state.session?.sessionId === session.sessionId && this.ready()) this.update({ page: result });
+      if (!this.disposed && version === this.pageVersion && this.state.session?.sessionId === session.sessionId && this.ready()) {
+        this.update({ page: result });
+        if (this.jumpTagId && result.tab === 'tags') {
+          const id = this.jumpTagId; this.jumpTagId = null;
+          this.selectTag(id);
+        }
+      }
     } catch (error) {
       if (!this.disposed && version === this.pageVersion && this.state.session?.sessionId === session.sessionId) this.update({ error: errorCode(error) });
     } finally {
@@ -292,7 +333,7 @@ export class Controller {
     }
   }
   retry(): void {
-    if (this.disposed || this.replyStops.has('command') || this.state.operation === 'picking') return;
+    if (this.disposed || this.replyStops.has('command') || this.state.operation === 'picking' || this.state.sourceChanged) return;
     this.update({ error: null });
     this.pollFailed = false;
     if (this.state.session) this.refreshStatus = true;
@@ -303,9 +344,10 @@ export class Controller {
     if (this.disposed || !this.ready() || this.refreshStatus || this.pollFailed || this.state.page?.tab !== 'tags') return;
     const tag = this.state.page.data.tags.find(item => item.id === tagId);
     if (!tag || this.state.selectedTag?.id === tagId) return;
-    if (this.nextDetailID === 18446744073709551615n) { this.update({ detailError: 'id_exhausted' }); return; }
+    if (this.nextReadID === 18446744073709551615n) { this.update({ detailError: 'id_exhausted' }); return; }
+    this.clearHex();
     this.stopDetailTimer?.(); this.stopDetailTimer = null;
-    this.detailRequest = { sessionId: this.state.session!.sessionId, requestId: (++this.nextDetailID).toString(), tagId };
+    this.detailRequest = { sessionId: this.state.session!.sessionId, requestId: (++this.nextReadID).toString(), tagId };
     this.detailPhase = 'start'; this.detailPaused = false; this.detailPolls = 0;
     this.update({ selectedTag: tag, detail: null, detailState: 'loading', detailError: null, detailRetry: '' });
     // Keep one IPC wait. If an older reply is in flight, coalesce selections
@@ -313,6 +355,7 @@ export class Controller {
     this.ensureDetail();
   }
   private clearDetail(): void {
+    this.clearHex();
     this.detailRequest = null;
     this.detailPaused = false;
     this.stopDetailTimer?.(); this.stopDetailTimer = null;
@@ -342,6 +385,7 @@ export class Controller {
       } else if (response.state === 'failed') {
         this.detailPaused = true;
         const code = response.error!.code;
+        if (code === 'source_changed') { this.invalidateSource(); return; }
         this.update({ detailState: 'failed', detailError: code, detailRetry: code === 'detail_not_found' ? 'confirm' : ['detail_failed', 'deadline_exceeded', 'canceled'].includes(code) ? 'reload' : '' });
       } else {
         this.detailPhase = 'get';
@@ -371,12 +415,122 @@ export class Controller {
     // Unconfirmed work keeps its identity. An explicitly failed read is cached
     // by the host, so only a deliberate new read advances the request number.
     if (this.state.detailRetry === 'reload') {
-      if (this.nextDetailID === 18446744073709551615n) { this.update({ detailError: 'id_exhausted', detailRetry: '' }); return; }
-      this.detailRequest = { ...this.detailRequest, requestId: (++this.nextDetailID).toString() };
+      if (this.nextReadID === 18446744073709551615n) { this.update({ detailError: 'id_exhausted', detailRetry: '' }); return; }
+      this.clearHex();
+      this.detailRequest = { ...this.detailRequest, requestId: (++this.nextReadID).toString() };
     }
     this.detailPhase = 'start'; this.detailPaused = false; this.detailPolls = 0;
     this.update({ detailState: 'loading', detailError: null, detailRetry: '' });
     this.ensureDetail();
+  }
+  jumpTag(text: string): void {
+    if (this.disposed || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    try {
+      const id = unsigned(text), total = unsigned(this.state.session!.progress!.tagCount);
+      if (id >= total) throw new Error('Out of range.');
+      this.select('tags', (id / BigInt(PAGE_SIZE) * BigInt(PAGE_SIZE)).toString());
+      this.jumpTagId = id.toString();
+      this.update({ tagJumpError: null });
+    } catch { this.update({ tagJumpError: 'tag_not_found' }); }
+  }
+  showHex(selection: HexSelection): void {
+    if (this.disposed || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    try {
+      validateSelection(selection);
+      if (unsigned(selection.offset) > unsigned(this.state.session!.progress!.sourceSize)) throw new Error('Out of range.');
+    } catch { this.update({ hexError: 'invalid_argument' }); return; }
+    this.requestHex(selection.offset, selection);
+  }
+  jumpHex(offset: string): void { this.showHex({ offset, bitOffset: 0, bitLength: null, label: '指定位置' }); }
+  pageHex(direction: -1 | 1): void {
+    const window = this.state.hex;
+    if (!window || this.disposed || !this.ready()) return;
+    const next = unsigned(window.offset) + BigInt(direction * HEX_WINDOW_BYTES), size = unsigned(window.sourceSize);
+    this.requestHex((next < 0n ? 0n : next > size ? size : next).toString(), this.state.hexSelection);
+  }
+  private pauseDetailForHex(): void {
+    if (!this.detailRequest) return;
+    // Change local identity to reject older replies. An already completed field
+    // table remains visible alongside its bytes; unfinished detail is retryable.
+    this.detailRequest = { ...this.detailRequest };
+    this.detailPaused = true;
+    this.stopDetailTimer?.(); this.stopDetailTimer = null;
+    this.replyStops.get('detail')?.();
+    if (this.state.detailState !== 'ready') this.update({ detailState: 'failed', detailError: 'detail_superseded', detailRetry: 'reload' });
+  }
+  private requestHex(offset: string, selection: HexSelection | null): void {
+    if (this.disposed || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.nextReadID === 18446744073709551615n) { this.update({ hexError: 'id_exhausted' }); return; }
+    this.pauseDetailForHex();
+    this.stopHexTimer?.(); this.stopHexTimer = null;
+    this.hexRequest = { sessionId: this.state.session!.sessionId, requestId: (++this.nextReadID).toString(), offset, count: HEX_WINDOW_BYTES };
+    this.hexPhase = 'start'; this.hexPaused = false; this.hexPolls = 0;
+    this.update({ hex: null, hexSelection: selection, hexState: 'loading', hexError: null, hexRetry: '' });
+    this.ensureHex();
+  }
+  private clearHex(): void {
+    this.hexRequest = null; this.hexPaused = false;
+    this.stopHexTimer?.(); this.stopHexTimer = null;
+    this.replyStops.get('hex')?.();
+    this.update({ hex: null, hexSelection: null, hexState: '', hexError: null, hexRetry: '', tagJumpError: null });
+  }
+  private invalidateSource(): void {
+    this.clearDetail();
+    this.pageVersion++; this.jumpTagId = null;
+    this.replyStops.get('page')?.();
+    this.update({ sourceChanged: true, error: 'source_changed', page: null, loading: false });
+  }
+  private ensureHex(): void {
+    if (this.disposed || this.hexBusy || this.hexPaused || this.stopHexTimer || !this.hexRequest || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.hexPhase === 'start') void this.loadHex();
+    else this.stopHexTimer = this.clock.after(() => { this.stopHexTimer = null; void this.loadHex(); }, POLL_MS);
+  }
+  private currentHex(request: HexRequest): boolean {
+    return !this.disposed && this.hexRequest === request && this.state.session?.sessionId === request.sessionId && this.ready();
+  }
+  private async loadHex(): Promise<void> {
+    const request = this.hexRequest;
+    if (!request || this.hexBusy || this.disposed || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    const phase = this.hexPhase;
+    this.hexBusy = true;
+    try {
+      const raw = await this.awaitReply('hex', () => phase === 'start' ? this.api.startHex(request) : this.api.hexResult({ sessionId: request.sessionId, requestId: request.requestId }));
+      if (!this.currentHex(request)) return;
+      const response = hexResult(raw, request);
+      if (response.state === 'ready') {
+        this.hexPaused = true;
+        this.update({ hex: response.window, hexState: 'ready', hexError: null, hexRetry: '' });
+      } else if (response.state === 'failed') {
+        this.hexPaused = true;
+        const code = response.error!.code;
+        if (code === 'source_changed') { this.invalidateSource(); return; }
+        this.update({ hexState: 'failed', hexError: code, hexRetry: code === 'hex_not_found' ? 'confirm' : ['hex_failed', 'deadline_exceeded', 'canceled'].includes(code) ? 'reload' : '' });
+      } else {
+        this.hexPhase = 'get';
+        if (phase === 'get' && ++this.hexPolls >= DETAIL_POLL_LIMIT) {
+          this.hexPaused = true;
+          this.update({ hexState: 'failed', hexError: 'deadline_exceeded', hexRetry: 'confirm' });
+        } else this.update({ hexState: 'pending', hexError: null });
+      }
+    } catch (error) {
+      if (!this.currentHex(request)) return;
+      if (phase === 'start' && !(error instanceof RequestError)) {
+        this.hexPhase = 'get'; this.update({ hexState: 'recovering', hexError: null });
+      } else {
+        this.hexPaused = true;
+        this.update({ hexState: 'failed', hexError: errorCode(error), hexRetry: error instanceof RequestError ? '' : 'confirm' });
+      }
+    } finally { this.hexBusy = false; this.ensureHex(); }
+  }
+  retryHex(): void {
+    if (this.disposed || this.hexBusy || !this.hexPaused || !this.hexRequest || !this.state.hexRetry || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.state.hexRetry === 'reload') {
+      if (this.nextReadID === 18446744073709551615n) { this.update({ hexError: 'id_exhausted' }); return; }
+      this.hexRequest = { ...this.hexRequest, requestId: (++this.nextReadID).toString() };
+    }
+    this.hexPhase = 'start'; this.hexPaused = false; this.hexPolls = 0;
+    this.update({ hexState: 'loading', hexError: null, hexRetry: '' });
+    this.ensureHex();
   }
   dispose(): void {
     this.disposed = true;
@@ -384,6 +538,8 @@ export class Controller {
     this.stopTimer?.(); this.stopTimer = null;
     this.detailRequest = null;
     this.stopDetailTimer?.(); this.stopDetailTimer = null;
+    this.hexRequest = null;
+    this.stopHexTimer?.(); this.stopHexTimer = null;
     for (const stop of this.replyStops.values()) stop();
     this.replyStops.clear();
     this.listeners.clear();

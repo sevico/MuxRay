@@ -42,7 +42,8 @@ function Get-GateSettings([string]$Mode) {
         'Detail' { return [ordered]@{ gateMode = 'Detail'; gateReadCall = 67; gateOffset = 24; committedTags = 32; fixtureBytes = 497; fixtureTags = 32 } }
         'AVCDetail' { return [ordered]@{ gateMode = 'AVCDetail'; gateReadCall = 67; gateOffset = 24; committedTags = 32; fixtureBytes = 504; fixtureTags = 32 } }
         'MP3Detail' { return [ordered]@{ gateMode = 'MP3Detail'; gateReadCall = 67; gateOffset = 24; committedTags = 32; fixtureBytes = 498; fixtureTags = 32 } }
-        default { throw 'Unsupported gate mode; use Scan, Detail, AVCDetail or MP3Detail.' }
+        'Hex' { return [ordered]@{ gateMode = 'Hex'; gateReadCall = 67; gateOffset = 13; committedTags = 32; fixtureBytes = 493; fixtureTags = 32 } }
+        default { throw 'Unsupported gate mode; use Scan, Detail, AVCDetail, MP3Detail or Hex.' }
     }
 }
 
@@ -52,11 +53,16 @@ function Assert-GateReceipt($Run, $Entered) {
     }
     if ($Entered.PSObject.Properties['gateMode']) {
         if ($Entered.gateMode -ne $Run.gateMode) { throw 'Gate receipt mode differs from its build record.' }
-    } elseif ($Run.gateMode -ne 'Scan') { throw 'Detail gate receipts must identify their mode.' }
+    } elseif ($Run.gateMode -ne 'Scan') { throw 'Content gate receipts must identify their mode.' }
 }
 
 function Assert-GateScenario($Run, [string]$Scenario) {
-    $modes = if ($Scenario -eq 'DetailClose') { @('Detail', 'AVCDetail', 'MP3Detail') } elseif ($Scenario -in @('Cancel', 'Exit')) { @('Scan') } else { throw 'Unknown acceptance scenario.' }
+    $modes = switch ($Scenario) {
+        'DetailClose' { @('Detail', 'AVCDetail', 'MP3Detail') }
+        'HexClose' { @('Hex') }
+        { $_ -in @('Cancel', 'Exit') } { @('Scan') }
+        default { throw 'Unknown acceptance scenario.' }
+    }
     if ($Run.gateMode -notin $modes) { throw "$Scenario requires a compatible gate run: $($modes -join ', ')." }
 }
 
@@ -93,7 +99,7 @@ function Read-Receipt($Run, [string]$Name) {
     }
     if ($receipt.PSObject.Properties['gateMode']) {
         if ($receipt.gateMode -ne $Run.gateMode) { throw "Receipt gate mode mismatch: $Name" }
-    } elseif ($Run.gateMode -ne 'Scan') { throw "Detail receipt is missing its gate mode: $Name" }
+    } elseif ($Run.gateMode -ne 'Scan') { throw "Content receipt is missing its gate mode: $Name" }
     return $receipt
 }
 
@@ -241,7 +247,8 @@ function Get-FramingFixtureBytes([string]$GateMode = 'Scan') {
     # Detail/AVCDetail/MP3Detail change only Tag 0; the remaining 31 tags are empty
     # ScriptData. These fixtures exercise reads, not playable media.
     $gate = Get-GateSettings $GateMode
-    $detail = $gate.gateMode -ne 'Scan'
+    # Hex deliberately reuses the original Scan bytes; only the gate differs.
+    $detail = $gate.gateMode -in @('Detail', 'AVCDetail', 'MP3Detail')
     [byte[]]$payload = @()
     $tagType = 18
     if ($gate.gateMode -eq 'Detail') { $payload = [byte[]]@(0xaf, 0, 0x12, 0x10); $tagType = 8 }

@@ -17,7 +17,7 @@ if ($Action -eq 'Status') {
 switch ($Action) {
     'MarkCancel' { Assert-GateScenario $run 'Cancel' }
     'MarkExit' { Assert-GateScenario $run 'Exit' }
-    'MarkClose' { Assert-GateScenario $run 'DetailClose' }
+    'MarkClose' { Assert-GateScenario $run $(if ($run.gateMode -eq 'Hex') { 'HexClose' } else { 'DetailClose' }) }
 }
 $entered = Read-Receipt $run 'entered.json'
 Assert-GateReceipt $run $entered

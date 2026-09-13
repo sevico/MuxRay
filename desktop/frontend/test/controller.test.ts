@@ -41,7 +41,8 @@ function setup(override: Partial<Omit<API, 'open'>> & { open?: (requestId: strin
     status: async () => response(terminal()), cancel: async () => response(snapshot({ state: 'canceling' })),
     close: async () => response(terminal({ closed: true })),
     tags: async () => tagPage(), diagnostics: async () => diagnosticPage(),
-    startDetail: async () => { throw new Error('unexpected detail request'); }, detailResult: async () => { throw new Error('unexpected detail query'); }, ...rest,
+    startDetail: async () => { throw new Error('unexpected detail request'); }, detailResult: async () => { throw new Error('unexpected detail query'); },
+    startHex: async () => { throw new Error('unexpected Hex request'); }, hexResult: async () => { throw new Error('unexpected Hex query'); }, ...rest,
   };
   return { controller: new Controller(api, clock), clock, api };
 }

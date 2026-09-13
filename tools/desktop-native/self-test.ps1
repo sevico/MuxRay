@@ -39,8 +39,9 @@ $fixtureHashes = @{
     Detail = '16346b21c3e84be9a1d398f330a0023b5ba3b5df5a5c74d8756b5cda8f1e4437'
     AVCDetail = '8b9d282048f76e6cc7fa6821a83ce8c02726a2dd91592b8da493b421ba4cdda9'
     MP3Detail = 'd6414212c5fb29d116fdf198ae7a1ab66ab688956d6fbfbfee7a16e2cfb10543'
+    Hex = '9758dc3635a5e05a780ffe4cd40659b243d2d23a4a9e704762add90fcd4c34fb'
 }
-foreach ($mode in @('Scan', 'Detail', 'AVCDetail', 'MP3Detail')) {
+foreach ($mode in @('Scan', 'Detail', 'AVCDetail', 'MP3Detail', 'Hex')) {
     $gate = [pscustomobject](Get-GateSettings $mode)
     [byte[]]$fixture = Get-FramingFixtureBytes $mode
     $sha = [Security.Cryptography.SHA256]::Create()
@@ -48,8 +49,10 @@ foreach ($mode in @('Scan', 'Detail', 'AVCDetail', 'MP3Detail')) {
     if ($fixture.Length -ne $gate.fixtureBytes -or $hash -ne $fixtureHashes[$mode]) { throw "Stable $mode fixture bytes changed." }
     $entered = [pscustomobject]@{ gateMode = $mode; readCall = $gate.gateReadCall; offset = $gate.gateOffset; committedTags = $gate.committedTags }
     Assert-GateReceipt $gate $entered
-    foreach ($scenario in @('Cancel', 'Exit', 'DetailClose')) {
-        $shouldPass = ($mode -ne 'Scan') -eq ($scenario -eq 'DetailClose')
+    foreach ($scenario in @('Cancel', 'Exit', 'DetailClose', 'HexClose')) {
+        $shouldPass = (($mode -eq 'Scan') -and ($scenario -in @('Cancel', 'Exit'))) -or
+            (($mode -eq 'Hex') -and ($scenario -eq 'HexClose')) -or
+            (($mode -in @('Detail', 'AVCDetail', 'MP3Detail')) -and ($scenario -eq 'DetailClose'))
         $accepted = $true
         try { Assert-GateScenario $gate $scenario } catch { $accepted = $false }
         if ($accepted -ne $shouldPass) { throw "Wrong mode accepted/rejected for $mode / $scenario." }
@@ -78,4 +81,6 @@ $avcGate = Get-GateSettings 'AVCDetail'
 if ($avcGate.fixtureBytes -ne 504 -or $avcGate.gateReadCall -ne 67 -or $avcGate.gateOffset -ne 24 -or $avcGate.committedTags -ne 32) { throw 'AVC detail gate contract changed.' }
 $mp3Gate = Get-GateSettings 'MP3Detail'
 if ($mp3Gate.fixtureBytes -ne 498 -or $mp3Gate.gateReadCall -ne 67 -or $mp3Gate.gateOffset -ne 24 -or $mp3Gate.committedTags -ne 32) { throw 'MP3 detail gate contract changed.' }
-Write-Host 'PASS: Scan/Detail/AVCDetail/MP3Detail fixture SHA-256, gate identity, legacy receipts and scenario mismatch rejection.'
+$hexGate = Get-GateSettings 'Hex'
+if ($hexGate.fixtureBytes -ne 493 -or $hexGate.gateReadCall -ne 67 -or $hexGate.gateOffset -ne 13 -or $hexGate.committedTags -ne 32) { throw 'Hex gate contract changed.' }
+Write-Host 'PASS: Scan/Detail/AVCDetail/MP3Detail/Hex fixture SHA-256, gate identity, legacy receipts and scenario mismatch rejection.'
