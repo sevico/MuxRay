@@ -1,10 +1,10 @@
 # MuxRay ADR-015 / Hex 桌面验收报告（2026-09-13）
 
-**状态：本批 Windows 原生验收已完成；浏览器 smoke 未完成，单独列为限制。**
+**状态：本批 Windows 原生验收已完成；随后通过内置浏览器完成合成宿主 smoke 的 25 类场景。Chrome CDP 命令入口仍缺少调试连接，执行路径分别记录。**
 
 本报告核对到原生证据编号 **127**，并核对 2026-09-13 03:03:48 UTC（北京时间 11:03:48）的最终进程记录。四类编码的字段联动、跨窗、诊断点、分页跳转、EOF、截断、源变化恢复、真实大文件末段 Tag 窗口和受控 Hex 关闭均有本批原生证据。
 
-代码基线为 `2e41581a150dbd298cea582c34d498a5994d9cfb`，其上实现本批 [ADR-015](decisions/015-bounded-desktop-hex.md)、Hex 读取与界面改动；本报告随实现一同提交。验收前完成代码检查与构建，原生验收后仅整理文档，没有改动已验收的程序代码。
+代码基线为 `2e41581a150dbd298cea582c34d498a5994d9cfb`，其上实现本批 [ADR-015](decisions/015-bounded-desktop-hex.md)、Hex 读取与界面改动，已提交为 `3128ebb`。验收前完成代码检查与构建；后续浏览器重试仅修正测试夹具和更新记录，没有改动已验收的生产代码或 dist。
 
 本机证据根目录为 `C:/Users/swk01/Documents/Codex/2026-09-09/computer-use/`。下文 `work/` 和 `outputs/` 路径均相对此目录；未注明目录的构建/检查日志位于 `outputs/muxray-hex/`，原生 JSON 和截图位于其 `native-20260913-001/` 子目录。媒体、构建产物和截图保留本地，不纳入源码仓库。
 
@@ -24,7 +24,7 @@
 7c47d48f98202be8412600e0f61c15b354c367aa1c8a8f40c7a7bdf56a89534d
 ```
 
-该 run ID 为 `f3c8f7b4979e4fec80938f85fe91324b`；Hex gate 参数为 read 67、offset 13、已提交 32 Tag。独立哈希检查中，build-record 的 **119 个 Go 输入、24 个前端输入、3 个 dist 资产、9 个工具模板和 4 个产物均匹配当前文件**。这是注入阻塞 I/O 的专用验收程序，不能作为生产 exe 发布或称为自然慢盘实测。生产记录本身未保存完整独立输入清单；以上完整输入证明来自随后生成的受控构建清单，未进行可复现重构建。
+该 run ID 为 `f3c8f7b4979e4fec80938f85fe91324b`；Hex gate 参数为 read 67、offset 13、已提交 32 Tag。原生验收前的独立哈希检查中，build-record 的 **119 个 Go 输入、24 个前端输入、3 个 dist 资产、9 个工具模板和 4 个产物均匹配当时冻结的文件**。这是注入阻塞 I/O 的专用验收程序，不能作为生产 exe 发布或称为自然慢盘实测。生产记录本身未保存完整独立输入清单；以上完整输入证明来自随后生成的受控构建清单，未进行可复现重构建。
 
 小样本来自 `work/hex-fixtures-002/fixtures.json`：
 
@@ -79,7 +79,7 @@ UIA 字节按钮的可访问名称包含地址，不包含每个十六进制值�
 | Hex / MP3 / Scan 非 GUI gate | Pass | 三个 `work/hex-native/verify*/verification.json` 与 Go 日志：带 race 的真实文件生命周期检查；Hex/MP3 保留 32 Tag 后关闭，Scan 取消保留 10 Tag；释放后文件可独占打开 |
 | PowerShell 工具 | Pass | `native-tools-checks-summary-001.json` 引用已完成工具输出；PS 5.1 / 7.6.5 自检、脚本语法、五种 gate 模式及收据身份检查 |
 | Hex fixture | Pass | `hex-fixtures-tests-002.log`：4 项 Python 测试；`work/hex-audit-001/verification.json`：25 次真实 document/detailview 请求与 55 个完整窗口比对；fixture002 修正元数据有独立确认 |
-| 浏览器 smoke | 未完成，不计 Pass | 仅 node --check 语法检查通过；实际浏览器流程因代理连接授权超时退出 1，未取得执行完成结果 |
+| 浏览器 smoke | 内置浏览器场景 Pass；Chrome CDP 入口未执行 | 首次代理授权超时退出 1 的历史保留；随后以内置浏览器完成同一组 25 类场景、44 条值断言，详见追加验收 |
 
 最初 root/desktop 的 build 因 Git VCS stamping 失败，原始失败日志保留；后续 `*-checks-build.json` 记录重试 exit 0，不能把第一次执行改写为成功。PowerShell 汇总也明确说明其 transcript 漏掉子进程输出，结论来源为对应工具执行结果。
 
@@ -131,4 +131,25 @@ close-001 原生 run 为 `f3c8f7b4979e4fec80938f85fe91324b`，PID **16144**，pr
 
 `desktop/desktop.exe` 这一 go build 临时产物已清理；Wails 生产程序仍保留在 `desktop/build/bin/` 供本地使用。源码提交包含 ADR、实现、测试、可复现验收工具及本文；最终提交 ID 和工作区检查结果记录在本次开发会话及本机 `outputs/muxray-hex/final-delivery.json`，避免报告自引用提交哈希。
 
-本批范围是本机只读、按需 Hex 与字段/诊断定位。未完成 browser smoke，不包含编辑、全文搜索、导出、媒体摘要、音视频解码、安装包或其他桌面平台验收。
+## 浏览器 smoke 追加验收
+
+2026-09-13 03:27:31 UTC（北京时间 11:27:31），在 **Codex 内置浏览器、1280 × 720 viewport** 完成原 smoke 的 25 类场景，**44 条值断言通过，产品断言失败为 0**。保留 30 份编号 DOM 快照和跨字节高亮截图；采集的浏览器 error/warn 日志为空。测试页和本地测试服务均已关闭。
+
+本次先重试 web-access 的连接检查：沙箱与 Windows 宿主两次均未发现 Chrome 调试连接。随后使用可用的内置浏览器和受支持的页面操作 API。`browser-retry-server.mjs` 从仓库 `browser-smoke.mjs` 提取同一个 `syntheticHost`，在回环地址托管既有 dist，沿用生产 CSP，并仅为测试页加入外部宿主脚本、场景选择器和可见读取日志。点击、输入、场景选择和只读 DOM 断言由内置浏览器接口执行。**没有运行原 Chrome CDP 的 `npm run test:browser` 命令，不能将本次记成该命令 exit 0。**
+
+生产 JS/CSS 和原始 index.html 的 SHA-256 已在 `browser-retry-server.json` 核对记录；JS 为 `de937cc14adb804baca7b20d107aeb89d6ea978e2967f0969df365512713fb1c`，CSS 为 `62f4539a32ffcae2b45cfd5c3902a93190ddc27cdfbd3faf7435ea58d67c4e27`。测试页面在服务器内存中插入宿主控制，未改动磁盘上的 dist。
+
+| 场景组 | 已验证行为 | DOM 证据编号 |
+| --- | --- | --- |
+| 基础界面与分页 | 空状态、100/100/5 分页、页尾禁用、精确大整数、部分结果、文件名及诊断文本转义 | 01–05 |
+| 四类详情 | AMF0/AAC/AVC/MP3 内容和范围说明、预览转义、byte/bit 位置、AVC 派生字段无伪造 Span、缺配置及预算诊断、MP3 free-format/损坏头/未支持音频清理旧结果 | 06–15 |
+| Hex 联动 | 未支持 Tag 只发起 Hex、512 byte 窗口、切 Tag 清理、跨窗范围保留、跨字节两侧精确位高亮、诊断仅为点、无可定位 Span 的派生字段无按钮、空 EOF、无窗口级横向溢出 | 16–23 |
+| 跳转与生命周期 | Tag 105 定位起点 100 的一页、源变化同时清空详情和 Hex、关闭、取消扫描后保留有界页、取消选择返回空状态 | 24–30 |
+
+重试前修正了 smoke 自身的三处问题：非空 Span 的起点从 UINT64_MAX 改到 UINT64_MAX−1，使排他末端合法；cross-byte 合成值从 7 改为与 `00 01` 所选位一致的 0；诊断等待条件增加读取终态和单个定位点，避免只看到新标签就抢先断言。`node --check test/browser-smoke.mjs` 和差异检查通过。这些修正没有改变生产实现。
+
+逐项证据 `browser-retry-checks.json` 保留一次断言工具问题：跨 JavaScript realm 的数组用 deepStrictEqual 比较时失败，实际值与期望值的 JSON 完全相同；改为 JSON 值比较后重新通过，原记录以 `harness-assertion-error` 标识，未删除。`browser-retry-result.json` 汇总场景、44 条通过断言和限制，`browser-retry-01-*.txt` 至 `browser-retry-30-*.txt` 为交互状态，`browser-retry-cross-byte.png` 为画面，`browser-retry-cleanup.json` 记录服务停止。
+
+此处是合成宿主的前端浏览器验证，不调用 Go 解析器、真实文件 I/O 或原生选择器；UINT64_MAX 文件大小与 EOF 仅用于合成传输/算术边界，真实 Go 文件仍受 int64 大小限制。Windows 文件生命周期的通过结论来自本文前面的独立原生证据。追加提交及证据清单见本机 `browser-retry-delivery.json`。
+
+本批范围是本机只读、按需 Hex 与字段/诊断定位，不包含编辑、全文搜索、导出、媒体摘要、音视频解码、安装包或其他桌面平台验收。

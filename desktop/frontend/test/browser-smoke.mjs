@@ -88,7 +88,8 @@ function syntheticHost() {
       }
       const preview = {
         kind: request.tagId === '0' ? 'amf0ScriptData' : 'aacAudio', complete: request.tagId === '0', truncated: true,
-        fields: [{ id: '0', parentId: '', name: 'synthetic payload', type: 'string', value: '<img onerror=alert(1)>字段值</img>', span: { byteOffset: '18446744073709551615', bitOffset: 3, bitLength: 5 } }],
+        // The enclosing byte range ends at UINT64_MAX, without overflowing it.
+        fields: [{ id: '0', parentId: '', name: 'synthetic payload', type: 'string', value: '<img onerror=alert(1)>字段值</img>', span: { byteOffset: '18446744073709551614', bitOffset: 3, bitLength: 5 } }],
         diagnostics: [{ code: 'SYNTHETIC_DETAIL', severity: 'warning', offset: '9007199254740993', bitOffset: 3, message: '<script>plain diagnostic</script>', expected: null, actual: null }],
       };
       if (['2', '3', '4', '5'].includes(request.tagId)) {
@@ -98,7 +99,7 @@ function syntheticHost() {
           { id: '0', parentId: '', name: 'AVC context', type: 'context', value: missingConfig ? 'missing' : contextBudget ? 'budget_exhausted' : 'found', span: null },
           { id: '1', parentId: '', name: 'compositionTime', type: 'int24', value: '-2', span: { byteOffset: '9007199254740993', bitOffset: 0, bitLength: 24 } },
           { id: '2', parentId: '', name: 'PTS', type: 'int64', value: '-9223372036854775808', span: null },
-          ...missingConfig || contextBudget ? [] : [{ id: '3', parentId: '', name: 'nalUnitType', type: 'uint5', value: '5', span: { byteOffset: '18446744073709551615', bitOffset: 3, bitLength: 5 } }],
+          ...missingConfig || contextBudget ? [] : [{ id: '3', parentId: '', name: 'nalUnitType', type: 'uint5', value: '5', span: { byteOffset: '18446744073709551614', bitOffset: 3, bitLength: 5 } }],
         ];
         preview.diagnostics = missingConfig ? [{ code: 'AVC_NAL_LENGTH_SIZE_UNAVAILABLE', severity: 'error', offset: '9007199254740993', bitOffset: 0, message: '缺少前置 AVC 配置，保留包头；不猜测 NAL 长度。', expected: null, actual: null }]
           : contextBudget ? [{ code: 'AVC_CONTEXT_LOOKUP_LIMIT_REACHED', severity: 'error', offset: '9007199254740993', bitOffset: 0, message: '前置配置查找达到预算，不猜测 NAL 长度。', expected: null, actual: null }]
@@ -122,7 +123,7 @@ function syntheticHost() {
         preview.kind = 'amf0ScriptData'; preview.complete = true; preview.truncated = false;
         preview.fields = [
           { id: '0', parentId: '', name: 'cross-window', type: 'bytes', value: '1024 byte range', span: { byteOffset: '9007199254740993', bitOffset: 0, bitLength: 8192 } },
-          { id: '1', parentId: '', name: 'cross-byte', type: 'uint5', value: '7', span: { byteOffset: '9007199254740993', bitOffset: 6, bitLength: 5 } },
+          { id: '1', parentId: '', name: 'cross-byte', type: 'uint5', value: '0', span: { byteOffset: '9007199254740993', bitOffset: 6, bitLength: 5 } },
           { id: '2', parentId: '', name: 'derived', type: 'number', value: '3', span: null },
         ];
       }
@@ -184,7 +185,7 @@ try {
   await waitFor("document.querySelector('.detail-heading h2')?.textContent === 'AMF0 Script Data'");
   assert.equal(await evaluate("document.querySelector('.field-value').textContent"), '<img onerror=alert(1)>字段值</img>');
   assert.equal(await evaluate("document.querySelector('.detail-panel img') === null"), true);
-  assert.equal(await evaluate("document.querySelector('.detail-fields td:nth-child(4)').textContent"), '18446744073709551615 : 3');
+  assert.equal(await evaluate("document.querySelector('.detail-fields td:nth-child(4)').textContent"), '18446744073709551614 : 3');
   assert.equal(await evaluate("document.querySelector('.detail-badges').textContent.includes('语法解析完成') && document.querySelector('.detail-badges').textContent.includes('展示省略')"), true);
   await click('1');
   await waitFor("document.querySelector('.detail-heading h2')?.textContent === 'AAC Audio'");
@@ -195,7 +196,7 @@ try {
   assert.equal(await evaluate("document.querySelector('.detail-panel').textContent.includes('不解码 slice')"), true);
   assert.equal(await evaluate("document.querySelector('.detail-badges').textContent"), '语法解析完成');
   assert.deepEqual(await evaluate("(() => { const row = [...document.querySelectorAll('.detail-fields tbody tr')].find(row => row.cells[0].textContent === 'PTS'); return [row.cells[2].textContent, row.cells[3].textContent, row.cells[4].textContent]; })()"), ['-9223372036854775808', '—', '—']);
-  assert.equal(await evaluate("[...document.querySelectorAll('.detail-fields tbody tr')].find(row => row.cells[0].textContent === 'nalUnitType').cells[3].textContent"), '18446744073709551615 : 3');
+  assert.equal(await evaluate("[...document.querySelectorAll('.detail-fields tbody tr')].find(row => row.cells[0].textContent === 'nalUnitType').cells[3].textContent"), '18446744073709551614 : 3');
   await click('3');
   await waitFor("document.querySelector('.detail-diagnostics code')?.textContent === 'AVC_NAL_LENGTH_SIZE_UNAVAILABLE'");
   assert.equal(await evaluate("document.querySelector('.detail-badges').textContent"), '部分解析');
@@ -250,7 +251,7 @@ try {
   await waitFor("document.querySelectorAll('.hex-byte.range-selected').length === 2");
   assert.deepEqual(await evaluate("[...document.querySelectorAll('.hex-bits .range-selected')].map(n=>n.getAttribute('aria-label'))"), ['bit 6 范围内', 'bit 7 范围内']);
   await evaluate("document.querySelector('[aria-label=\"定位诊断 SYNTHETIC_DETAIL\"]').click()");
-  await waitFor("document.querySelector('.hex-selection').textContent.includes('仅标记位置')");
+  await waitFor("document.querySelector('.hex-panel')?.getAttribute('aria-busy') === 'false' && document.querySelector('.hex-grid tbody tr') !== null && document.querySelector('.hex-selection').textContent.includes('仅标记位置') && document.querySelectorAll('.hex-byte.point-selected').length === 1");
   assert.equal(await evaluate("document.querySelectorAll('.hex-byte.range-selected').length"), 0);
   assert.equal(await evaluate("document.querySelectorAll('.hex-byte.point-selected').length"), 1);
   assert.equal(await evaluate("document.querySelector('.hex-panel img') === null && document.documentElement.scrollWidth <= window.innerWidth"), true);
