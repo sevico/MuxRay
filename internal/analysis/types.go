@@ -20,6 +20,13 @@ type Options struct {
 	AVC                    avc.Options
 }
 
+// Progress counts completed Tag visits, not bytes read or partially visited
+// Tags. Total is the frozen index length, including a canceled scan's prefix.
+type Progress struct {
+	Processed uint64
+	Total     uint64
+}
+
 const (
 	DefaultMaxKeyframes           uint32 = 4_096
 	HardMaxKeyframes              uint32 = 65_536

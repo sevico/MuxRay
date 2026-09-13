@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory)][string]$RunDirectory,
-    [Parameter(Mandatory)][ValidateSet('Cancel', 'Exit', 'DetailClose', 'HexClose')][string]$Scenario,
+    [Parameter(Mandatory)][ValidateSet('Cancel', 'Exit', 'DetailClose', 'HexClose', 'SummaryClose')][string]$Scenario,
     [ValidateSet('canceled', 'closing')][string]$ObservedState,
     [int]$ObservedTagCount = -1,
     [ValidateRange(1000, 15000)][int]$MaxExitMilliseconds = 6000
@@ -16,7 +16,7 @@ if ($entered.executable -ne (Join-Path $run.runDirectory 'MuxRay-io-acceptance.e
 }
 $result = [ordered]@{ runId = $run.runId; gateMode = $run.gateMode; scenario = $Scenario; completedUTC = [DateTime]::UtcNow.ToString('o') }
 if ($Scenario -ne 'Exit') {
-    $isClose = $Scenario -in @('DetailClose', 'HexClose')
+    $isClose = $Scenario -in @('DetailClose', 'HexClose', 'SummaryClose')
     $expectedState = if ($isClose) { 'closing' } else { 'canceled' }
     if ($ObservedState -ne $expectedState -or $ObservedTagCount -ne $run.committedTags) { throw "Supply the actual native UI observation: -ObservedState $expectedState -ObservedTagCount $($run.committedTags)." }
     $commandName = if ($isClose) { 'close-command.json' } else { 'cancel-command.json' }

@@ -2,7 +2,7 @@
 
 这组工具从新 checkout 生成独立的验收程序和结构样本，用真实 Windows 文件选择器、Wails IPC 和文档生命周期复现取消及阻塞退出。正常产品代码不含 gate；工具只通过 Go `-overlay` 替换本次构建读到的 `document.go`，不会修改仓库 Go 源文件。ADR-013 之后扫描终态仍保留源，只有关闭文档才释放句柄。
 
-`build.ps1` 和 `verify.ps1` 的 `-GateMode` 默认为 `Scan`，也可显式选择 `Detail`、`AVCDetail`、`MP3Detail` 或 `Hex`。五种模式使用确定性生成的 FLV，不是可播放媒体。gate 只匹配本 run 的绝对样本路径，故意忽略取消，直到同一进程身份的 release 收据发布；这是受控 I/O 实验，不能称为正常生产程序的自然慢盘实测。
+`build.ps1` 和 `verify.ps1` 的 `-GateMode` 默认为 `Scan`，也可显式选择 `Detail`、`AVCDetail`、`MP3Detail`、`Hex` 或 `Summary`。六种模式使用确定性生成的 FLV，不是可播放媒体。gate 只匹配本 run 的绝对样本路径，故意忽略取消，直到同一进程身份的 release 收据发布；这是受控 I/O 实验，不能称为正常生产程序的自然慢盘实测。
 
 | GateMode | 结构样本 | gate 位置 | 允许的原生检查 |
 | --- | --- | --- | --- |
@@ -11,10 +11,15 @@
 | AVCDetail | 504 byte，首 Tag 为 `17 01 00 00 00 00 00 00 02 65 88` 孤立 AVC NALU 包，其余 31 个空 Script Tag，FLV video 标志置位 | 扫描完成 32 Tag 后，首次详情探测第 67 次 ReadAt，offset 24 | DetailClose |
 | MP3Detail | 498 byte，首 Tag 为 `2F FF FB 90 00` FLV MP3 声音头与 MPEG-1 Layer III 固定头，其余 31 个空 Script Tag，FLV audio 标志置位 | 扫描完成 32 Tag 后，首次详情探测第 67 次 ReadAt，offset 24 | DetailClose |
 | Hex | 493 byte，与 Scan 样本字节相同 | 扫描完成 32 Tag 后，点击 Tag 0 偏移，首次 Hex 读取第 67 次 ReadAt，offset 13 | HexClose |
+| Summary | 497 byte，与 Detail 样本字节相同 | 扫描完成 32 Tag 后，手动开始媒体概览分析，首次 AAC prefix 第 67 次 ReadAt，offset 24 | SummaryClose |
 
 Scan 样本 SHA-256 为 `9758dc3635a5e05a780ffe4cd40659b243d2d23a4a9e704762add90fcd4c34fb`，Detail 样本为 `16346b21c3e84be9a1d398f330a0023b5ba3b5df5a5c74d8756b5cda8f1e4437`，AVCDetail 样本为 `8b9d282048f76e6cc7fa6821a83ce8c02726a2dd91592b8da493b421ba4cdda9`，MP3Detail 样本为 `d6414212c5fb29d116fdf198ae7a1ab66ab688956d6fbfbfee7a16e2cfb10543`。实际 fixture SHA-256、模式、读取次数、gate 偏移、文件长度和已提交 Tag 数均写入 `build-record.json`；收据和检查必须匹配这些参数。旧 v1 Scan 记录仍可读取，不修改历史 JSON。
 
 Hex 样本沿用 Scan 的 SHA-256；模式及 gate 参数独立校验，不能混用两种 run 的收据。
+
+Summary 样本沿用 Detail 的 SHA-256，但通过 `StartSummary` 进入全索引分析。
+32 个空 Script Tag 不需要读取 payload，因此 Summary 必须保留首个 AAC Tag。
+Summary 模式的收据、场景和 gate 身份单独校验，不能混用 DetailClose。
 
 AVCDetail 首 Tag 没有前置 sequence header。它用于验证 AVC 首次读取阻塞时的文档关闭协议，不用于证明 NAL 长度或视频解码正确；缺配置时产品保留包头并明确报告长度上下文不可用。AVC 上下文与位置语义见 [ADR-014](../../docs/decisions/014-bounded-desktop-avc-context.md)。
 
@@ -323,6 +328,84 @@ MPEG-1、128 kbps、44100 Hz、双声道、推导长度 417 byte，以及完整 
 验收前使用 `Get-Item` 与 `Get-FileHash -Algorithm SHA256` 独立读回，和清单的实际
 `bytes`、SHA-256 核对；大文件成功扫描或选中尾 Tag不能解读为音频解码能力或完整
 payload 读取吞吐量。
+
+## Summary 读取阻塞时关闭文件
+
+使用单独的 Summary run，完成 32 Tag 扫描后点击媒体概览的“开始分析”。
+不要先点击详情或 Hex：gate 记录的是扫描后首个真实源读取，不能把其他读取
+误当作分析读取。`GetSummary`、取消确认和事件分页均不应读取源文件。
+
+```powershell
+$summaryVerify = 'C:\work\native acceptance\summary-verify-001'
+$summaryRun = 'C:\work\native acceptance\summary-close-001'
+& "$scripts\verify.ps1" -Repository $repo -RunDirectory $summaryVerify -GateMode Summary
+& "$scripts\build.ps1" -Repository $repo -RunDirectory $summaryRun -GateMode Summary
+```
+
+非 GUI race 验证调用 `StartSummary(1)`，记录第 67 次 ReadAt、offset 24；
+逻辑关闭立即清空读取结果并拒绝 Detail、Hex、Summary、取消查询和事件/Tag 页，
+但源仍归实际 worker 所有。只有释放 gate 后 `Close` 才完成、句柄才可独占打开。
+Scan 模式的非 GUI 回归另外验证：取消留下的 10 Tag 索引前缀可完成 Summary，
+`processed=total=10`、`scanComplete=false`，不能把它显示成完整源覆盖。
+
+原生步骤：
+
+1. 从真实 Windows 文件选择器打开 `$summaryRun\native-controlled.flv`，确认扫描完成 32 Tag。
+2. 点击媒体概览开始分析，保存读取中 UI 和 `entered.json`，核对 Summary、read 67、offset 24、32 Tag。
+3. 运行 MarkClose，随即点击真实“关闭文件”，保存“正在关闭”的 UI；概览、详情和 Hex 清空，新读取和打开入口禁用。此时不能出现 `closed.json`，源不可独占打开。
+4. 发布 Release，等待空状态与 `closed.json`，再执行检查。
+
+```powershell
+& "$scripts\control.ps1" -RunDirectory $summaryRun -Action MarkClose
+# 随即操作真实窗口关闭文件；保存 Release 前的 closing 状态。
+& "$scripts\control.ps1" -RunDirectory $summaryRun -Action Release
+# 确认窗口已恢复空状态后：
+& "$scripts\check.ps1" -RunDirectory $summaryRun -Scenario SummaryClose -ObservedState closing -ObservedTagCount 32
+```
+
+`SummaryClose` 同样要求 `close-command < release < released < closed` 严格排序、
+进程/run 身份一致、实际源 Close 无错误和独占打开成功。客户端等待超时不表示
+实际 I/O 已结束；即使概览显示等待确认，关闭仍必须保留同一个源直到读取返回。
+SummaryClose 不能用于其他模式；MarkCancel/MarkExit 和 Exit watcher 只适用于 Scan。
+
+## Summary 生产窗口、分页与数值样本
+
+标准库生成器输出到绝对、新目录；默认另外流式写入一个 200000 Tag、约 3 MB
+的索引压力样本。`--many-tags 0` 可省略，允许 32–1000000。所有小样本在清单中
+列出 Tag ID、DTS、类型和源偏移，不包含可播放媒体声明。
+
+```powershell
+python -B tools/desktop-native/summary_fixtures.py --output-dir 'C:\work\summary-fixtures-new'
+python -B -m unittest discover -s tools/desktop-native -p '*fixtures_test.py'
+```
+
+| 文件 | 结构与预期 |
+| --- | --- |
+| `summary-mixed.flv` / `summary-change.flv` | 497 byte，20 Tag；AAC/MP3 切换 2 次、AAC 配置变化 1 次、AVC NAL 长度 4→2、MP3 参数变化 1 次/码率变化 1 次；音频重复 2 次/回退 2 次，视频回退 1 次。变化副本用于 source_changed 锁存及精确恢复后必须重新打开的流程 |
+| `summary-timing.flv` | 180 byte，6 Tag；无回退/切换的 AAC/AVC 时间轴，A/V 首尾极值偏移均 10 ms、交集 30 ms，音频/视频区间码率 800/2200 bit/s，闭合 GOP 40 ms |
+| `summary-retention.flv` | 42423 byte，1660 Tag；声明关键帧观测 1100/保留 1024，AAC 与 AVC 配置各观测 130/保留 128，MP3 头观测 300/保留 256；截断列表不影响后续观测计数（配置变化各 129、MP3 码率变化 299） |
+| `summary-diagnostics.flv` | 6013 byte，300 个损坏同步的 MP3 Tag；分析不完整，MP3 头观测/损坏均 300、保留 256；诊断保留 256，最后一条为 `MEDIA_DIAGNOSTIC_LIMIT_REACHED` |
+| `summary-truncated.flv` | 510 byte，混合样本后追加 ID 20，声明 10 byte 只剩 `AF 00`；扫描与分析不完整，索引 21 Tag，新增 audio unknown 1，仍可浏览已保留事件 |
+| `summary-many-tags.flv` | 默认 3000018 byte，200000 Tag；前 199999 个为空 Script，末个 MP3 固定头；用于大索引/进度和末 Tag 跳转，不是大物理文件或完整音频测试 |
+
+Mixed 样本的 MP3 DTS 回退会重置比较基线，所以最后一个 128 kbps 头不追加一次
+码率变化。音频区间码率为 `9 × 8000 / 46 = 1565` bit/s（整数截断），MP3 区间
+码率为 `5 × 8000 / 26 = 1538` bit/s；这些是容器数据量覆盖的正向 DTS 区间，
+不能混同 128/160 kbps 的 MPEG 头声明，也不能称为播放时长或实际音画同步。
+
+`summary_check.py` 调用显式提供的本地 CLI，用清单中五项 ADR-016 汇总预算核对
+独立事实，保存精确命令、stdout/stderr、退出码、可执行文件和样本 SHA-256：
+
+```powershell
+go build -mod=readonly -o 'C:\work\muxray-summary-check.exe' ./cmd/muxray
+python -B tools/desktop-native/summary_check.py --fixtures-dir 'C:\work\summary-fixtures-new' --muxray 'C:\work\muxray-summary-check.exe' --output-dir 'C:\work\summary-cli-check-new'
+```
+
+损坏和截断文件的 CLI 退出码 2 为预期有诊断结果，仍必须通过数值断言。CLI 的
+codec parser 默认预算与桌面不完全相同，但这些微小头均在两者限制之内；此工具
+不证明 parser 预算边界，也不代替生产窗口/Wails IPC 验收。GUI 应逐页核对 retained
+事件边界（最多 100 条），并验证事件跳回现有 Tag 详情/Hex 后 READY 概览仍保留。
+超过 1 GiB 的物理文件沿用 MP3 生成器或已校验的大文件，再独立记录大小和哈希。
 
 ## 阻塞中退出
 

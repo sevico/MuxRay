@@ -29,7 +29,7 @@ function setup(overrides: Partial<API> = {}, snapshot = session()) {
     tags: async request => { const total = BigInt(snapshot.progress!.tagCount), start = BigInt(request.start), count = Number(total - start > 100n ? 100n : total - start); return { apiVersion: 1, error: null, page: { sessionId: request.sessionId, bounds: { start: request.start, total: total.toString(), next: (start + BigInt(count)).toString(), limit: 100 }, tags: Array.from({ length: count }, (_, i) => tag((start + BigInt(i)).toString())) } }; },
     diagnostics: async request => ({ apiVersion: 1, error: null, page: { sessionId: request.sessionId, bounds: { start: request.start, total: '0', next: '0', limit: 100 }, diagnostics: [] } }),
     startDetail: async request => detailReady(request), detailResult: async () => { throw Error('unexpected detail query'); },
-    startHex: async request => ready(request, snapshot.progress!.sourceSize), hexResult: async () => { throw Error('unexpected Hex query'); }, ...overrides,
+    startHex: async request => ready(request, snapshot.progress!.sourceSize), hexResult: async () => { throw Error('unexpected Hex query'); }, ...unexpectedSummary, ...overrides,
   };
   return { controller: new Controller(api, clock), clock };
 }
@@ -149,3 +149,4 @@ test('Tag jump reads just one target page, selects the ID and rejects out-of-ran
   const huge = setup({}, session('scan-1', '10000', '9007199254741000')); await huge.controller.open(); await settle(); huge.controller.jumpTag('9007199254740993'); await settle();
   assert.equal(huge.controller.getSnapshot().start, '9007199254740900'); assert.equal(huge.controller.getSnapshot().selectedTag?.id, '9007199254740993');
 });
+import { unexpectedSummary } from './summary-fixture.ts';

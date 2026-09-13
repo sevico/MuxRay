@@ -138,3 +138,31 @@ input:focus-visible { outline: 3px solid #7bc9dd; outline-offset: 1px; }
 .hex-bits { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 10px 0; font-size: 12px; }
 .hex-bits code { display: flex; gap: 4px; font: 15px Consolas, monospace; } .hex-bits code span { display: inline-block; padding: 3px 7px; border: 1px solid #dfebef; border-radius: 3px; }
 .hex-panel .request-error { margin: 12px 0; }
+.summary-panel { margin: 0 0 22px; padding: 22px; border: 1px solid var(--border, #dce4ee); border-radius: 12px; background: var(--surface, #fff); }
+.summary-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.summary-heading h2 { margin: 4px 0 12px; font-size: 20px; }
+.summary-note { color: #536475; font-size: 13px; line-height: 1.7; }
+.summary-coverage { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0; font-size: 13px; }
+.summary-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 16px 0; }
+.summary-cards > div { padding: 14px; background: #f5f8fb; border-radius: 8px; min-width: 0; }
+.summary-cards span { display: block; color: #536475; font-size: 12px; margin-bottom: 8px; }
+.summary-cards strong { display: block; font-size: 17px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.summary-table-area { overflow-x: auto; }
+.summary-table-area table { width: 100%; }
+.summary-table-area td { vertical-align: top; }
+.summary-table-area td:first-child { min-width: 250px; max-width: 500px; white-space: normal; overflow-wrap: anywhere; }
+.summary-table-area td p { font-size: 13px; line-height: 1.6; }
+.summary-panel details > summary { cursor: pointer; padding: 8px 0; font-size: 13px; color: #245875; }
+.summary-all-metrics { border-top: 1px solid #e1e8ef; padding-top: 6px; }
+.summary-metric-groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.summary-metric-groups h3, .summary-events h3 { font-size: 15px; }
+.summary-facts { margin: 6px 0; font-size: 12px; }
+.summary-facts > div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; border-bottom: 1px solid #e9edf2; padding: 6px 0; }
+.summary-facts dt { color: #536475; flex: 1; }
+.summary-facts dd { margin: 0; flex: 1; text-align: right; overflow-wrap: anywhere; white-space: normal; font-variant-numeric: tabular-nums; }
+.summary-events { border-top: 1px solid #e1e8ef; margin-top: 14px; padding-top: 6px; }
+.summary-events .tabs { flex-wrap: wrap; }
+.summary-events .summary-table-area { max-height: min(42vh, 480px); }
+.summary-panel .progress-line span { width: auto; min-width: 110px; overflow-wrap: anywhere; }
+@media (max-width: 850px) { .summary-cards, .summary-metric-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); } .summary-heading { align-items: flex-start; flex-wrap: wrap; } }
+@media (max-width: 560px) { .summary-cards, .summary-metric-groups { grid-template-columns: minmax(0, 1fr); } .summary-panel { padding: 14px; } }

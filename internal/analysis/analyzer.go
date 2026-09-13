@@ -24,10 +24,10 @@ const avSyncBasis = "videoPtsExtremaMinusAudioDtsExtrema"
 // A/V range summaries. It reads only codec framing prefixes and sequence
 // headers; ordinary media payloads remain in the source.
 func Analyze(ctx context.Context, source io.ReaderAt, scan flv.ScanResult, options Options) (Result, error) {
-	return analyze(ctx, source, scan, options, nil)
+	return analyze(ctx, source, scan, options, nil, nil)
 }
 
-func analyze(ctx context.Context, source io.ReaderAt, scan flv.ScanResult, options Options, v2 *summaryV2State) (Result, error) {
+func analyze(ctx context.Context, source io.ReaderAt, scan flv.ScanResult, options Options, v2 *summaryV2State, progress func(Progress)) (Result, error) {
 	result := Result{Complete: !scan.HasErrors()}
 	if ctx == nil {
 		ctx = context.Background()
@@ -48,6 +48,16 @@ func analyze(ctx context.Context, source io.ReaderAt, scan flv.ScanResult, optio
 		previousKeyframeRetainedIndex: -1,
 	}
 	index := scan.Index()
+	completed := Progress{Total: index.Len()}
+	var lastReported uint64
+	if progress != nil {
+		progress(completed)
+		defer func() {
+			if completed.Processed != lastReported {
+				progress(completed)
+			}
+		}()
+	}
 	tagCount := int(index.Len()) // Both scan paths are bounded by HardMaxTags.
 	a.result.Keyframes.Entries = make([]Keyframe, 0, minCapacity(tagCount, normalized.MaxKeyframes))
 	a.result.AAC.Events = make([]AACConfiguration, 0, minCapacity(tagCount, normalized.MaxConfigurationEvents))
@@ -66,6 +76,11 @@ func analyze(ctx context.Context, source io.ReaderAt, scan flv.ScanResult, optio
 		if err := a.visit(tag); err != nil {
 			a.result.Complete = false
 			return a.finish(), err
+		}
+		completed.Processed++
+		if progress != nil && completed.Processed&1023 == 0 {
+			progress(completed)
+			lastReported = completed.Processed
 		}
 	}
 	if err := a.ctx.Err(); err != nil {

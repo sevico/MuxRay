@@ -7,6 +7,7 @@ import { byteSize, previousStart, progressPercent, unsigned } from './numbers';
 import { selectionFromSpan } from './hex';
 import type { HexSelection } from './hex';
 import { HexPanel } from './HexPanel';
+import { SummaryPanel } from './SummaryPanel';
 
 const stateNames: Record<string, string> = {
   opening: '正在打开', running: '扫描中', canceling: '正在取消', finished: '扫描结束', canceled: '已取消', failed: '扫描失败',
@@ -30,6 +31,9 @@ const errors: Record<string, string> = {
   detail_superseded: '已切换到原始字节读取；可重新读取此 Tag 的详情。',
   hex_not_found: '尚未确认原始字节请求，请重试查询。', hex_failed: '原始字节读取失败，请重试。',
   hex_unsupported: '当前源不支持原始字节读取。',
+  summary_not_found: '尚未确认媒体分析请求，请确认原请求的结果。', summary_failed: '媒体分析失败；未发布未完成的汇总，可重新分析。',
+  summary_unsupported: '当前源不支持媒体分析。', summary_wait_paused: '媒体分析等待已暂停；任务可能仍在读取，请确认结果或取消。',
+  summary_cancel_unconfirmed: '尚未确认取消命令生效；请再次确认取消，或关闭文件。',
 };
 export function fault(code: string): string { return errors[code] ?? '请求失败，请重试。'; }
 
@@ -49,7 +53,8 @@ export function App({ controller }: { controller: Controller }) {
   const [tagId, setTagId] = useState('');
   const { session, operation, page } = view;
   const progress = session?.progress;
-  const canPage = !!session?.terminal && !session.closed && session.scan !== null && !view.sourceChanged;
+  const scanReady = !!session?.terminal && !session.closed && session.scan !== null && !view.sourceChanged;
+  const canPage = scanReady && !view.summaryRunning;
   const bounds = page?.data.bounds;
   const percent = progress ? progressPercent(progress.bytesScanned, progress.sourceSize) : 0;
   const isClosing = operation === 'closing' || session?.closed;
@@ -88,6 +93,8 @@ export function App({ controller }: { controller: Controller }) {
           <p className="scan-note" role="status">{scanNote(session)}</p>
         </section>
 
+        <SummaryPanel view={view} controller={controller} disabled={!scanReady || !!isClosing} message={fault} />
+
         <div className={`result-layout ${view.selectedTag ? 'has-detail' : ''}`}>
         <section className="results" aria-label="扫描结果">
           <div className="results-toolbar">
@@ -104,13 +111,13 @@ export function App({ controller }: { controller: Controller }) {
           </form>
           <div className="table-area" role="tabpanel" aria-busy={view.loading}>
             {view.loading ? <div className="result-placeholder" role="status">正在读取当前页…</div> : page ? <>
-              {page.tab === 'tags' ? <TagTable rows={page.data.tags} selectedId={view.selectedTag?.id ?? null} disabled={!!isClosing || !canPage} onSelect={id => controller.selectTag(id)} onLocate={selection => controller.showHex(selection)} /> : <DiagnosticTable rows={page.data.diagnostics} onLocate={selection => controller.showHex(selection)} />}
+              {page.tab === 'tags' ? <TagTable rows={page.data.tags} selectedId={view.selectedTag?.id ?? null} disabled={!!isClosing || !canPage} onSelect={id => controller.selectTag(id)} onLocate={selection => controller.showHex(selection)} /> : <DiagnosticTable rows={page.data.diagnostics} disabled={!!isClosing || !canPage} onLocate={selection => controller.showHex(selection)} />}
             </> : <div className="result-placeholder">{canPage ? '暂无可显示的页，请重试查询。' : '扫描结束后，完整或部分结果会显示在这里。'}</div>}
           </div>
           <div className="pagination"><span>{bounds ? `起点 ${bounds.start} · 本页 ${unsigned(bounds.next) - unsigned(bounds.start)} 条 · 共 ${bounds.total} 条` : '尚无结果页'}</span><div>
-            <button disabled={!bounds || view.loading || bounds.start === '0' || !!isClosing} onClick={() => controller.select(view.tab, '0')}>首页</button>
-            <button disabled={!bounds || view.loading || bounds.start === '0' || !!isClosing} onClick={() => controller.select(view.tab, previousStart(view.start, PAGE_SIZE))}>上一页</button>
-            <button disabled={!bounds || view.loading || unsigned(bounds.next) >= unsigned(bounds.total) || !!isClosing} onClick={() => bounds && controller.select(view.tab, bounds.next)}>下一页</button>
+            <button disabled={!canPage || !bounds || view.loading || bounds.start === '0' || !!isClosing} onClick={() => controller.select(view.tab, '0')}>首页</button>
+            <button disabled={!canPage || !bounds || view.loading || bounds.start === '0' || !!isClosing} onClick={() => controller.select(view.tab, previousStart(view.start, PAGE_SIZE))}>上一页</button>
+            <button disabled={!canPage || !bounds || view.loading || unsigned(bounds.next) >= unsigned(bounds.total) || !!isClosing} onClick={() => bounds && controller.select(view.tab, bounds.next)}>下一页</button>
           </div></div>
         </section>
         {view.selectedTag && <DetailPanel view={view} onRetry={() => controller.retryDetail()} onLocate={selection => controller.showHex(selection)} />}
@@ -157,9 +164,9 @@ function DetailPanel({ view, onRetry, onLocate }: { view: ViewState; onRetry: ()
   </section>;
 }
 
-function DiagnosticTable({ rows, onLocate }: { rows: Diagnostic[]; onLocate: (selection: HexSelection) => void }) {
+function DiagnosticTable({ rows, onLocate, disabled = false }: { rows: Diagnostic[]; onLocate: (selection: HexSelection) => void; disabled?: boolean }) {
   if (!rows.length) return <div className="result-placeholder">没有保留的结构诊断。</div>;
   return <table className="diagnostics"><thead><tr><th>级别</th><th>代码 / 消息</th><th>偏移 : bit</th><th>期望 / 实际</th></tr></thead><tbody>{rows.map((item, index) => <tr key={`${item.code}-${item.offset}-${index}`}>
-    <td><span className={`severity severity-${item.severity}`}>{item.severity}</span></td><td><code>{item.code}</code><p>{item.message}</p></td><td><button className="source-link" aria-label={`定位诊断 ${item.code}`} onClick={() => onLocate({ offset: item.offset, bitOffset: item.bitOffset, bitLength: null, label: `诊断 ${item.code}` })}>{item.offset} : {item.bitOffset}</button></td><td>{item.expected ?? '—'} / {item.actual ?? '—'}</td>
+    <td><span className={`severity severity-${item.severity}`}>{item.severity}</span></td><td><code>{item.code}</code><p>{item.message}</p></td><td><button className="source-link" disabled={disabled} aria-label={`定位诊断 ${item.code}`} onClick={() => onLocate({ offset: item.offset, bitOffset: item.bitOffset, bitLength: null, label: `诊断 ${item.code}` })}>{item.offset} : {item.bitOffset}</button></td><td>{item.expected ?? '—'} / {item.actual ?? '—'}</td>
   </tr>)}</tbody></table>;
 }

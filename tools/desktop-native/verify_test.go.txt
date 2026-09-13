@@ -73,6 +73,18 @@ func TestNativeAcceptanceOverlayGate(t *testing.T) {
         if ctx.Err() != nil { t.Fatal("prefix detail did not finish") }
         time.Sleep(time.Millisecond)
     }
+    if selected, err := s.StartSummary(2); err != nil || selected.State != "pending" { t.Fatalf("prefix Summary start: %+v %v", selected, err) }
+    for {
+        summary, err := s.GetSummary(2)
+        if err != nil { t.Fatal(err) }
+        if summary.State != "pending" {
+            if summary.Err != nil || summary.State != "ready" || summary.Processed != 10 || summary.Total != 10 || summary.Overview == nil || summary.Overview.ScanComplete || summary.Overview.IndexedTags != "10" { t.Fatalf("prefix Summary: %+v", summary) }
+            break
+        }
+        if ctx.Err() != nil { t.Fatal("prefix Summary did not finish") }
+        time.Sleep(time.Millisecond)
+    }
+    t.Log("canceled scan prefix: Summary completed all 10 retained Tags with scanComplete=false")
     if err := s.Close(ctx); !errors.Is(err, context.Canceled) { t.Fatalf("close: %v", err) }
     if _, err := os.Stat(filepath.Join(nativeIOAcceptanceDirectory, "closed.json")); err != nil { t.Fatal(err) }
 	if !s.Snapshot().Closed { t.Fatal("session Close was not recorded") }
@@ -91,7 +103,10 @@ func verifyNativeContentClose(t *testing.T, s *Document) {
 			t.Fatalf("scan unexpectedly produced %s: %v", name, err)
 		}
 	}
-	if nativeIOAcceptanceMode == "Hex" {
+	if nativeIOAcceptanceMode == "Summary" {
+		selected, err := s.StartSummary(1)
+		if err != nil || selected.State != "pending" { t.Fatalf("Summary start: %+v %v", selected, err) }
+	} else if nativeIOAcceptanceMode == "Hex" {
 		selected, err := s.StartHex(1, nativeIOAcceptanceOffset, 512)
 		if err != nil || selected.State != "pending" { t.Fatalf("Hex start: %+v %v", selected, err) }
 	} else {
@@ -116,8 +131,12 @@ func verifyNativeContentClose(t *testing.T, s *Document) {
 	if _, err := s.GetDetail(1); !errors.Is(err, session.ErrClosed) { t.Fatalf("old detail while closing: %v", err) }
 	if _, err := s.StartHex(3, 13, 512); !errors.Is(err, session.ErrClosed) { t.Fatalf("new Hex while closing: %v", err) }
 	if _, err := s.GetHex(1); !errors.Is(err, session.ErrClosed) { t.Fatalf("old Hex while closing: %v", err) }
+	if _, err := s.StartSummary(4); !errors.Is(err, session.ErrClosed) { t.Fatalf("new Summary while closing: %v", err) }
+	if _, err := s.GetSummary(1); !errors.Is(err, session.ErrClosed) { t.Fatalf("old Summary while closing: %v", err) }
+	if _, err := s.CancelSummary(1); !errors.Is(err, session.ErrClosed) { t.Fatalf("cancel Summary while closing: %v", err) }
+	if _, err := s.SummaryEvents(1, "aac", 0, 100); !errors.Is(err, session.ErrClosed) { t.Fatalf("Summary events while closing: %v", err) }
 	if _, err := s.Page(0, 100); !errors.Is(err, session.ErrClosed) { t.Fatalf("page while closing: %v", err) }
-	t.Log("close before release: closed=true, terminal=false, source retained, details, Hex and pages rejected")
+	t.Log("close before release: closed=true, terminal=false, source retained, details, Hex, Summary and pages rejected")
 	if err := nativeIOAcceptanceWrite("release.json", nativeIOAcceptanceReceipt{}); err != nil { t.Fatal(err) }
 	if err := s.Close(ctx); err != nil { t.Fatalf("Close after content release: %v", err) }
 	if got := s.Snapshot(); !got.Closed || !got.State.Terminal() { t.Fatalf("Close never released source: %+v", got) }

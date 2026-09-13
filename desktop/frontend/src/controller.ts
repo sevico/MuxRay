@@ -2,12 +2,15 @@ import type { API, Detail, DetailRequest, DetailResponse, DiagnosticPage, HexReq
 import { unsigned } from './numbers.ts';
 import { HEX_WINDOW_BYTES, validateHexWindow, validateSelection } from './hex.ts';
 import type { HexSelection } from './hex.ts';
+import type { DetailQuery, SummaryKind, SummaryOverview, SummaryPage, SummaryPageRequest, SummaryResponse, SummaryEvent } from './protocol.ts';
+import { summaryKind, validateSummaryPage, validateSummaryResponse } from './summary.ts';
 
 export const PAGE_SIZE = 100;
 export const POLL_MS = 200;
 export const REPLY_TIMEOUT_MS = 5000;
 export const OPEN_REPLY_TIMEOUT_MS = REPLY_TIMEOUT_MS;
 export const DETAIL_POLL_LIMIT = 25;
+export const SUMMARY_POLL_LIMIT = 600;
 export type Tab = 'tags' | 'diagnostics';
 export type VisiblePage = { tab: 'tags'; data: TagPage } | { tab: 'diagnostics'; data: DiagnosticPage };
 export interface ViewState {
@@ -31,6 +34,20 @@ export interface ViewState {
   hexRetry: '' | 'confirm' | 'reload';
   tagJumpError: string | null;
   sourceChanged: boolean;
+  summary: SummaryOverview | null;
+  summaryState: '' | 'loading' | 'pending' | 'canceling' | 'recovering' | 'ready' | 'failed';
+  summaryRunning: boolean;
+  summaryCancelRequested: boolean;
+  summaryProcessed: string;
+  summaryTotal: string;
+  summaryError: string | null;
+  summaryRetry: '' | 'confirm' | 'reload';
+  summaryKind: SummaryKind;
+  summaryStart: string;
+  summaryPage: SummaryPage | null;
+  summaryPageLoading: boolean;
+  summaryPageError: string | null;
+  summaryPrevious: string | null;
 }
 export interface Scheduler { after(fn: () => void, ms: number): () => void }
 const scheduler: Scheduler = {
@@ -39,7 +56,7 @@ const scheduler: Scheduler = {
 
 class RequestError extends Error {}
 class ReplyUnconfirmed extends Error {}
-type ReplySlot = 'open' | 'command' | 'status' | 'page' | 'detail' | 'hex';
+type ReplySlot = 'open' | 'command' | 'status' | 'page' | 'detail' | 'hex' | 'summary' | 'summaryPage';
 function check(response: { apiVersion: number; error: { code: string } | null }): void {
   if (response.apiVersion !== 1) throw new RequestError('incompatible_api');
   if (response.error) throw new RequestError(response.error.code);
@@ -93,7 +110,7 @@ export class Controller {
   private api: API;
   private clock: Scheduler;
   private listeners = new Set<() => void>();
-  private state: ViewState = { fileName: '', session: null, operation: '', error: null, tab: 'tags', start: '0', page: null, loading: false, selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '', hex: null, hexSelection: null, hexState: '', hexError: null, hexRetry: '', tagJumpError: null, sourceChanged: false };
+  private state: ViewState = { fileName: '', session: null, operation: '', error: null, tab: 'tags', start: '0', page: null, loading: false, selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '', hex: null, hexSelection: null, hexState: '', hexError: null, hexRetry: '', tagJumpError: null, sourceChanged: false, summary: null, summaryState: '', summaryRunning: false, summaryCancelRequested: false, summaryProcessed: '0', summaryTotal: '0', summaryError: null, summaryRetry: '', summaryKind: 'keyframes', summaryStart: '0', summaryPage: null, summaryPageLoading: false, summaryPageError: null, summaryPrevious: null };
   private disposed = false;
   private statusVersion = 0;
   private pageVersion = 0;
@@ -121,6 +138,15 @@ export class Controller {
   private hexPaused = false;
   private hexPolls = 0;
   private stopHexTimer: (() => void) | null = null;
+  private summaryRequest: DetailQuery | null = null;
+  private summaryPhase: 'start' | 'get' | 'cancel' = 'start';
+  private summaryBusy = false;
+  private summaryPaused = false;
+  private summaryPolls = 0;
+  private stopSummaryTimer: (() => void) | null = null;
+  private summaryPageVersion = 0;
+  private summaryPageBusy = false;
+  private summaryHistory: string[] = [];
 
   constructor(api: API, clock: Scheduler = scheduler) { this.api = api; this.clock = clock; }
   getSnapshot = (): ViewState => this.state;
@@ -135,6 +161,7 @@ export class Controller {
   }
   private accept(session: Session): void {
     if (session.closed && session.terminal) {
+      this.clearSummary();
       this.clearDetail();
       this.pageVersion++;
       this.replyStops.get('page')?.();
@@ -142,10 +169,11 @@ export class Controller {
       this.jumpTagId = null;
       this.update({ session: null, fileName: '', operation: '', page: null, loading: false, start: '0', sourceChanged: false, error: null });
     } else {
-      if (session.closed) this.clearDetail();
+      if (session.closed) { this.clearSummary(); this.clearDetail(); }
       this.update({ session, operation: session.closed ? 'closing' : '' });
       this.ensureDetail();
       this.ensureHex();
+      this.ensureSummary();
     }
   }
   async open(): Promise<void> {
@@ -202,6 +230,7 @@ export class Controller {
     this.update({ operation: '', error: null });
     check(result);
     if (session) {
+      this.clearSummary();
       this.clearDetail();
       this.nextReadID = 0n;
       this.statusVersion++;
@@ -223,6 +252,7 @@ export class Controller {
     this.pollFailed = false;
     this.refreshStatus = false;
     if (operation === 'closing') {
+      this.clearSummary();
       this.clearDetail();
       this.pageVersion++;
       this.replyStops.get('page')?.();
@@ -291,6 +321,7 @@ export class Controller {
     } finally { this.polling = false; this.schedule(); }
   }
   select(tab: Tab, start = '0'): void {
+    if (this.state.summaryRunning) return;
     try { unsigned(start); } catch { this.update({ error: 'invalid_argument' }); return; }
     this.pageVersion++;
     this.jumpTagId = null;
@@ -303,7 +334,7 @@ export class Controller {
     return !!session?.terminal && !session.closed && session.scan !== null && this.state.operation !== 'closing' && !this.state.sourceChanged;
   }
   private ensurePage(): void {
-    if (this.disposed || this.paging || this.refreshStatus || this.pollFailed || !this.ready() || this.state.page) return;
+    if (this.disposed || this.paging || this.refreshStatus || this.pollFailed || !this.ready() || this.state.page || this.state.summaryRunning) return;
     void this.loadPage();
   }
   private async loadPage(): Promise<void> {
@@ -341,7 +372,7 @@ export class Controller {
     this.ensurePage();
   }
   selectTag(tagId: string): void {
-    if (this.disposed || !this.ready() || this.refreshStatus || this.pollFailed || this.state.page?.tab !== 'tags') return;
+    if (this.disposed || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed || this.state.page?.tab !== 'tags') return;
     const tag = this.state.page.data.tags.find(item => item.id === tagId);
     if (!tag || this.state.selectedTag?.id === tagId) return;
     if (this.nextReadID === 18446744073709551615n) { this.update({ detailError: 'id_exhausted' }); return; }
@@ -363,7 +394,7 @@ export class Controller {
     this.update({ selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '' });
   }
   private ensureDetail(): void {
-    if (this.disposed || this.detailBusy || this.detailPaused || this.stopDetailTimer || !this.detailRequest || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || this.state.summaryRunning || this.detailBusy || this.detailPaused || this.stopDetailTimer || !this.detailRequest || !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (this.detailPhase === 'start') void this.loadDetail();
     else this.stopDetailTimer = this.clock.after(() => { this.stopDetailTimer = null; void this.loadDetail(); }, POLL_MS);
   }
@@ -411,7 +442,7 @@ export class Controller {
     }
   }
   retryDetail(): void {
-    if (this.disposed || this.detailBusy || !this.detailPaused || !this.detailRequest || !this.state.detailRetry || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || this.state.summaryRunning || this.detailBusy || !this.detailPaused || !this.detailRequest || !this.state.detailRetry || !this.ready() || this.refreshStatus || this.pollFailed) return;
     // Unconfirmed work keeps its identity. An explicitly failed read is cached
     // by the host, so only a deliberate new read advances the request number.
     if (this.state.detailRetry === 'reload') {
@@ -424,7 +455,7 @@ export class Controller {
     this.ensureDetail();
   }
   jumpTag(text: string): void {
-    if (this.disposed || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
     try {
       const id = unsigned(text), total = unsigned(this.state.session!.progress!.tagCount);
       if (id >= total) throw new Error('Out of range.');
@@ -434,7 +465,7 @@ export class Controller {
     } catch { this.update({ tagJumpError: 'tag_not_found' }); }
   }
   showHex(selection: HexSelection): void {
-    if (this.disposed || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
     try {
       validateSelection(selection);
       if (unsigned(selection.offset) > unsigned(this.state.session!.progress!.sourceSize)) throw new Error('Out of range.');
@@ -459,7 +490,7 @@ export class Controller {
     if (this.state.detailState !== 'ready') this.update({ detailState: 'failed', detailError: 'detail_superseded', detailRetry: 'reload' });
   }
   private requestHex(offset: string, selection: HexSelection | null): void {
-    if (this.disposed || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (this.nextReadID === 18446744073709551615n) { this.update({ hexError: 'id_exhausted' }); return; }
     this.pauseDetailForHex();
     this.stopHexTimer?.(); this.stopHexTimer = null;
@@ -475,13 +506,14 @@ export class Controller {
     this.update({ hex: null, hexSelection: null, hexState: '', hexError: null, hexRetry: '', tagJumpError: null });
   }
   private invalidateSource(): void {
+    this.clearSummary();
     this.clearDetail();
     this.pageVersion++; this.jumpTagId = null;
     this.replyStops.get('page')?.();
     this.update({ sourceChanged: true, error: 'source_changed', page: null, loading: false });
   }
   private ensureHex(): void {
-    if (this.disposed || this.hexBusy || this.hexPaused || this.stopHexTimer || !this.hexRequest || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || this.state.summaryRunning || this.hexBusy || this.hexPaused || this.stopHexTimer || !this.hexRequest || !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (this.hexPhase === 'start') void this.loadHex();
     else this.stopHexTimer = this.clock.after(() => { this.stopHexTimer = null; void this.loadHex(); }, POLL_MS);
   }
@@ -523,7 +555,7 @@ export class Controller {
     } finally { this.hexBusy = false; this.ensureHex(); }
   }
   retryHex(): void {
-    if (this.disposed || this.hexBusy || !this.hexPaused || !this.hexRequest || !this.state.hexRetry || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || this.state.summaryRunning || this.hexBusy || !this.hexPaused || !this.hexRequest || !this.state.hexRetry || !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (this.state.hexRetry === 'reload') {
       if (this.nextReadID === 18446744073709551615n) { this.update({ hexError: 'id_exhausted' }); return; }
       this.hexRequest = { ...this.hexRequest, requestId: (++this.nextReadID).toString() };
@@ -531,6 +563,163 @@ export class Controller {
     this.hexPhase = 'start'; this.hexPaused = false; this.hexPolls = 0;
     this.update({ hexState: 'loading', hexError: null, hexRetry: '' });
     this.ensureHex();
+  }
+  startSummary(): void {
+    if (this.disposed || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.nextReadID === 18446744073709551615n) { this.update({ summaryError: 'id_exhausted' }); return; }
+    this.clearSummary();
+    this.clearDetail();
+    this.pageVersion++; this.jumpTagId = null;
+    this.replyStops.get('page')?.();
+    this.summaryRequest = { sessionId: this.state.session!.sessionId, requestId: (++this.nextReadID).toString() };
+    this.summaryPhase = 'start'; this.summaryPaused = false; this.summaryPolls = 0;
+    this.update({ summaryState: 'loading', summaryRunning: true, summaryTotal: this.state.session!.progress!.tagCount, loading: false });
+    this.ensureSummary();
+  }
+  cancelSummary(): void {
+    if (this.disposed || !this.summaryRequest || !this.state.summaryRunning || this.state.summaryCancelRequested || !this.ready()) return;
+    // Fence any Start/Get reply before sending the cancellation. A local timeout
+    // never implies that the host released the read worker.
+    this.summaryRequest = { ...this.summaryRequest };
+    this.stopSummaryTimer?.(); this.stopSummaryTimer = null;
+    this.replyStops.get('summary')?.();
+    this.summaryPhase = 'cancel'; this.summaryPaused = false; this.summaryPolls = 0;
+    this.update({ summaryState: 'canceling', summaryCancelRequested: true, summaryError: null, summaryRetry: '' });
+    this.ensureSummary();
+  }
+  retrySummary(): void {
+    if (this.disposed || this.summaryBusy || !this.summaryPaused || !this.summaryRequest || !this.state.summaryRetry || !this.ready()) return;
+    if (this.state.summaryRetry === 'reload') { this.startSummary(); return; }
+    this.summaryRequest = { ...this.summaryRequest };
+    this.summaryPhase = this.state.summaryCancelRequested ? 'cancel' : this.state.summaryError === 'summary_not_found' ? 'start' : 'get';
+    this.summaryPaused = false; this.summaryPolls = 0;
+    this.update({ summaryState: this.state.summaryCancelRequested ? 'canceling' : 'recovering', summaryError: null, summaryRetry: '' });
+    this.ensureSummary();
+  }
+  private clearSummary(): void {
+    this.summaryRequest = null; this.summaryPaused = false; this.summaryPolls = 0;
+    this.stopSummaryTimer?.(); this.stopSummaryTimer = null;
+    this.replyStops.get('summary')?.(); this.replyStops.get('summaryPage')?.();
+    this.summaryPageVersion++; this.summaryHistory = [];
+    this.update({ summary: null, summaryState: '', summaryRunning: false, summaryCancelRequested: false, summaryProcessed: '0', summaryTotal: '0', summaryError: null, summaryRetry: '', summaryKind: 'keyframes', summaryStart: '0', summaryPage: null, summaryPageLoading: false, summaryPageError: null, summaryPrevious: null });
+  }
+  private ensureSummary(): void {
+    if (this.disposed || this.summaryBusy || this.summaryPaused || this.stopSummaryTimer || !this.summaryRequest || !this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.summaryPhase !== 'get') void this.loadSummary();
+    else this.stopSummaryTimer = this.clock.after(() => { this.stopSummaryTimer = null; void this.loadSummary(); }, POLL_MS);
+  }
+  private currentSummary(request: DetailQuery): boolean {
+    return !this.disposed && this.summaryRequest === request && this.state.session?.sessionId === request.sessionId && this.ready();
+  }
+  private async loadSummary(): Promise<void> {
+    const request = this.summaryRequest;
+    if (!request || this.summaryBusy || !this.ready() || this.disposed) return;
+    const phase = this.summaryPhase;
+    this.summaryBusy = true;
+    try {
+      const response: SummaryResponse = await this.awaitReply('summary', () => phase === 'start' ? this.api.startSummary(request) : phase === 'cancel' ? this.api.cancelSummary(request) : this.api.summaryResult(request));
+      if (!this.currentSummary(request)) return;
+      if (response.apiVersion !== 1) throw new RequestError('incompatible_api');
+      if (response.sessionId !== request.sessionId || response.requestId !== request.requestId) throw new RequestError('invalid_response');
+      try { validateSummaryResponse(response); } catch { throw new RequestError('invalid_response'); }
+      this.update({ summaryProcessed: response.processed, summaryTotal: response.total });
+      if (response.state === 'ready') {
+        this.summaryPaused = true;
+        this.update({ summary: response.overview, summaryState: 'ready', summaryRunning: false, summaryCancelRequested: false, summaryError: null, summaryRetry: '' });
+        this.selectSummaryKind(this.state.summaryKind);
+        this.ensurePage();
+      } else if (response.state === 'failed') {
+        const code = response.error!.code;
+        if (code === 'source_changed') { this.invalidateSource(); return; }
+        this.summaryPaused = true;
+        // Not-found cannot prove a lost Start/Cancel command was never admitted.
+        const uncertain = code === 'summary_not_found';
+        this.update({ summaryState: 'failed', summaryRunning: uncertain, summaryCancelRequested: uncertain && this.state.summaryCancelRequested, summaryError: code,
+          summaryRetry: uncertain ? 'confirm' : ['summary_failed', 'deadline_exceeded', 'canceled'].includes(code) ? 'reload' : '' });
+        if (!uncertain) this.ensurePage();
+      } else {
+        this.summaryPhase = 'get';
+        if (this.state.summaryCancelRequested && response.state === 'pending') {
+          // A pending reply after an uncertain cancellation is not consent to
+          // resume. Keep reads blocked and allow the same cancellation again.
+          this.summaryPaused = true;
+          this.update({ summaryState: 'canceling', summaryError: 'summary_cancel_unconfirmed', summaryRetry: 'confirm' });
+        } else if (phase === 'get' && ++this.summaryPolls >= SUMMARY_POLL_LIMIT) {
+          this.summaryPaused = true;
+          this.update({ summaryState: response.state, summaryError: 'summary_wait_paused', summaryRetry: 'confirm' });
+        } else this.update({ summaryState: response.state, summaryCancelRequested: response.state === 'canceling' || this.state.summaryCancelRequested, summaryError: null, summaryRetry: '' });
+      }
+    } catch (error) {
+      if (!this.currentSummary(request)) return;
+      if ((phase === 'start' || phase === 'cancel') && !(error instanceof RequestError)) {
+        this.summaryPhase = 'get';
+        this.update({ summaryState: this.state.summaryCancelRequested ? 'canceling' : 'recovering', summaryError: null });
+      } else {
+        this.summaryPaused = true;
+        this.update({ summaryState: this.state.summaryCancelRequested ? 'canceling' : 'failed', summaryError: errorCode(error), summaryRetry: 'confirm' });
+      }
+    } finally { this.summaryBusy = false; this.ensureSummary(); }
+  }
+  selectSummaryKind(kind: SummaryKind): void {
+    if (this.disposed || this.state.summaryState !== 'ready' || !this.ready()) return;
+    try { summaryKind(kind); } catch { return; }
+    this.summaryHistory = [];
+    this.requestSummaryPage(kind, '0');
+  }
+  pageSummary(direction: 'first' | 'previous' | 'next'): void {
+    const page = this.state.summaryPage;
+    if (!page || this.state.summaryPageLoading || this.state.summaryState !== 'ready' || !this.ready()) return;
+    let start: string;
+    if (direction === 'first') { this.summaryHistory = []; start = '0'; }
+    else if (direction === 'previous') { const previous = this.summaryHistory.pop(); if (previous === undefined) return; start = previous; }
+    else { if (unsigned(page.bounds.next) >= unsigned(page.bounds.total)) return; this.summaryHistory.push(page.bounds.start); start = page.bounds.next; }
+    this.requestSummaryPage(this.state.summaryKind, start);
+  }
+  retrySummaryPage(): void {
+    if (!this.state.summaryPageError || this.state.summaryPageLoading || this.state.summaryState !== 'ready' || !this.ready()) return;
+    this.requestSummaryPage(this.state.summaryKind, this.state.summaryStart);
+  }
+  private requestSummaryPage(kind: SummaryKind, start: string): void {
+    this.summaryPageVersion++;
+    this.replyStops.get('summaryPage')?.();
+    this.update({ summaryKind: kind, summaryStart: start, summaryPage: null, summaryPageLoading: true, summaryPageError: null, summaryPrevious: this.summaryHistory.at(-1) ?? null });
+    this.ensureSummaryPage();
+  }
+  private ensureSummaryPage(): void {
+    if (this.disposed || this.summaryPageBusy || !this.state.summaryPageLoading || !this.summaryRequest || this.state.summaryState !== 'ready' || !this.ready()) return;
+    void this.loadSummaryPage();
+  }
+  private async loadSummaryPage(): Promise<void> {
+    const identity = this.summaryRequest!;
+    const request: SummaryPageRequest = { ...identity, kind: this.state.summaryKind, start: this.state.summaryStart, count: PAGE_SIZE };
+    const version = this.summaryPageVersion;
+    this.summaryPageBusy = true;
+    try {
+      const response = await this.awaitReply('summaryPage', () => this.api.summaryEvents(request));
+      if (!this.currentSummary(identity) || version !== this.summaryPageVersion) return;
+      if (response.sessionId !== request.sessionId || response.requestId !== request.requestId || response.kind !== request.kind) throw new RequestError('invalid_response');
+      check(response);
+      if (!response.page) throw new RequestError('invalid_response');
+      try {
+        validateSummaryPage(response.page, request.start, request.count);
+        if (response.page.bounds.total !== this.state.summary!.lists.find(list => list.kind === request.kind)?.retained) throw Error('Invalid retained count.');
+      } catch { throw new RequestError('invalid_response'); }
+      this.update({ summaryPage: response.page });
+    } catch (error) {
+      if (!this.currentSummary(identity) || version !== this.summaryPageVersion) return;
+      const code = errorCode(error);
+      if (code === 'source_changed') { this.invalidateSource(); return; }
+      this.update({ summaryPageError: code });
+    } finally {
+      this.summaryPageBusy = false;
+      if (version === this.summaryPageVersion) this.update({ summaryPageLoading: false });
+      else this.ensureSummaryPage();
+    }
+  }
+  locateSummaryEvent(event: SummaryEvent, target: 'tag' | 'hex'): void {
+    if (this.state.summaryState !== 'ready' || !this.state.summaryPage?.events.includes(event) || !this.ready()) return;
+    if (target === 'tag') { if (event.tagId !== null) this.jumpTag(event.tagId); }
+    else this.showHex({ offset: event.offset, bitOffset: event.bitOffset, bitLength: null, label: `媒体概览 · ${event.title}` });
   }
   dispose(): void {
     this.disposed = true;
@@ -540,6 +729,9 @@ export class Controller {
     this.stopDetailTimer?.(); this.stopDetailTimer = null;
     this.hexRequest = null;
     this.stopHexTimer?.(); this.stopHexTimer = null;
+    this.summaryRequest = null;
+    this.summaryPageVersion++;
+    this.stopSummaryTimer?.(); this.stopSummaryTimer = null;
     for (const stop of this.replyStops.values()) stop();
     this.replyStops.clear();
     this.listeners.clear();

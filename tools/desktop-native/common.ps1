@@ -43,7 +43,8 @@ function Get-GateSettings([string]$Mode) {
         'AVCDetail' { return [ordered]@{ gateMode = 'AVCDetail'; gateReadCall = 67; gateOffset = 24; committedTags = 32; fixtureBytes = 504; fixtureTags = 32 } }
         'MP3Detail' { return [ordered]@{ gateMode = 'MP3Detail'; gateReadCall = 67; gateOffset = 24; committedTags = 32; fixtureBytes = 498; fixtureTags = 32 } }
         'Hex' { return [ordered]@{ gateMode = 'Hex'; gateReadCall = 67; gateOffset = 13; committedTags = 32; fixtureBytes = 493; fixtureTags = 32 } }
-        default { throw 'Unsupported gate mode; use Scan, Detail, AVCDetail, MP3Detail or Hex.' }
+        'Summary' { return [ordered]@{ gateMode = 'Summary'; gateReadCall = 67; gateOffset = 24; committedTags = 32; fixtureBytes = 497; fixtureTags = 32 } }
+        default { throw 'Unsupported gate mode; use Scan, Detail, AVCDetail, MP3Detail, Hex or Summary.' }
     }
 }
 
@@ -60,6 +61,7 @@ function Assert-GateScenario($Run, [string]$Scenario) {
     $modes = switch ($Scenario) {
         'DetailClose' { @('Detail', 'AVCDetail', 'MP3Detail') }
         'HexClose' { @('Hex') }
+        'SummaryClose' { @('Summary') }
         { $_ -in @('Cancel', 'Exit') } { @('Scan') }
         default { throw 'Unknown acceptance scenario.' }
     }
@@ -244,19 +246,19 @@ function Get-GoInputs([string]$Repository) {
 }
 
 function Get-FramingFixtureBytes([string]$GateMode = 'Scan') {
-    # Detail/AVCDetail/MP3Detail change only Tag 0; the remaining 31 tags are empty
+    # Detail/AVCDetail/MP3Detail/Summary change only Tag 0; the remaining 31 tags are empty
     # ScriptData. These fixtures exercise reads, not playable media.
     $gate = Get-GateSettings $GateMode
     # Hex deliberately reuses the original Scan bytes; only the gate differs.
-    $detail = $gate.gateMode -in @('Detail', 'AVCDetail', 'MP3Detail')
+    $detail = $gate.gateMode -in @('Detail', 'AVCDetail', 'MP3Detail', 'Summary')
     [byte[]]$payload = @()
     $tagType = 18
-    if ($gate.gateMode -eq 'Detail') { $payload = [byte[]]@(0xaf, 0, 0x12, 0x10); $tagType = 8 }
+    if ($gate.gateMode -in @('Detail', 'Summary')) { $payload = [byte[]]@(0xaf, 0, 0x12, 0x10); $tagType = 8 }
     if ($gate.gateMode -eq 'AVCDetail') { $payload = [byte[]]@(0x17, 1, 0, 0, 0, 0, 0, 0, 2, 0x65, 0x88); $tagType = 9 }
     if ($gate.gateMode -eq 'MP3Detail') { $payload = [byte[]]@(0x2f, 0xff, 0xfb, 0x90, 0); $tagType = 8 }
     $bytes = [byte[]]::new($gate.fixtureBytes)
     [byte[]]$header = 70, 76, 86, 1, 0, 0, 0, 0, 9
-    if ($gate.gateMode -in @('Detail', 'MP3Detail')) { $header[4] = 4 }
+    if ($gate.gateMode -in @('Detail', 'MP3Detail', 'Summary')) { $header[4] = 4 }
     if ($gate.gateMode -eq 'AVCDetail') { $header[4] = 1 }
     [Array]::Copy($header, $bytes, $header.Length)
     for ($index = 0; $index -lt 32; $index++) {

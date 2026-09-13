@@ -16,6 +16,7 @@ import (
 	"github.com/sevico/muxray/internal/detailview"
 	"github.com/sevico/muxray/internal/flv"
 	"github.com/sevico/muxray/internal/session"
+	"github.com/sevico/muxray/internal/summaryview"
 )
 
 const (
@@ -46,6 +47,7 @@ type workKind uint8
 const (
 	detailWork workKind = iota
 	hexWork
+	summaryWork
 )
 
 type work struct {
@@ -67,25 +69,29 @@ type DetailResult struct {
 }
 
 type Document struct {
-	mu           sync.Mutex
-	ctx          context.Context
-	cancel       context.CancelFunc
-	scan         *session.Session
-	source       sourceFile
-	initial      os.FileInfo
-	parse        parseDetail
-	timeout      time.Duration
-	wake         chan struct{}
-	done         chan struct{}
-	closed       bool
-	released     bool
-	closeErr     error
-	changed      bool
-	request      work
-	latest       DetailResult
-	hex          HexResult
-	pending      *work
-	activeCancel context.CancelFunc
+	mu             sync.Mutex
+	ctx            context.Context
+	cancel         context.CancelFunc
+	scan           *session.Session
+	source         sourceFile
+	initial        os.FileInfo
+	parse          parseDetail
+	timeout        time.Duration
+	summaryTimeout time.Duration
+	wake           chan struct{}
+	done           chan struct{}
+	closed         bool
+	released       bool
+	closeErr       error
+	changed        bool
+	request        work
+	latest         DetailResult
+	hex            HexResult
+	summary        SummaryResult
+	summaryReport  *summaryview.Report
+	pending        *work
+	active         *work
+	activeCancel   context.CancelFunc
 }
 
 // Open opens one regular file. The same handle serves the scan and all details
@@ -120,7 +126,7 @@ func startWithParser(ctx context.Context, source sourceFile, info os.FileInfo, o
 		ctx = context.Background()
 	}
 	ctx, cancel := context.WithCancel(ctx)
-	d := &Document{ctx: ctx, cancel: cancel, source: source, initial: info, parse: parse, timeout: timeout, wake: make(chan struct{}, 1), done: make(chan struct{})}
+	d := &Document{ctx: ctx, cancel: cancel, source: source, initial: info, parse: parse, timeout: timeout, summaryTimeout: SummaryTimeout, wake: make(chan struct{}, 1), done: make(chan struct{})}
 	d.scan = session.Start(ctx, source, uint64(info.Size()), options)
 	if d.parse == nil {
 		d.parse = d.parseWithContext
@@ -138,6 +144,7 @@ func (d *Document) run() {
 			d.pending = nil
 			d.latest.Detail = nil
 			d.hex.Window = nil
+			d.summary.Overview, d.summaryReport = nil, nil
 			d.mu.Unlock()
 			// This single worker owns closure. No read or parse remains active.
 			_ = d.scan.Close(context.Background())
@@ -158,22 +165,47 @@ func (d *Document) run() {
 			continue
 		}
 		d.pending = nil
-		ctx, cancel := context.WithTimeout(d.ctx, d.timeout)
+		timeout := d.timeout
+		if selected.kind == summaryWork {
+			timeout = d.summaryTimeout
+		}
+		ctx, cancel := context.WithTimeout(d.ctx, timeout)
+		d.active = selected
 		d.activeCancel = cancel
 		d.mu.Unlock()
 
 		var detail *detailview.Detail
 		var window *HexWindow
+		var summary *summaryview.Report
 		var err error
 		if selected.kind == hexWork {
 			window, err = d.readHex(ctx, selected.offset, selected.count)
+		} else if selected.kind == summaryWork {
+			summary, err = d.readSummary(ctx, selected.id)
 		} else {
 			detail, err = d.readDetail(ctx, selected.tag)
 		}
 		cancel()
 		d.mu.Lock()
 		d.activeCancel = nil
-		if !d.closed && d.request.id == selected.id {
+		d.active = nil
+		if !d.closed && selected.kind == summaryWork && d.summary.RequestID == selected.id {
+			// A superseded active Summary remains canceling until its actual
+			// read returns, even though a newer task owns the request namespace.
+			if d.changed {
+				err = ErrSourceChanged
+			} else if d.summary.State == "canceling" {
+				err = context.Canceled
+			}
+			d.summary.State, d.summary.Err = "ready", err
+			d.summaryReport = summary
+			if err != nil {
+				d.summary.State = "failed"
+				d.summary.Overview, d.summaryReport = nil, nil
+			} else {
+				d.summary.Overview = &summary.Overview
+			}
+		} else if !d.closed && d.request.id == selected.id {
 			if selected.kind == hexWork {
 				d.hex.Window, d.hex.Err, d.hex.State = window, err, "ready"
 				if err != nil {
@@ -191,15 +223,21 @@ func (d *Document) run() {
 }
 
 func (d *Document) sourceUnchanged() error {
+	d.mu.Lock()
 	if d.changed {
+		d.mu.Unlock()
 		return ErrSourceChanged
 	}
+	d.mu.Unlock()
 	info, err := d.source.Stat()
 	if err != nil {
 		return err
 	}
 	if !os.SameFile(d.initial, info) || d.initial.Size() != info.Size() || !d.initial.ModTime().Equal(info.ModTime()) || d.initial.Mode() != info.Mode() {
+		d.mu.Lock()
 		d.changed = true
+		d.invalidateSummaryLocked(ErrSourceChanged)
+		d.mu.Unlock()
 		return ErrSourceChanged
 	}
 	return nil
@@ -267,13 +305,17 @@ func (d *Document) StartDetail(id, tagID uint64) (DetailResult, error) {
 // admitLocked replaces the pending task without bypassing the active worker.
 // Superseded results are dropped; a caller already holding a copy may keep it.
 func (d *Document) admitLocked(task work) {
+	d.cancelSummaryLocked()
 	d.request = task
 	d.pending = &task
 	d.latest, d.hex = DetailResult{}, HexResult{}
 	if task.kind == hexWork {
 		d.hex = HexResult{RequestID: task.id, Offset: task.offset, Count: task.count, State: "pending"}
-	} else {
+	} else if task.kind == detailWork {
 		d.latest = DetailResult{RequestID: task.id, TagID: task.tag.ID, State: "pending"}
+	} else {
+		d.summary = SummaryResult{RequestID: task.id, State: "pending", Total: d.scan.Snapshot().Progress.TagCount}
+		d.summaryReport = nil
 	}
 	if d.activeCancel != nil {
 		d.activeCancel()
@@ -366,6 +408,7 @@ func (d *Document) Close(ctx context.Context) error {
 	d.pending = nil
 	d.latest.Detail = nil
 	d.hex.Window = nil
+	d.summary.Overview, d.summaryReport = nil, nil
 	if d.activeCancel != nil {
 		d.activeCancel()
 	}

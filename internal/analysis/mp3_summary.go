@@ -96,12 +96,21 @@ type MP3Headers struct {
 // AnalyzeV2 opts in to MP3 classification without changing Analyze's v1 scope.
 // It reads one FLV audio byte and at most four MPEG header bytes per MP3 Tag.
 func AnalyzeV2(ctx context.Context, source io.ReaderAt, scan flv.ScanResult, options OptionsV2) (ResultV2, error) {
+	return AnalyzeV2WithProgress(ctx, source, scan, options, nil)
+}
+
+// AnalyzeV2WithProgress preserves AnalyzeV2's result and error semantics while
+// reporting completed visits synchronously: initially, every 1024 Tags, and at
+// the final completed position. Equal consecutive progress is not repeated.
+// An error may leave the returned aggregate midway through a Tag; progress
+// excludes that Tag, and callers must not publish the aggregate as complete.
+func AnalyzeV2WithProgress(ctx context.Context, source io.ReaderAt, scan flv.ScanResult, options OptionsV2, progress func(Progress)) (ResultV2, error) {
 	normalized, err := options.Normalized()
 	if err != nil {
 		return ResultV2{}, err
 	}
 	state := summaryV2State{headerLimit: normalized.MaxMP3HeaderEvents}
-	result, err := analyze(ctx, source, scan, normalized.Options, &state)
+	result, err := analyze(ctx, source, scan, normalized.Options, &state, progress)
 	return ResultV2{Result: result, AudioCodecs: state.audioCodecs, MP3: state.mp3}, err
 }
 

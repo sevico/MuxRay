@@ -45,6 +45,27 @@ export interface HexResponse {
   apiVersion: number; sessionId: string; requestId: string; offset: string; count: number;
   state: 'pending' | 'ready' | 'failed'; window: HexWindow | null; error: Fault | null;
 }
+export type SummaryKind = 'keyframes' | 'aac' | 'avc' | 'mp3' | 'diagnostics';
+export interface SummaryMetric { section: string; name: string; value: string | null; unit: string }
+export interface SummaryList { kind: SummaryKind; observed: string | null; retained: string; truncated: boolean }
+export interface SummaryOverview {
+  sourceSize: string; indexedTags: string; scanComplete: boolean; scanHasErrors: boolean;
+  complete: boolean; hasErrors: boolean; metrics: SummaryMetric[]; lists: SummaryList[];
+}
+export interface SummaryEvent {
+  id: string; tagId: string | null; offset: string; bitOffset: number; dts: string | null;
+  title: string; severity: string; message: string; values: SummaryMetric[];
+}
+export interface SummaryResponse {
+  apiVersion: number; sessionId: string; requestId: string; state: 'pending' | 'canceling' | 'ready' | 'failed';
+  processed: string; total: string; overview: SummaryOverview | null; error: Fault | null;
+}
+export interface SummaryPageRequest extends DetailQuery { kind: SummaryKind; start: string; count: number }
+export interface SummaryPage { bounds: Bounds; events: SummaryEvent[] }
+export interface SummaryPageResponse {
+  apiVersion: number; sessionId: string; requestId: string; kind: SummaryKind;
+  page: SummaryPage | null; error: Fault | null;
+}
 export interface API {
   open(requestId: string): Promise<PickResponse>;
   openResult(requestId: string): Promise<PickResponse>;
@@ -57,4 +78,8 @@ export interface API {
   detailResult(request: DetailQuery): Promise<DetailResponse>;
   startHex(request: HexRequest): Promise<HexResponse>;
   hexResult(request: DetailQuery): Promise<HexResponse>;
+  startSummary(request: DetailQuery): Promise<SummaryResponse>;
+  summaryResult(request: DetailQuery): Promise<SummaryResponse>;
+  cancelSummary(request: DetailQuery): Promise<SummaryResponse>;
+  summaryEvents(request: SummaryPageRequest): Promise<SummaryPageResponse>;
 }

@@ -36,7 +36,7 @@ function setup(overrides: Partial<API> = {}) {
     tags: async request => ({ apiVersion: 1, error: null, page: { sessionId: request.sessionId, bounds: { start: request.start, total: '3', next: '3', limit: 100 }, tags: ['0', '1', '9007199254740993'].map(tag) } }),
     diagnostics: async request => ({ apiVersion: 1, error: null, page: { sessionId: request.sessionId, bounds: { start: request.start, total: '0', next: '0', limit: 100 }, diagnostics: [] } }),
     startDetail: async request => ready(request), detailResult: async () => { throw Error('unexpected detail poll'); },
-    startHex: async () => { throw Error('unexpected Hex request'); }, hexResult: async () => { throw Error('unexpected Hex query'); }, ...overrides,
+    startHex: async () => { throw Error('unexpected Hex request'); }, hexResult: async () => { throw Error('unexpected Hex query'); }, ...unexpectedSummary, ...overrides,
   };
   return { controller: new Controller(api, clock), clock };
 }
@@ -181,3 +181,4 @@ test('a superseded Get reply and detail deadline are isolated from concurrent pa
   old.resolve(ready(requests[0], { state: 'failed', detail: null, error: { code: 'source_changed', message: 'late' } })); await settle();
   assert.equal(controller.getSnapshot().detailError, null); assert.equal(controller.getSnapshot().page?.tab, 'tags'); assert.equal(clock.tasks.size, 0);
 });
+import { unexpectedSummary } from './summary-fixture.ts';

@@ -1,7 +1,7 @@
 param(
     [Parameter(Mandatory)][string]$Repository,
     [Parameter(Mandatory)][string]$RunDirectory,
-    [ValidateSet('Scan', 'Detail', 'AVCDetail', 'MP3Detail', 'Hex')][string]$GateMode = 'Scan'
+    [ValidateSet('Scan', 'Detail', 'AVCDetail', 'MP3Detail', 'Hex', 'Summary')][string]$GateMode = 'Scan'
 )
 . (Join-Path $PSScriptRoot 'common.ps1')
 

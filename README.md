@@ -12,6 +12,7 @@ MuxRay 是一个面向 FLV 和音视频码流的跨平台诊断工具。项目�
 - 独立 Wails/React 最小桌面壳：原生文件选择、进度、取消/关闭和有界结果页；
 - 独立文件生命周期及 AMF0/AAC/AVC/MP3 桌面详情：取消后完整前缀可读、请求恢复、字段与位级源位置；
 - 有界 Hex 桌面窗口、字段/诊断源位置联动及 Tag ID 跳转，共用保留源文件与读取任务；
+- 媒体概览 v2 桌面视图：可取消分析、精确时间/码率指标、有界事件分页与 Tag/Hex 联动；
 - AVC 桌面有界前置配置查找、NAL 长度来源、SPS/PPS 摘要与不伪造的派生字段位置；
 - 按 Tag、资源有界的通用详情分发；
 - AMF0 ScriptData 详情解析；
@@ -24,7 +25,7 @@ MuxRay 是一个面向 FLV 和音视频码流的跨平台诊断工具。项目�
 - 正常、边界、损坏样本的 unit、Golden 与 fuzz 测试；
 - 离线语料身份/差分校验与实际落盘大文件的扫描测量工具。
 
-summary 桌面视图、完整 VUI/PPS/slice 等深层 H.264 语义、MP3 多帧/VBR/CRC 深层分析、分页帧级曲线和实时 RTMP/HTTP-FLV 将在后续阶段加入。
+完整 VUI/PPS/slice 等深层 H.264 语义、MP3 多帧/VBR/CRC 深层分析、分页帧级曲线和实时 RTMP/HTTP-FLV 将在后续阶段加入。
 
 ## 开发
 
@@ -62,6 +63,8 @@ Go 应用层新增 `internal/session.Open`：一个会话拥有一个后台扫�
 `desktop/` 是独立 Go 模块，接入 Wails v2.14.0 与 React/TypeScript。界面提供原生文件选择、进度、取消/关闭，以及扫描结束后的 Tag/诊断分页（每页 100 条）和 AMF0/AAC/AVC/MP3 按需详情。Hex 默认读取 512 字节、单次上限 4 KiB，支持字段/诊断源位置和 Tag ID 跳转；截断或未支持编码的原始字节也可独立查看。AVC NAL 长度由有界查找前置可用 sequence header 取得，缺失或达到预算时保留包头并明确诊断，不猜测长度；SPS/PPS 摘要和其他派生值不伪造连续源位置。MP3 只解析首个 MPEG 固定帧头，free-format 不虚构码率或帧长，CRC 标志不代表校验通过。根模块不引入 GUI 依赖；Windows 构建、测试和功能边界见 [`桌面开发说明`](desktop/README.md)、[`ADR-011`](docs/decisions/011-minimal-wails-shell.md) 与 [`ADR-014`](docs/decisions/014-bounded-desktop-avc-context.md)。本轮四类详情联动、大文件、源变化恢复及阻塞关闭实测见 [`Hex 原生验收记录`](docs/desktop-hex-20260913.md)。
 
 扫描、详情、汇总和输出共用 Ctrl+C 取消上下文，取消退出码为 `130`，不会伪造文件损坏诊断。取消时 stdout 可能不完整，调用方应丢弃；核心返回的部分索引仍可分页读取。取消是协作式的，不能强制中断已阻塞的底层读取或写入。设计依据见 [`ADR-008`](docs/decisions/008-cancellable-chunked-index.md)。
+
+桌面“媒体概览”按需分析已有索引，沿用 CLI v2 核心与保留的源句柄。它与详情、Hex 共用读取 worker 和请求 ID，使用独立的两分钟协作截止时间；完成的概览可在事件定位后继续查看。取消或读取失败不展示半成品，部分索引的结果明确标记覆盖范围。事件列表分别显示观测总数、保留条数与省略状态，诊断总数无法确定时显示未知。桌面采用固定资源预算，跨入口比对应使用相同预算。设计见 [`ADR-016`](docs/decisions/016-retained-desktop-summary.md)，自动与浏览器检查、待完成的原生步骤见 [`Summary 验证记录`](docs/desktop-summary-20260913.md)。
 
 首批 8 个小样本与 1/2/10 GiB 实际落盘文件的验证结果见 [`语料与大文件实测`](docs/corpus-baseline-20260905.md)，复现方法见 [`tools/README.md`](tools/README.md)。媒体仅保留本地；公开样本尚未清权，另有一次首次取消延迟离群值待调查，不能据此宣告完整语料或性能验收通过。
 

@@ -489,6 +489,156 @@ export namespace desktop {
 	}
 	
 	
+	export class SummaryPage {
+	    bounds: PageBounds;
+	    events: summaryview.Event[];
+	
+	    static createFrom(source: any = {}) {
+	        return new SummaryPage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.bounds = this.convertValues(source["bounds"], PageBounds);
+	        this.events = this.convertValues(source["events"], summaryview.Event);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SummaryPageRequest {
+	    sessionId: string;
+	    requestId: string;
+	    kind: string;
+	    start: string;
+	    count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SummaryPageRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.requestId = source["requestId"];
+	        this.kind = source["kind"];
+	        this.start = source["start"];
+	        this.count = source["count"];
+	    }
+	}
+	export class SummaryPageResponse {
+	    apiVersion: number;
+	    sessionId: string;
+	    requestId: string;
+	    kind: string;
+	    page?: SummaryPage;
+	    error?: Fault;
+	
+	    static createFrom(source: any = {}) {
+	        return new SummaryPageResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.apiVersion = source["apiVersion"];
+	        this.sessionId = source["sessionId"];
+	        this.requestId = source["requestId"];
+	        this.kind = source["kind"];
+	        this.page = this.convertValues(source["page"], SummaryPage);
+	        this.error = this.convertValues(source["error"], Fault);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SummaryQuery {
+	    sessionId: string;
+	    requestId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SummaryQuery(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.requestId = source["requestId"];
+	    }
+	}
+	export class SummaryResponse {
+	    apiVersion: number;
+	    sessionId: string;
+	    requestId: string;
+	    state: string;
+	    processed: string;
+	    total: string;
+	    overview?: summaryview.Overview;
+	    error?: Fault;
+	
+	    static createFrom(source: any = {}) {
+	        return new SummaryResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.apiVersion = source["apiVersion"];
+	        this.sessionId = source["sessionId"];
+	        this.requestId = source["requestId"];
+	        this.state = source["state"];
+	        this.processed = source["processed"];
+	        this.total = source["total"];
+	        this.overview = this.convertValues(source["overview"], summaryview.Overview);
+	        this.error = this.convertValues(source["error"], Fault);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class Tag {
 	    id: string;
 	    typeCode: number;
@@ -767,6 +917,138 @@ export namespace main {
 	        this.fileName = source["fileName"];
 	        this.session = this.convertValues(source["session"], desktop.SessionSnapshot);
 	        this.error = this.convertValues(source["error"], desktop.Fault);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
+export namespace summaryview {
+	
+	export class Metric {
+	    section: string;
+	    name: string;
+	    value?: string;
+	    unit: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Metric(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.section = source["section"];
+	        this.name = source["name"];
+	        this.value = source["value"];
+	        this.unit = source["unit"];
+	    }
+	}
+	export class Event {
+	    id: string;
+	    tagId?: string;
+	    offset: string;
+	    bitOffset: number;
+	    dts?: string;
+	    title: string;
+	    severity: string;
+	    message: string;
+	    values: Metric[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Event(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.tagId = source["tagId"];
+	        this.offset = source["offset"];
+	        this.bitOffset = source["bitOffset"];
+	        this.dts = source["dts"];
+	        this.title = source["title"];
+	        this.severity = source["severity"];
+	        this.message = source["message"];
+	        this.values = this.convertValues(source["values"], Metric);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ListInfo {
+	    kind: string;
+	    observed?: string;
+	    retained: string;
+	    truncated: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ListInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.observed = source["observed"];
+	        this.retained = source["retained"];
+	        this.truncated = source["truncated"];
+	    }
+	}
+	
+	export class Overview {
+	    sourceSize: string;
+	    indexedTags: string;
+	    scanComplete: boolean;
+	    scanHasErrors: boolean;
+	    complete: boolean;
+	    hasErrors: boolean;
+	    metrics: Metric[];
+	    lists: ListInfo[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Overview(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sourceSize = source["sourceSize"];
+	        this.indexedTags = source["indexedTags"];
+	        this.scanComplete = source["scanComplete"];
+	        this.scanHasErrors = source["scanHasErrors"];
+	        this.complete = source["complete"];
+	        this.hasErrors = source["hasErrors"];
+	        this.metrics = this.convertValues(source["metrics"], Metric);
+	        this.lists = this.convertValues(source["lists"], ListInfo);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

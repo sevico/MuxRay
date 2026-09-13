@@ -6,6 +6,10 @@ export function CancelScan(arg1) {
   return window['go']['desktop']['Bindings']['CancelScan'](arg1);
 }
 
+export function CancelSummary(arg1) {
+  return window['go']['desktop']['Bindings']['CancelSummary'](arg1);
+}
+
 export function CloseFile(arg1) {
   return window['go']['desktop']['Bindings']['CloseFile'](arg1);
 }
@@ -26,6 +30,14 @@ export function GetSession(arg1) {
   return window['go']['desktop']['Bindings']['GetSession'](arg1);
 }
 
+export function GetSummary(arg1) {
+  return window['go']['desktop']['Bindings']['GetSummary'](arg1);
+}
+
+export function GetSummaryEvents(arg1) {
+  return window['go']['desktop']['Bindings']['GetSummaryEvents'](arg1);
+}
+
 export function GetTags(arg1) {
   return window['go']['desktop']['Bindings']['GetTags'](arg1);
 }
@@ -40,4 +52,8 @@ export function StartDetail(arg1) {
 
 export function StartHex(arg1) {
   return window['go']['desktop']['Bindings']['StartHex'](arg1);
+}
+
+export function StartSummary(arg1) {
+  return window['go']['desktop']['Bindings']['StartSummary'](arg1);
 }

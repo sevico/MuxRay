@@ -1,6 +1,7 @@
 import type { desktop, main } from '../wailsjs/go/models';
-import type { DetailKind, DetailResponse, DiagnosticPage, HexResponse, PageResponse, PickResponse, Session, SessionResponse, TagPage } from './protocol';
+import type { DetailKind, DetailResponse, DiagnosticPage, HexResponse, PageResponse, PickResponse, Session, SessionResponse, TagPage, SummaryResponse, SummaryPageResponse } from './protocol';
 import { validateHexWindow } from './hex.ts';
+import { summaryKind, validateSummaryResponse, validateSummaryPage } from './summary.ts';
 
 // Wails v2.14 emits optional TS properties for Go pointers. Normalize both
 // undefined (generated declarations) and null (actual JSON) without unsafe
@@ -45,4 +46,23 @@ export function hexResponse(value: desktop.HexResponse): HexResponse {
   const window = value.window ?? null;
   if (window) validateHexWindow(window, value.count);
   return { ...value, state, window, error: value.error ?? null };
+}
+export function summaryResponse(value: desktop.SummaryResponse): SummaryResponse {
+  const state = value.state;
+  if (state !== 'pending' && state !== 'canceling' && state !== 'ready' && state !== 'failed') throw new Error('Invalid summary response state.');
+  const result: SummaryResponse = { ...value, state, error: value.error ?? null, overview: value.overview ? {
+    ...value.overview, metrics: value.overview.metrics.map(metric => ({ ...metric, value: metric.value ?? null })),
+    lists: value.overview.lists.map(list => ({ ...list, kind: summaryKind(list.kind), observed: list.observed ?? null })),
+  } : null };
+  validateSummaryResponse(result);
+  return result;
+}
+export function summaryPageResponse(value: desktop.SummaryPageResponse): SummaryPageResponse {
+  const result: SummaryPageResponse = { ...value, kind: summaryKind(value.kind), error: value.error ?? null, page: value.page ? {
+    ...value.page, events: value.page.events.map(event => ({ ...event, tagId: event.tagId ?? null, dts: event.dts ?? null,
+      values: event.values.map(metric => ({ ...metric, value: metric.value ?? null })),
+    })),
+  } : null };
+  if (result.page) validateSummaryPage(result.page, result.page.bounds.start, result.page.bounds.limit);
+  return result;
 }

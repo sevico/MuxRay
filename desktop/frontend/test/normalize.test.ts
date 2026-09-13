@@ -91,3 +91,32 @@ test('MP3 free-format preserves complete header syntax and does not invent unkno
   assert.equal(value.detail?.diagnostics[0].expected, null);
   assert.equal(value.detail?.diagnostics[0].actual, null);
 });
+import { summaryResponse, summaryPageResponse } from '../src/normalize.ts';
+import { overview, summaryReady, summaryPage } from './summary-fixture.ts';
+
+test('summary normalizes optional pointers and preserves signed metrics, coordinates, and unknown observed counts', () => {
+  const ready = summaryReady({ sessionId: 'scan-1', requestId: '9007199254740993' });
+  const wire = JSON.parse(JSON.stringify(ready));
+  delete wire.overview.metrics[1].value; delete wire.overview.lists[4].observed; delete wire.error;
+  const result = summaryResponse(wire);
+  assert.equal(result.requestId, '9007199254740993'); assert.equal(result.overview?.metrics[0].value, '-9007199254740993'); assert.equal(result.overview?.metrics[1].value, null);
+  assert.equal(result.overview?.lists[4].observed, null); assert.equal(result.error, null);
+  const page = summaryPage({ sessionId: 'scan-1', requestId: '1', kind: 'diagnostics', start: '0', count: 100 }, 1);
+  const pageWire = JSON.parse(JSON.stringify(page)); delete pageWire.page.events[0].tagId; delete pageWire.page.events[0].dts;
+  const normalized = summaryPageResponse(pageWire);
+  assert.equal(normalized.page?.events[0].tagId, null); assert.equal(normalized.page?.events[0].dts, null); assert.equal(normalized.page?.events[0].offset, '9007199254740993');
+  assert.equal(normalized.page?.events[0].message, '<script>plain text</script>');
+});
+test('summary rejects oversized values, invalid counts, nonterminal overviews and malformed page bounds', () => {
+  const request = { sessionId: 'scan-1', requestId: '1' };
+  for (const mutate of [
+    (value: ReturnType<typeof summaryReady>) => { value.overview!.metrics[0].value = '字'.repeat(86); },
+    (value: ReturnType<typeof summaryReady>) => { value.overview!.lists[0].observed = '1'; },
+    (value: ReturnType<typeof summaryReady>) => { value.overview!.lists[0].retained = '1025'; },
+    (value: ReturnType<typeof summaryReady>) => { value.processed = '206'; },
+    (value: ReturnType<typeof summaryReady>) => { value.state = 'pending'; },
+  ]) { const value = summaryReady(request); mutate(value); assert.throws(() => summaryResponse(JSON.parse(JSON.stringify(value)))); }
+  const page = summaryPage({ ...request, kind: 'keyframes', start: '0', count: 100 }); page.page!.bounds.next = '101';
+  assert.throws(() => summaryPageResponse(JSON.parse(JSON.stringify(page))));
+  assert.equal(overview().indexedTags, '205');
+});
