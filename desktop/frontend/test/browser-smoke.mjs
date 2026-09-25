@@ -29,6 +29,9 @@ async function waitFor(expression) {
 async function click(text) {
   await evaluate(`(() => { const matches = [...document.querySelectorAll('button')].filter(b => b.textContent.trim() === ${JSON.stringify(text)}); if(matches.length !== 1 || matches[0].disabled) throw Error('Button unavailable'); matches[0].click(); return true; })()`);
 }
+async function setFilterField(id, value) {
+  await evaluate(`(() => { const element = document.getElementById(${JSON.stringify(id)}); if (!element || element.disabled) throw Error('Filter field unavailable'); const select = element.tagName === 'SELECT'; Object.getOwnPropertyDescriptor(select ? HTMLSelectElement.prototype : HTMLInputElement.prototype, 'value').set.call(element, ${JSON.stringify(value)}); element.dispatchEvent(new Event(select ? 'change' : 'input', { bubbles: true })); })()`);
+}
 
 try {
   target = (await call(`/new?url=${encodeURIComponent(`http://127.0.0.1:${server.address().port}/`)}`)).targetId;
@@ -195,6 +198,54 @@ try {
   await click('打开 FLV 文件');
   await waitFor("document.querySelector('.topbar .primary')?.disabled === false");
   assert.equal(await evaluate("document.querySelector('.empty-state') !== null && document.querySelector('[role=alert]') === null"), true);
+  await evaluate("window.smokeMode = 'filter-sparse'");
+  await click('打开 FLV 文件'); await waitFor("document.querySelectorAll('.results tbody tr').length === 100");
+  await setFilterField('tag-filter-type', 'audio'); await click('应用筛选');
+  await waitFor("document.querySelector('.filter-pagination')?.textContent.includes('[0, 4096)')");
+  assert.equal(await evaluate("document.querySelector('.results .result-placeholder').textContent"), '本次检查范围内没有匹配 Tag；仍有索引未检查。');
+  await click('继续查找'); await waitFor("document.querySelector('.results tbody .tag-select')?.textContent === '4500'");
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('.results tbody .tag-select')].map(x => x.textContent)"), ['4500', '5000']);
+  await click('下一结果页'); await waitFor("document.querySelector('.results tbody .tag-select')?.textContent === '8200'");
+  assert.equal(await evaluate("[...document.querySelectorAll('button')].find(x => x.textContent === '下一结果页').disabled"), true);
+  await click('上一结果页'); await waitFor("document.querySelector('.filter-pagination')?.textContent.includes('[4096, 8192)')");
+  await click('筛选首页'); await waitFor("document.querySelector('.filter-pagination')?.textContent.includes('[0, 4096)')");
+  await click('关闭文件'); await waitFor("document.querySelector('.empty-state') !== null");
+  await evaluate("window.smokeMode = 'filter-multipage'");
+  await click('打开 FLV 文件'); await waitFor("document.querySelectorAll('.results tbody tr').length === 100");
+  await setFilterField('tag-filter-type', 'audio'); await click('应用筛选');
+  await waitFor("document.querySelector('.filter-pagination')?.textContent.includes('[0, 199)')");
+  await click('下一结果页'); await waitFor("document.querySelectorAll('.results tbody tr').length === 53");
+  assert.equal(await evaluate("document.querySelector('.results tbody .tag-select').textContent"), '200');
+  await click('上一结果页'); await waitFor("document.querySelector('.filter-pagination')?.textContent.includes('[0, 199)')");
+  await click('分析媒体'); await waitFor("document.querySelector('.summary-coverage') !== null");
+  assert.equal(await evaluate("document.querySelector('.summary-coverage').textContent.includes('305 Tag')"), true, 'Filtered Summary covers the same opened 305-Tag dataset');
+  await evaluate("document.querySelector('[aria-label=\"查看 Tag 6 详情\"]').click()");
+  await waitFor("document.querySelector('.detail-heading h2')?.textContent === 'MP3 Audio'");
+  await evaluate("document.querySelector('[aria-label=\"查看 Tag 6 原始字节\"]').click()");
+  await waitFor("document.querySelector('.hex-grid tbody tr') !== null");
+  assert.equal(await evaluate("document.querySelector('.filter-pagination').textContent.includes('[0, 199)') && document.querySelector('.summary-coverage') !== null && document.querySelectorAll('.results tbody tr').length === 100"), true, 'Filtered detail/Hex preserves filter page and ready Summary');
+  await click('关闭文件'); await waitFor("document.querySelector('.empty-state') !== null");
+  await evaluate("window.smokeMode = 'filter-ranges'");
+  await click('打开 FLV 文件'); await waitFor("document.querySelectorAll('.results tbody tr').length === 12");
+  await setFilterField('tag-filter-type', 'video');
+  await setFilterField('tag-filter-dts-min', '10000'); await setFilterField('tag-filter-dts-max', '12000');
+  await click('应用筛选'); await waitFor("document.querySelectorAll('.results tbody tr').length === 3");
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('.results tbody .tag-select')].map(x => x.textContent)"), ['1', '7', '11']);
+  await setFilterField('tag-filter-dts-min', '12001'); await click('应用筛选');
+  await waitFor("document.querySelector('.tag-filter [role=alert]') !== null");
+  assert.equal(await evaluate("document.querySelectorAll('.results tbody tr').length"), 3, 'Invalid draft preserves applied results');
+  await click('清除筛选'); await waitFor("document.querySelector('.filter-pagination') === null && document.querySelectorAll('.results tbody tr').length === 12");
+  assert.equal(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), true, 'Filter controls stay inside viewport');
+  await click('关闭文件'); await waitFor("document.querySelector('.empty-state') !== null");
+  await evaluate("window.smokeMode = 'filter-structures'");
+  await click('打开 FLV 文件'); await waitFor("document.querySelectorAll('.results tbody tr').length === 7");
+  await setFilterField('tag-filter-structure', 'previous_size_invalid'); await click('应用筛选');
+  await waitFor("document.querySelectorAll('.results tbody tr').length === 2");
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('.results tbody .tag-select')].map(x => x.textContent)"), ['1', '3']);
+  await setFilterField('tag-filter-structure', 'previous_size_missing'); await click('应用筛选');
+  await waitFor("document.querySelectorAll('.results tbody tr').length === 1 && document.querySelector('.results tbody .tag-select').textContent === '6'");
+  await click('关闭文件'); await waitFor("document.querySelector('.empty-state') !== null");
+  console.log(JSON.stringify({ filterChecks: ['empty 4096-record window continues', 'sparse global IDs and previous cursor history', '100/53 matches with scan cursor 199', 'filtered MP3 detail and Hex retain Summary', 'inclusive nonmonotonic DTS', 'invalid range preserves applied results', 'clear filter restores page', 'missing versus invalid PreviousTagSize'] }));
   console.log(JSON.stringify({ result: 'passed', host: 'synthetic only; native Wails not verified', checks: ['empty state', '100/100/5 pagination', 'exact large integers', 'escaped diagnostic text', 'partial results', 'AMF0/AAC/AVC/MP3 detail panes', 'AVC derived values without fabricated spans', 'AVC missing configuration', 'AVC context lookup budget', 'AVC bounded prefix diagnostics', 'MP3 fixed-header scope', 'MP3 free-format unknown derived values', 'MP3 malformed header and unsupported audio clear stale values', 'escaped field previews', 'exact byte/bit positions', '512-byte Hex windows', 'raw unsupported Tag without detail parse', 'cross-window and cross-byte selection', 'diagnostic point without range', 'empty EOF', 'Tag ID jump', 'summary exact signed metrics and partial coverage', 'summary bounded short-page next/history', 'unknown observed diagnostics', 'summary event Tag and point-Hex navigation', 'ready summary survives navigation', 'summary lost Start recovery', 'summary uncertain Cancel confirmation', 'source change invalidates all views', 'cancel', 'close', 'picker cancellation'], screenshot }, null, 2));
 } finally {
   try { if (target) await call(`/close?target=${target}`); }

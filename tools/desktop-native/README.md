@@ -368,6 +368,58 @@ Scan 模式的非 GUI 回归另外验证：取消留下的 10 Tag 索引前缀�
 实际 I/O 已结束；即使概览显示等待确认，关闭仍必须保留同一个源直到读取返回。
 SummaryClose 不能用于其他模式；MarkCancel/MarkExit 和 Exit watcher 只适用于 Scan。
 
+## Summary 取消完成后重新分析
+
+此流程使用独立的新 `Summary` run，补充取消、实际读取退出和重新分析的连续操作。
+它不使用 `SummaryClose` 的关闭前释放顺序，检查入口是 `check-summary-recovery.ps1`。
+
+1. 构建 `build.ps1 -Repository $repo -RunDirectory $recoveryRun -GateMode Summary`，在真实窗口打开本 run 的 `native-controlled.flv`，扫描完成 32 Tag 后开始媒体分析。
+2. 确认 `entered.json` 是 Summary、ReadAt 67、offset 24。运行 `control.ps1 -RunDirectory $recoveryRun -Action MarkSummaryCancel`，随即在窗口点击“取消媒体分析”。记录此时仍在取消/等待的原生截图与 accessibility JSON，以及实际观察时的 UTC。
+3. 运行 `control.ps1 -RunDirectory $recoveryRun -Action Release`，等待 UI 明确显示任务已取消、可重新分析；保存第二组 UI 证据和 UTC。
+4. 不关闭或重开文件，点击“重新分析”，等待完成 32/32 Tag 并出现概览；保存第三组证据和 UTC。gate 仅阻塞第 67 次读取，后续分析走实际文件读取。
+5. 通过真实 UI 关闭文件，保存空状态证据和 UTC。将四次实际观察写到绝对路径 JSON，执行 `check-summary-recovery.ps1 -RunDirectory $recoveryRun -ObservationFile $observationFile`。
+
+观察文件结构如下；时间和路径须使用本次实际记录，`runId/pid/processToken` 从 `entered.json` 取值：
+
+```json
+{
+  "format": "muxray-summary-recovery-observation-v1",
+  "runId": "actual-run-id", "pid": 123, "processToken": "actual-token",
+  "observations": [
+    {"state": "canceling", "timeUTC": "2026-09-25T01:00:02Z", "evidenceFiles": ["C:\\evidence\\canceling.json", "C:\\evidence\\canceling.png"]},
+    {"state": "canceled", "timeUTC": "2026-09-25T01:00:05Z", "evidenceFiles": ["C:\\evidence\\canceled.json", "C:\\evidence\\canceled.png"]},
+    {"state": "ready", "timeUTC": "2026-09-25T01:00:06Z", "processed": 32, "total": 32, "indexedTags": 32, "evidenceFiles": ["C:\\evidence\\ready.json", "C:\\evidence\\ready.png"]},
+    {"state": "empty", "timeUTC": "2026-09-25T01:00:08Z", "evidenceFiles": ["C:\\evidence\\empty.json", "C:\\evidence\\empty.png"]}
+  ]
+}
+```
+
+检查要求 `entered < cancel-command < canceling UI < release < released < canceled UI < ready UI < closed < empty UI`，收据与观察文件的进程身份一致、ready 覆盖 32 Tag、Close 无错误、源可独占打开，并保存所有证据文件 SHA-256。这些 UI 状态由操作者提供，脚本只校验元数据与顺序，不会从收据推断界面显示成功。`summary-recovery-self-test.ps1` 可在 PowerShell 5.1/7 验证顺序与拒绝错误身份的逻辑，不构成 GUI 验收。
+
+## ADR-017 Tag 筛选样本与索引核对
+
+`filter_fixtures.py` 生成七个固定样本、SHA-256、全部索引字段和预期全局 Tag ID，写入绝对、新目录。`summary-mixed.flv` 与 Summary 生成器的 20 Tag/497 byte 样本逐字节相同，供筛选→详情→Hex 与已完成 Summary 的联动验收。
+
+```powershell
+python -B -m unittest discover -s tools/desktop-native -p filter_fixtures_test.py -v
+python -B tools/desktop-native/filter_fixtures.py --output-dir C:\work\filter-fixtures-001
+go build -o .cache/muxray-filter.exe ./cmd/muxray
+python -B tools/desktop-native/filter_check.py --fixtures-dir C:\work\filter-fixtures-001 --muxray C:\work\MuxRay\.cache\muxray-filter.exe --output-dir C:\work\filter-cli-check-001
+```
+
+| 样本 | 确定性期望 |
+| --- | --- |
+| `filter-ranges.flv` | 12 Tag，类型齐全；10000–12000 ms 包含两端、重复与回退后再次命中；视频为 ID 1/7/11；4294967295 ms 为 ID 9 |
+| `filter-structures.flv` | 7 Tag；PreviousTagSize 不一致为 ID 1/3，缺失为 ID 6；缺失不能归为“存在但不一致” |
+| `filter-truncated.flv` | ID 1 声明 10 byte/实际 2 byte，同时命中 Payload 截断和 PreviousTagSize 缺失 |
+| `filter-sparse.flv` | 8305 Tag，音频 ID 4500/5000/8200；首窗口 `[0,4096)` 无命中仍可继续，下一窗口止于 8192，最后止于 8305 |
+| `filter-multipage.flv` | 305 Tag，偶数 ID 为音频共 153；第一页 100 条后游标为 199，第二页 53 条止于 305 |
+| `filter-empty.flv` | 13 byte 合法头，0 Tag，查询直接到索引末尾 |
+
+`filter_check.py` 用真实 Go CLI `tags --count 4096` 核对所有索引字段，保留命令、返回码和原始 JSON；它不调用桌面筛选 binding，不替代筛选单测或 GUI 验收。`fixtures-001` 等已生成目录不可覆盖，修改生成器后必须使用新目录。
+
+浏览器合成 host 可在前端 build 后运行 `node test/browser-host.mjs`，通过 `?smoke=filter-ranges|filter-sparse|filter-multipage|filter-structures|filter-truncated|filter-empty` 选择同等数据；`filter-delayed` 延迟 1.8 秒回复以检查关闭/重开隔离，`filter-timeout` 丢失本会话第一次筛选回复以检查重试。`node --test test/browser-filter-fixture.test.mjs` 只核对合成 host 的分页与数据，不启动浏览器。现有 `browser-smoke.mjs` 已补筛选检查；真正浏览器/原生窗口是否执行应在本次验收报告单独记录。
+
 ## Summary 生产窗口、分页与数值样本
 
 标准库生成器输出到绝对、新目录；默认另外流式写入一个 200000 Tag、约 3 MB

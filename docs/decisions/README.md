@@ -20,3 +20,4 @@ Repository-wide architecture and compatibility decisions are recorded here. An a
 | [ADR-014](./014-bounded-desktop-avc-context.md) | Accepted | Reuse AVC context rules with bounded desktop lookup, provenance and truthful syntax spans |
 | [ADR-015](./015-bounded-desktop-hex.md) | Accepted | Add bounded source byte windows and field navigation through the retained document's shared worker |
 | [ADR-016](./016-retained-desktop-summary.md) | Accepted | Add cancellable media-summary v2 with exact bounded projections, retained event pages and shared source ownership |
+| [ADR-017](./017-bounded-tag-filtering.md) | Accepted | Query committed Tags by container type, inclusive raw DTS and structural state with bounded source cursors |

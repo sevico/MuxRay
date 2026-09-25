@@ -119,7 +119,7 @@ func TestDTOsExposeOnlyConcreteSafeFields(t *testing.T) {
 			t.Errorf("unsupported or potentially lossy DTO type: %s", typ)
 		}
 	}
-	for _, typ := range []reflect.Type{reflect.TypeFor[OpenRequest](), reflect.TypeFor[PageRequest](), reflect.TypeFor[SessionResponse](), reflect.TypeFor[TagPageResponse](), reflect.TypeFor[DiagnosticPageResponse]()} {
+	for _, typ := range []reflect.Type{reflect.TypeFor[OpenRequest](), reflect.TypeFor[PageRequest](), reflect.TypeFor[SessionResponse](), reflect.TypeFor[TagPageResponse](), reflect.TypeFor[DiagnosticPageResponse](), reflect.TypeFor[FilteredTagRequest](), reflect.TypeFor[FilteredTagPageResponse]()} {
 		visit(typ)
 	}
 }

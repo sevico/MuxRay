@@ -12,6 +12,8 @@ export function GetDetail(arg1:desktop.DetailQuery):Promise<desktop.DetailRespon
 
 export function GetDiagnostics(arg1:desktop.PageRequest):Promise<desktop.DiagnosticPageResponse>;
 
+export function GetFilteredTags(arg1:desktop.FilteredTagRequest):Promise<desktop.FilteredTagPageResponse>;
+
 export function GetHex(arg1:desktop.HexQuery):Promise<desktop.HexResponse>;
 
 export function GetSession(arg1:string):Promise<desktop.SessionResponse>;

@@ -2,6 +2,8 @@
 // Run: node test/browser-host.mjs [port]; then open its printed local URL.
 // Optional ?smoke=summary-pending|summary-lost-start|summary-cancel-lost|
 // summary-source-changed|summary-short-page selects a deterministic host case.
+// ADR-017: ?smoke=filter-ranges|filter-sparse|filter-multipage|filter-structures|
+// filter-truncated|filter-empty|filter-delayed|filter-timeout selects Tag data.
 import { createServer } from 'node:http';
 import { readFile, readdir } from 'node:fs/promises';
 import { resolve, dirname, extname } from 'node:path';

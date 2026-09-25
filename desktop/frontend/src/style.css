@@ -116,6 +116,17 @@ input { min-width: 0; font: inherit; border: 1px solid #cbd7e2; border-radius: 5
 input:focus-visible { outline: 3px solid #7bc9dd; outline-offset: 1px; }
 .tag-jump-form { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 17px; border-bottom: 1px solid #e6ebf1; font-size: 12px; }
 .tag-jump-form input { width: 145px; } .tag-jump-form button { padding: 6px 10px; }
+.tag-filter { padding: 12px 17px; border-bottom: 1px solid #e6ebf1; background: #f9fbfd; }
+.tag-filter form { display: flex; align-items: end; gap: 10px; flex-wrap: wrap; font-size: 12px; }
+.tag-filter label { display: flex; flex-direction: column; gap: 6px; color: #536475; }
+.tag-filter input { width: 140px; }
+.tag-filter select { min-height: 34px; max-width: 100%; font: inherit; border: 1px solid #cbd7e2; border-radius: 5px; padding: 7px 9px; background: white; color: #243347; }
+.tag-filter select:focus-visible { outline: 3px solid #7bc9dd; outline-offset: 1px; }
+.tag-filter-actions { display: flex; gap: 8px; }
+.tag-filter-actions button { padding: 7px 10px; font-size: 12px; }
+.filter-note { color: #617389; font-size: 12px; line-height: 1.7; margin: 9px 0 0; overflow-wrap: anywhere; }
+.filter-pagination > .filter-note { padding: 0 17px 10px; margin: 0; }
+.filter-pagination .pagination > span { overflow-wrap: anywhere; }
 .pagination { flex-wrap: wrap; }
 .hex-panel { min-width: 0; padding: 20px; margin-top: 22px; background: #fff; border: 1px solid #dfe6ee; border-radius: 9px; scroll-margin-top: 16px; }
 .hex-heading, .hex-window-heading { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 12px; }

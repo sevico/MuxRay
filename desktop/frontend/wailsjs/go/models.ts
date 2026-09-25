@@ -197,6 +197,254 @@ export namespace desktop {
 		}
 	}
 	
+	export class PreviousTagSize {
+	    present: boolean;
+	    span?: Span;
+	    value: number;
+	    expected: number;
+	    valid: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new PreviousTagSize(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.present = source["present"];
+	        this.span = this.convertValues(source["span"], Span);
+	        this.value = source["value"];
+	        this.expected = source["expected"];
+	        this.valid = source["valid"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Span {
+	    byteOffset: string;
+	    bitOffset: number;
+	    bitLength: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Span(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.byteOffset = source["byteOffset"];
+	        this.bitOffset = source["bitOffset"];
+	        this.bitLength = source["bitLength"];
+	    }
+	}
+	export class Tag {
+	    id: string;
+	    typeCode: number;
+	    typeName: string;
+	    offset: string;
+	    span: Span;
+	    headerSpan: Span;
+	    payloadSpan: Span;
+	    rawTypeFlags: number;
+	    filter: boolean;
+	    dataSize: number;
+	    availableDataSize: number;
+	    dts: string;
+	    streamId: number;
+	    payloadComplete: boolean;
+	    previousTagSize: PreviousTagSize;
+	
+	    static createFrom(source: any = {}) {
+	        return new Tag(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.typeCode = source["typeCode"];
+	        this.typeName = source["typeName"];
+	        this.offset = source["offset"];
+	        this.span = this.convertValues(source["span"], Span);
+	        this.headerSpan = this.convertValues(source["headerSpan"], Span);
+	        this.payloadSpan = this.convertValues(source["payloadSpan"], Span);
+	        this.rawTypeFlags = source["rawTypeFlags"];
+	        this.filter = source["filter"];
+	        this.dataSize = source["dataSize"];
+	        this.availableDataSize = source["availableDataSize"];
+	        this.dts = source["dts"];
+	        this.streamId = source["streamId"];
+	        this.payloadComplete = source["payloadComplete"];
+	        this.previousTagSize = this.convertValues(source["previousTagSize"], PreviousTagSize);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TagFilter {
+	    type: string;
+	    dtsMin?: string;
+	    dtsMax?: string;
+	    structure: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TagFilter(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.type = source["type"];
+	        this.dtsMin = source["dtsMin"];
+	        this.dtsMax = source["dtsMax"];
+	        this.structure = source["structure"];
+	    }
+	}
+	export class FilteredTagPage {
+	    sessionId: string;
+	    filter: TagFilter;
+	    start: string;
+	    next: string;
+	    indexedTotal: string;
+	    limit: number;
+	    scanLimit: number;
+	    scanned: number;
+	    exhausted: boolean;
+	    tags: Tag[];
+	
+	    static createFrom(source: any = {}) {
+	        return new FilteredTagPage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.filter = this.convertValues(source["filter"], TagFilter);
+	        this.start = source["start"];
+	        this.next = source["next"];
+	        this.indexedTotal = source["indexedTotal"];
+	        this.limit = source["limit"];
+	        this.scanLimit = source["scanLimit"];
+	        this.scanned = source["scanned"];
+	        this.exhausted = source["exhausted"];
+	        this.tags = this.convertValues(source["tags"], Tag);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class FilteredTagPageResponse {
+	    apiVersion: number;
+	    page?: FilteredTagPage;
+	    error?: Fault;
+	
+	    static createFrom(source: any = {}) {
+	        return new FilteredTagPageResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.apiVersion = source["apiVersion"];
+	        this.page = this.convertValues(source["page"], FilteredTagPage);
+	        this.error = this.convertValues(source["error"], Fault);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class FilteredTagRequest {
+	    sessionId: string;
+	    start: string;
+	    count: number;
+	    filter: TagFilter;
+	
+	    static createFrom(source: any = {}) {
+	        return new FilteredTagRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.start = source["start"];
+	        this.count = source["count"];
+	        this.filter = this.convertValues(source["filter"], TagFilter);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class HexQuery {
 	    sessionId: string;
 	    requestId: string;
@@ -325,60 +573,7 @@ export namespace desktop {
 	        this.count = source["count"];
 	    }
 	}
-	export class Span {
-	    byteOffset: string;
-	    bitOffset: number;
-	    bitLength: number;
 	
-	    static createFrom(source: any = {}) {
-	        return new Span(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.byteOffset = source["byteOffset"];
-	        this.bitOffset = source["bitOffset"];
-	        this.bitLength = source["bitLength"];
-	    }
-	}
-	export class PreviousTagSize {
-	    present: boolean;
-	    span?: Span;
-	    value: number;
-	    expected: number;
-	    valid: boolean;
-	
-	    static createFrom(source: any = {}) {
-	        return new PreviousTagSize(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.present = source["present"];
-	        this.span = this.convertValues(source["span"], Span);
-	        this.value = source["value"];
-	        this.expected = source["expected"];
-	        this.valid = source["valid"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
 	export class Progress {
 	    sourceSize: string;
 	    bytesScanned: string;
@@ -639,64 +834,8 @@ export namespace desktop {
 		    return a;
 		}
 	}
-	export class Tag {
-	    id: string;
-	    typeCode: number;
-	    typeName: string;
-	    offset: string;
-	    span: Span;
-	    headerSpan: Span;
-	    payloadSpan: Span;
-	    rawTypeFlags: number;
-	    filter: boolean;
-	    dataSize: number;
-	    availableDataSize: number;
-	    dts: string;
-	    streamId: number;
-	    payloadComplete: boolean;
-	    previousTagSize: PreviousTagSize;
 	
-	    static createFrom(source: any = {}) {
-	        return new Tag(source);
-	    }
 	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.typeCode = source["typeCode"];
-	        this.typeName = source["typeName"];
-	        this.offset = source["offset"];
-	        this.span = this.convertValues(source["span"], Span);
-	        this.headerSpan = this.convertValues(source["headerSpan"], Span);
-	        this.payloadSpan = this.convertValues(source["payloadSpan"], Span);
-	        this.rawTypeFlags = source["rawTypeFlags"];
-	        this.filter = source["filter"];
-	        this.dataSize = source["dataSize"];
-	        this.availableDataSize = source["availableDataSize"];
-	        this.dts = source["dts"];
-	        this.streamId = source["streamId"];
-	        this.payloadComplete = source["payloadComplete"];
-	        this.previousTagSize = this.convertValues(source["previousTagSize"], PreviousTagSize);
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
 	export class TagPage {
 	    sessionId: string;
 	    bounds: PageBounds;

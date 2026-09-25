@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory)][string]$RunDirectory,
-    [Parameter(Mandatory)][ValidateSet('Status', 'Release', 'MarkCancel', 'MarkExit', 'MarkClose')][string]$Action
+    [Parameter(Mandatory)][ValidateSet('Status', 'Release', 'MarkCancel', 'MarkSummaryCancel', 'MarkExit', 'MarkClose')][string]$Action
 )
 . (Join-Path $PSScriptRoot 'common.ps1')
 $run = Read-Run $RunDirectory
@@ -16,6 +16,7 @@ if ($Action -eq 'Status') {
 }
 switch ($Action) {
     'MarkCancel' { Assert-GateScenario $run 'Cancel' }
+    'MarkSummaryCancel' { Assert-GateScenario $run 'SummaryClose' }
     'MarkExit' { Assert-GateScenario $run 'Exit' }
     'MarkClose' { Assert-GateScenario $run $(if ($run.gateMode -eq 'Summary') { 'SummaryClose' } elseif ($run.gateMode -eq 'Hex') { 'HexClose' } else { 'DetailClose' }) }
 }
@@ -23,7 +24,7 @@ $entered = Read-Receipt $run 'entered.json'
 Assert-GateReceipt $run $entered
 $process = Get-NativeProcess $run $entered
 try {
-    $name = switch ($Action) { 'Release' { 'release.json' }; 'MarkCancel' { 'cancel-command.json' }; 'MarkExit' { 'exit-command.json' }; 'MarkClose' { 'close-command.json' } }
+    $name = switch ($Action) { 'Release' { 'release.json' }; { $_ -in @('MarkCancel', 'MarkSummaryCancel') } { 'cancel-command.json' }; 'MarkExit' { 'exit-command.json' }; 'MarkClose' { 'close-command.json' } }
     if (Test-Path -LiteralPath (Join-Path $run.runDirectory 'closed.json')) { throw 'The gated source already closed.' }
     if ($Action -ne 'Release' -and (Test-Path -LiteralPath (Join-Path $run.runDirectory 'release.json'))) { throw 'Record GUI action before releasing the gate.' }
     Write-NewJSON (Join-Path $run.runDirectory $name) ([ordered]@{

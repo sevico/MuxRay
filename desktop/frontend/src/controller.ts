@@ -4,6 +4,8 @@ import { HEX_WINDOW_BYTES, validateHexWindow, validateSelection } from './hex.ts
 import type { HexSelection } from './hex.ts';
 import type { DetailQuery, SummaryKind, SummaryOverview, SummaryPage, SummaryPageRequest, SummaryResponse, SummaryEvent } from './protocol.ts';
 import { summaryKind, validateSummaryPage, validateSummaryResponse } from './summary.ts';
+import type { FilteredTagPage, TagFilter } from './protocol.ts';
+import { FILTER_HISTORY_LIMIT, validateFilteredTagPage, validateTagFilter } from './tag-filter.ts';
 
 export const PAGE_SIZE = 100;
 export const POLL_MS = 200;
@@ -22,6 +24,11 @@ export interface ViewState {
   start: string;
   page: VisiblePage | null;
   loading: boolean;
+  tagFilter: TagFilter | null;
+  filteredPage: FilteredTagPage | null;
+  filterError: string | null;
+  filterPrevious: string | null;
+  filterHistoryLimited: boolean;
   selectedTag: Tag | null;
   detail: Detail | null;
   detailState: '' | 'loading' | 'pending' | 'recovering' | 'ready' | 'failed';
@@ -110,7 +117,7 @@ export class Controller {
   private api: API;
   private clock: Scheduler;
   private listeners = new Set<() => void>();
-  private state: ViewState = { fileName: '', session: null, operation: '', error: null, tab: 'tags', start: '0', page: null, loading: false, selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '', hex: null, hexSelection: null, hexState: '', hexError: null, hexRetry: '', tagJumpError: null, sourceChanged: false, summary: null, summaryState: '', summaryRunning: false, summaryCancelRequested: false, summaryProcessed: '0', summaryTotal: '0', summaryError: null, summaryRetry: '', summaryKind: 'keyframes', summaryStart: '0', summaryPage: null, summaryPageLoading: false, summaryPageError: null, summaryPrevious: null };
+  private state: ViewState = { fileName: '', session: null, operation: '', error: null, tab: 'tags', start: '0', page: null, loading: false, tagFilter: null, filteredPage: null, filterError: null, filterPrevious: null, filterHistoryLimited: false, selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '', hex: null, hexSelection: null, hexState: '', hexError: null, hexRetry: '', tagJumpError: null, sourceChanged: false, summary: null, summaryState: '', summaryRunning: false, summaryCancelRequested: false, summaryProcessed: '0', summaryTotal: '0', summaryError: null, summaryRetry: '', summaryKind: 'keyframes', summaryStart: '0', summaryPage: null, summaryPageLoading: false, summaryPageError: null, summaryPrevious: null };
   private disposed = false;
   private statusVersion = 0;
   private pageVersion = 0;
@@ -147,6 +154,7 @@ export class Controller {
   private summaryPageVersion = 0;
   private summaryPageBusy = false;
   private summaryHistory: string[] = [];
+  private filterHistory: string[] = [];
 
   constructor(api: API, clock: Scheduler = scheduler) { this.api = api; this.clock = clock; }
   getSnapshot = (): ViewState => this.state;
@@ -161,6 +169,7 @@ export class Controller {
   }
   private accept(session: Session): void {
     if (session.closed && session.terminal) {
+      this.clearFilter();
       this.clearSummary();
       this.clearDetail();
       this.pageVersion++;
@@ -169,7 +178,7 @@ export class Controller {
       this.jumpTagId = null;
       this.update({ session: null, fileName: '', operation: '', page: null, loading: false, start: '0', sourceChanged: false, error: null });
     } else {
-      if (session.closed) { this.clearSummary(); this.clearDetail(); }
+      if (session.closed) { this.clearFilter(); this.clearSummary(); this.clearDetail(); }
       this.update({ session, operation: session.closed ? 'closing' : '' });
       this.ensureDetail();
       this.ensureHex();
@@ -230,6 +239,7 @@ export class Controller {
     this.update({ operation: '', error: null });
     check(result);
     if (session) {
+      this.clearFilter();
       this.clearSummary();
       this.clearDetail();
       this.nextReadID = 0n;
@@ -252,6 +262,7 @@ export class Controller {
     this.pollFailed = false;
     this.refreshStatus = false;
     if (operation === 'closing') {
+      this.clearFilter();
       this.clearSummary();
       this.clearDetail();
       this.pageVersion++;
@@ -323,10 +334,51 @@ export class Controller {
   select(tab: Tab, start = '0'): void {
     if (this.state.summaryRunning) return;
     try { unsigned(start); } catch { this.update({ error: 'invalid_argument' }); return; }
+    this.clearFilter();
     this.pageVersion++;
     this.jumpTagId = null;
     this.clearDetail();
     this.update({ tab, start, page: null, loading: false, error: this.openingID || this.refreshStatus || this.pollFailed ? this.state.error : null });
+    this.ensurePage();
+  }
+  private clearFilter(): void {
+    this.filterHistory = [];
+    this.update({ tagFilter: null, filteredPage: null, filterPrevious: null, filterHistoryLimited: false, filterError: null });
+  }
+  applyTagFilter(filter: TagFilter): void {
+    if (this.disposed || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    try { validateTagFilter(filter); } catch { this.update({ filterError: 'invalid_filter' }); return; }
+    this.filterHistory = [];
+    this.pageVersion++; this.jumpTagId = null;
+    this.clearDetail();
+    this.update({ tab: 'tags', start: '0', page: null, filteredPage: null, tagFilter: { ...filter }, loading: false,
+      filterError: null, filterPrevious: null, filterHistoryLimited: false, error: null });
+    this.ensurePage();
+  }
+  resetTagFilter(): void {
+    if (this.disposed || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    this.select('tags');
+  }
+  pageFilteredTags(direction: 'first' | 'previous' | 'next'): void {
+    const page = this.state.filteredPage;
+    if (this.disposed || !page || !this.state.tagFilter || this.state.loading || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    let start: string;
+    let limited = this.state.filterHistoryLimited;
+    if (direction === 'first') { start = '0'; this.filterHistory = []; limited = false; }
+    else if (direction === 'previous') {
+      const previous = this.filterHistory.pop();
+      if (previous === undefined) return;
+      start = previous;
+    } else {
+      if (page.exhausted) return;
+      this.filterHistory.push(page.start);
+      if (this.filterHistory.length > FILTER_HISTORY_LIMIT) { this.filterHistory.shift(); limited = true; }
+      start = page.next;
+    }
+    this.pageVersion++; this.jumpTagId = null;
+    this.clearDetail();
+    this.update({ start, filteredPage: null, loading: false, error: null,
+      filterPrevious: this.filterHistory.at(-1) ?? null, filterHistoryLimited: limited });
     this.ensurePage();
   }
   private ready(): boolean {
@@ -334,17 +386,30 @@ export class Controller {
     return !!session?.terminal && !session.closed && session.scan !== null && this.state.operation !== 'closing' && !this.state.sourceChanged;
   }
   private ensurePage(): void {
-    if (this.disposed || this.paging || this.refreshStatus || this.pollFailed || !this.ready() || this.state.page || this.state.summaryRunning) return;
+    if (this.disposed || this.paging || this.refreshStatus || this.pollFailed || !this.ready() || this.state.page || this.state.filteredPage || this.state.summaryRunning) return;
     void this.loadPage();
   }
   private async loadPage(): Promise<void> {
     const session = this.state.session!;
-    const { tab, start } = this.state;
+    const { tab, start, tagFilter } = this.state;
     const version = this.pageVersion;
     this.paging = true;
     this.update({ loading: true });
     try {
       const request = { sessionId: session.sessionId, start, count: PAGE_SIZE };
+      if (tab === 'tags' && tagFilter) {
+        const filteredRequest = { ...request, filter: tagFilter };
+        const response = await this.awaitReply('page', () => this.api.filteredTags(filteredRequest));
+        if (this.disposed || version !== this.pageVersion || this.state.session?.sessionId !== session.sessionId || !this.ready()) return;
+        check(response);
+        if (!response.page) throw new RequestError('invalid_response');
+        try {
+          validateFilteredTagPage(response.page, filteredRequest);
+          if (response.page.indexedTotal !== session.progress?.tagCount) throw Error('Invalid index coverage.');
+        } catch { throw new RequestError('invalid_response'); }
+        this.update({ filteredPage: response.page });
+        return;
+      }
       const result: VisiblePage = tab === 'tags'
         ? { tab, data: pageResult(await this.awaitReply('page', () => this.api.tags(request)), session.sessionId, start) }
         : { tab, data: pageResult(await this.awaitReply('page', () => this.api.diagnostics(request)), session.sessionId, start) };
@@ -356,7 +421,10 @@ export class Controller {
         }
       }
     } catch (error) {
-      if (!this.disposed && version === this.pageVersion && this.state.session?.sessionId === session.sessionId) this.update({ error: errorCode(error) });
+      if (!this.disposed && version === this.pageVersion && this.state.session?.sessionId === session.sessionId) {
+        if (errorCode(error) === 'source_changed') this.invalidateSource();
+        else this.update({ error: errorCode(error) });
+      }
     } finally {
       this.paging = false;
       if (version === this.pageVersion) this.update({ loading: false });
@@ -372,8 +440,9 @@ export class Controller {
     this.ensurePage();
   }
   selectTag(tagId: string): void {
-    if (this.disposed || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed || this.state.page?.tab !== 'tags') return;
-    const tag = this.state.page.data.tags.find(item => item.id === tagId);
+    if (this.disposed || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    const tags = this.state.filteredPage?.tags ?? (this.state.page?.tab === 'tags' ? this.state.page.data.tags : []);
+    const tag = tags.find(item => item.id === tagId);
     if (!tag || this.state.selectedTag?.id === tagId) return;
     if (this.nextReadID === 18446744073709551615n) { this.update({ detailError: 'id_exhausted' }); return; }
     this.clearHex();
@@ -506,6 +575,7 @@ export class Controller {
     this.update({ hex: null, hexSelection: null, hexState: '', hexError: null, hexRetry: '', tagJumpError: null });
   }
   private invalidateSource(): void {
+    this.clearFilter();
     this.clearSummary();
     this.clearDetail();
     this.pageVersion++; this.jumpTagId = null;

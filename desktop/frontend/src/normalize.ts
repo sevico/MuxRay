@@ -1,5 +1,6 @@
 import type { desktop, main } from '../wailsjs/go/models';
-import type { DetailKind, DetailResponse, DiagnosticPage, HexResponse, PageResponse, PickResponse, Session, SessionResponse, TagPage, SummaryResponse, SummaryPageResponse } from './protocol';
+import type { DetailKind, DetailResponse, DiagnosticPage, HexResponse, PageResponse, PickResponse, Session, SessionResponse, TagPage, SummaryResponse, SummaryPageResponse, FilteredTagPage, TagFilter } from './protocol';
+import { validateTagFilter } from './tag-filter.ts';
 import { validateHexWindow } from './hex.ts';
 import { summaryKind, validateSummaryResponse, validateSummaryPage } from './summary.ts';
 
@@ -19,6 +20,20 @@ export function tagResponse(value: desktop.TagPageResponse): PageResponse<TagPag
   return { apiVersion: value.apiVersion, error: value.error ?? null, page: value.page ? {
     ...value.page, tags: value.page.tags.map(tag => ({ ...tag, previousTagSize: { ...tag.previousTagSize, span: tag.previousTagSize.span ?? null } })),
   } : null };
+}
+export function filteredTagResponse(value: desktop.FilteredTagPageResponse): PageResponse<FilteredTagPage> {
+  return { apiVersion: value.apiVersion, error: value.error ?? null, page: value.page ? {
+    ...value.page, filter: normalizedFilter(value.page.filter),
+    tags: value.page.tags.map(tag => ({ ...tag, previousTagSize: { ...tag.previousTagSize, span: tag.previousTagSize.span ?? null } })),
+  } : null };
+}
+function normalizedFilter(value: { type: string; structure: string; dtsMin?: string | null; dtsMax?: string | null }): TagFilter {
+  const { type, structure } = value;
+  if (type !== 'all' && type !== 'audio' && type !== 'video' && type !== 'script' && type !== 'other') throw Error('Invalid filter type.');
+  if (structure !== 'all' && structure !== 'payload_incomplete' && structure !== 'previous_size_missing' && structure !== 'previous_size_invalid') throw Error('Invalid filter structure.');
+  const filter: TagFilter = { type, structure, dtsMin: value.dtsMin ?? null, dtsMax: value.dtsMax ?? null };
+  validateTagFilter(filter);
+  return filter;
 }
 export function diagnosticResponse(value: desktop.DiagnosticPageResponse): PageResponse<DiagnosticPage> {
   return { apiVersion: value.apiVersion, error: value.error ?? null, page: value.page ? {

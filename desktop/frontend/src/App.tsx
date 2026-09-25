@@ -8,6 +8,7 @@ import { selectionFromSpan } from './hex';
 import type { HexSelection } from './hex';
 import { HexPanel } from './HexPanel';
 import { SummaryPanel } from './SummaryPanel';
+import { FilterPagination, TagFilterPanel } from './TagFilterPanel';
 
 const stateNames: Record<string, string> = {
   opening: '正在打开', running: '扫描中', canceling: '正在取消', finished: '扫描结束', canceled: '已取消', failed: '扫描失败',
@@ -109,16 +110,19 @@ export function App({ controller }: { controller: Controller }) {
             <label htmlFor="tag-id-input">Tag ID</label><input id="tag-id-input" inputMode="numeric" value={tagId} onChange={event => setTagId(event.target.value)} placeholder="精确 ID" disabled={!canPage || !!isClosing} />
             <button disabled={!canPage || !!isClosing}>跳转 Tag</button>{view.tagJumpError && <span className="problem" role="alert">{fault(view.tagJumpError)}</span>}
           </form>
+          {view.tab === 'tags' && <TagFilterPanel key={session.sessionId} view={view} controller={controller} disabled={!canPage || !!isClosing} />}
           <div className="table-area" role="tabpanel" aria-busy={view.loading}>
-            {view.loading ? <div className="result-placeholder" role="status">正在读取当前页…</div> : page ? <>
+            {view.loading ? <div className="result-placeholder" role="status">正在读取当前页…</div> : view.filteredPage ? <>
+              {view.filteredPage.tags.length ? <TagTable rows={view.filteredPage.tags} selectedId={view.selectedTag?.id ?? null} disabled={!!isClosing || !canPage} onSelect={id => controller.selectTag(id)} onLocate={selection => controller.showHex(selection)} /> : <div className="result-placeholder">{view.filteredPage.exhausted ? '本次检查范围内没有匹配 Tag，已到当前索引末尾。' : '本次检查范围内没有匹配 Tag；仍有索引未检查。'}</div>}
+            </> : page ? <>
               {page.tab === 'tags' ? <TagTable rows={page.data.tags} selectedId={view.selectedTag?.id ?? null} disabled={!!isClosing || !canPage} onSelect={id => controller.selectTag(id)} onLocate={selection => controller.showHex(selection)} /> : <DiagnosticTable rows={page.data.diagnostics} disabled={!!isClosing || !canPage} onLocate={selection => controller.showHex(selection)} />}
             </> : <div className="result-placeholder">{canPage ? '暂无可显示的页，请重试查询。' : '扫描结束后，完整或部分结果会显示在这里。'}</div>}
           </div>
-          <div className="pagination"><span>{bounds ? `起点 ${bounds.start} · 本页 ${unsigned(bounds.next) - unsigned(bounds.start)} 条 · 共 ${bounds.total} 条` : '尚无结果页'}</span><div>
+          {view.tagFilter ? <FilterPagination view={view} controller={controller} disabled={!canPage || !!isClosing} /> : <div className="pagination"><span>{bounds ? `起点 ${bounds.start} · 本页 ${unsigned(bounds.next) - unsigned(bounds.start)} 条 · 共 ${bounds.total} 条` : '尚无结果页'}</span><div>
             <button disabled={!canPage || !bounds || view.loading || bounds.start === '0' || !!isClosing} onClick={() => controller.select(view.tab, '0')}>首页</button>
             <button disabled={!canPage || !bounds || view.loading || bounds.start === '0' || !!isClosing} onClick={() => controller.select(view.tab, previousStart(view.start, PAGE_SIZE))}>上一页</button>
             <button disabled={!canPage || !bounds || view.loading || unsigned(bounds.next) >= unsigned(bounds.total) || !!isClosing} onClick={() => bounds && controller.select(view.tab, bounds.next)}>下一页</button>
-          </div></div>
+          </div></div>}
         </section>
         {view.selectedTag && <DetailPanel view={view} onRetry={() => controller.retryDetail()} onLocate={selection => controller.showHex(selection)} />}
         </div>

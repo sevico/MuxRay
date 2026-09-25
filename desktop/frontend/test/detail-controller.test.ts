@@ -28,6 +28,7 @@ function tag(id: string): Tag {
 function setup(overrides: Partial<API> = {}) {
   const clock = new Clock();
   const api: API = {
+    filteredTags: async () => { throw Error('unexpected filtered tags'); },
     open: async requestId => ({ apiVersion: 1, requestId, pending: false, canceled: false, fileName: 'sample.flv', session: terminal(), error: null }),
     openResult: async () => { throw Error('unexpected open recovery'); },
     status: async () => ({ apiVersion: 1, session: terminal(), error: null }),

@@ -22,6 +22,10 @@ export function GetDiagnostics(arg1) {
   return window['go']['desktop']['Bindings']['GetDiagnostics'](arg1);
 }
 
+export function GetFilteredTags(arg1) {
+  return window['go']['desktop']['Bindings']['GetFilteredTags'](arg1);
+}
+
 export function GetHex(arg1) {
   return window['go']['desktop']['Bindings']['GetHex'](arg1);
 }

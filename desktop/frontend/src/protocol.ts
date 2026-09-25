@@ -28,6 +28,16 @@ export interface Diagnostic {
   expected: string | null; actual: string | null;
 }
 export interface TagPage { sessionId: string; bounds: Bounds; tags: Tag[] }
+export interface TagFilter {
+  type: 'all' | 'audio' | 'video' | 'script' | 'other';
+  dtsMin: string | null; dtsMax: string | null;
+  structure: 'all' | 'payload_incomplete' | 'previous_size_missing' | 'previous_size_invalid';
+}
+export interface FilteredTagRequest extends PageRequest { filter: TagFilter }
+export interface FilteredTagPage {
+  sessionId: string; filter: TagFilter; start: string; next: string; indexedTotal: string;
+  limit: number; scanLimit: number; scanned: number; exhausted: boolean; tags: Tag[];
+}
 export interface DiagnosticPage { sessionId: string; bounds: Bounds; diagnostics: Diagnostic[] }
 export interface PageResponse<P> { apiVersion: number; page: P | null; error: Fault | null }
 export interface DetailRequest { sessionId: string; requestId: string; tagId: string }
@@ -73,6 +83,7 @@ export interface API {
   cancel(id: string): Promise<SessionResponse>;
   close(id: string): Promise<SessionResponse>;
   tags(request: PageRequest): Promise<PageResponse<TagPage>>;
+  filteredTags(request: FilteredTagRequest): Promise<PageResponse<FilteredTagPage>>;
   diagnostics(request: PageRequest): Promise<PageResponse<DiagnosticPage>>;
   startDetail(request: DetailRequest): Promise<DetailResponse>;
   detailResult(request: DetailQuery): Promise<DetailResponse>;
