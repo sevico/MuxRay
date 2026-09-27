@@ -904,6 +904,116 @@ export namespace desktop {
 		    return a;
 		}
 	}
+	export class TagTrendPoint {
+	    tagId: string;
+	    offset: string;
+	    dts: string;
+	    typeCode: number;
+	    streamId: number;
+	    dataSize: number;
+	    availableDataSize: number;
+	    payloadComplete: boolean;
+	    previousTagSizeState: string;
+	    filtered: boolean;
+	    previousTagId?: string;
+	    previousDts?: string;
+	    deltaMs?: string;
+	    context: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TagTrendPoint(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.tagId = source["tagId"];
+	        this.offset = source["offset"];
+	        this.dts = source["dts"];
+	        this.typeCode = source["typeCode"];
+	        this.streamId = source["streamId"];
+	        this.dataSize = source["dataSize"];
+	        this.availableDataSize = source["availableDataSize"];
+	        this.payloadComplete = source["payloadComplete"];
+	        this.previousTagSizeState = source["previousTagSizeState"];
+	        this.filtered = source["filtered"];
+	        this.previousTagId = source["previousTagId"];
+	        this.previousDts = source["previousDts"];
+	        this.deltaMs = source["deltaMs"];
+	        this.context = source["context"];
+	    }
+	}
+	export class TagTrendPage {
+	    sessionId: string;
+	    bounds: PageBounds;
+	    contextStart: string;
+	    contextScanned: number;
+	    points: TagTrendPoint[];
+	
+	    static createFrom(source: any = {}) {
+	        return new TagTrendPage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.bounds = this.convertValues(source["bounds"], PageBounds);
+	        this.contextStart = source["contextStart"];
+	        this.contextScanned = source["contextScanned"];
+	        this.points = this.convertValues(source["points"], TagTrendPoint);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TagTrendPageResponse {
+	    apiVersion: number;
+	    page?: TagTrendPage;
+	    error?: Fault;
+	
+	    static createFrom(source: any = {}) {
+	        return new TagTrendPageResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.apiVersion = source["apiVersion"];
+	        this.page = this.convertValues(source["page"], TagTrendPage);
+	        this.error = this.convertValues(source["error"], Fault);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 
 }
 

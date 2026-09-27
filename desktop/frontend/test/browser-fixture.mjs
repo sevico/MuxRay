@@ -1,16 +1,18 @@
 // Browser fixture only: no Go parser or native I/O runs here.
 export function syntheticHost() {
-  let session, latestPick, latestDetail, latestHex, latestSummary, sequence = 0, dataset = 'finished', filterCalls = 0;
+  let session, latestPick, latestDetail, latestHex, latestSummary, sequence = 0, dataset = 'finished', filterCalls = 0, trendCalls = 0;
   window.smokeMode = new URL(window.location.href).searchParams.get('smoke') ?? 'finished';
   window.smokeReads = [];
   window.smokeSummaryCalls = [];
   window.smokeFilterCalls = [];
+  window.smokeTrendCalls = [];
   const envelope = () => structuredClone({ apiVersion: 1, session, error: null });
   const span = { byteOffset: '9007199254740993', bitOffset: 0, bitLength: 88 };
   window.go = { main: { Native: { OpenFLV: async requestId => {
     if (window.smokeMode === 'picker-cancel') return latestPick = { apiVersion: 1, requestId, pending: false, canceled: true, session: null, error: null, fileName: '' };
     dataset = window.smokeMode;
     filterCalls = 0;
+    trendCalls = 0;
     session = { sessionId: `synthetic-${++sequence}`, state: window.smokeMode === 'running' ? 'running' : 'finished', terminal: window.smokeMode !== 'running', closed: false,
       progress: { sourceSize: '18446744073709551615', bytesScanned: '9223372036854775807', tagCount: String(tagTotal()), diagnosticCount: 2 },
       scan: window.smokeMode === 'running' ? null : { complete: false, hasErrors: true }, failure: null };
@@ -24,8 +26,45 @@ export function syntheticHost() {
     CloseFile: async () => { session.closed = true; session.terminal = true; return envelope(); },
     GetTags: async request => {
       assertRequest(request);
-      const start = Number(request.start), next = Math.min(start + request.count, tagTotal());
-      return { apiVersion: 1, error: null, page: { sessionId: session.sessionId, bounds: { start: request.start, next: String(next), total: String(tagTotal()), limit: request.count }, tags: Array.from({ length: next - start }, (_, index) => tagAt(start + index)) } };
+      const start = BigInt(request.start), total = BigInt(tagTotal());
+      if (start < 0n || start > total) throw Error('Synthetic page cursor out of bounds');
+      const next = start + BigInt(request.count) < total ? start + BigInt(request.count) : total;
+      return { apiVersion: 1, error: null, page: { sessionId: session.sessionId, bounds: { start: request.start, next: String(next), total: String(total), limit: request.count }, tags: Array.from({ length: Number(next - start) }, (_, index) => tagAt(start + BigInt(index))) } };
+    },
+    GetTagTrends: async request => {
+      if (!session.terminal || session.closed || request.sessionId !== session.sessionId) throw Error('Unexpected synthetic trend identity');
+      window.smokeTrendCalls.push(structuredClone(request));
+      trendCalls++;
+      if (!/^(0|[1-9][0-9]*)$/.test(request.start) || !Number.isInteger(request.count) || request.count < 1 || request.count > 512
+        || BigInt(request.start) > BigInt(tagTotal())) {
+        return { apiVersion: 1, error: { code: 'invalid_argument', message: 'Invalid synthetic trend window.' }, page: null };
+      }
+      const start = BigInt(request.start), total = BigInt(tagTotal());
+      const next = start + BigInt(request.count) < total ? start + BigInt(request.count) : total;
+      const rows = Array.from({ length: Number(next - start) }, (_, index) => tagAt(start + BigInt(index)));
+      const key = tag => `${tag.typeCode}:${tag.streamId}`, unresolved = new Set(rows.map(key)), previous = new Map();
+      let contextStart = start;
+      while (unresolved.size && contextStart > 0n && start - contextStart < 4096n) {
+        const tag = tagAt(--contextStart), track = key(tag);
+        if (unresolved.delete(track)) previous.set(track, tag);
+      }
+      const points = rows.map(tag => {
+        const track = key(tag), before = previous.get(track);
+        previous.set(track, tag);
+        return { tagId: tag.id, offset: tag.offset, dts: tag.dts, typeCode: tag.typeCode, streamId: tag.streamId,
+          dataSize: tag.dataSize, availableDataSize: tag.availableDataSize, payloadComplete: tag.payloadComplete, filtered: tag.filter,
+          previousTagSizeState: !tag.previousTagSize.present ? 'missing' : tag.previousTagSize.valid ? 'valid' : 'invalid',
+          previousTagId: before?.id ?? null, previousDts: before?.dts ?? null,
+          deltaMs: before ? String(BigInt(tag.dts) - BigInt(before.dts)) : null,
+          context: before ? 'found' : contextStart === 0n ? 'start' : 'budget_exhausted' };
+      });
+      const response = { apiVersion: 1, error: null, page: { sessionId: session.sessionId,
+        bounds: { start: request.start, next: String(next), total: String(total), limit: request.count },
+        contextStart: String(contextStart), contextScanned: Number(start - contextStart), points } };
+      if (dataset === 'trends-timeout' && trendCalls === 1) return new Promise(() => {});
+      // Capture identity before waiting; the late reply must not adopt a reopened session.
+      if (dataset === 'trends-delayed') await new Promise(resolve => setTimeout(resolve, 1800));
+      return response;
     },
     GetFilteredTags: async request => {
       assertRequest(request);
@@ -62,7 +101,7 @@ export function syntheticHost() {
     StartDetail: async request => {
       if (!session.terminal || session.closed || request.sessionId !== session.sessionId) throw Error('Unexpected synthetic detail request');
       window.smokeReads.push({ kind: 'detail', ...request });
-      if (request.tagId === '9') {
+      if (!dataset.startsWith('trends') && request.tagId === '9') {
         latestDetail = { apiVersion: 1, ...request, state: 'failed', error: { code: 'detail_unsupported', message: 'Synthetic SoundFormat=14 remains unsupported.' }, detail: null };
         return structuredClone(latestDetail);
       }
@@ -106,6 +145,16 @@ export function syntheticHost() {
           { id: '1', parentId: '', name: 'cross-byte', type: 'uint5', value: '0', span: { byteOffset: '9007199254740993', bitOffset: 6, bitLength: 5 } },
           { id: '2', parentId: '', name: 'derived', type: 'number', value: '3', span: null },
         ];
+      }
+      if (dataset.startsWith('trends')) {
+        const tag = tagAt(BigInt(request.tagId));
+        preview.kind = tag.typeCode === 9 ? 'avcVideo' : tag.typeCode === 18 ? 'amf0ScriptData'
+          : BigInt(tag.id) >= 12n && BigInt(tag.id) <= 16n ? 'mp3Audio' : 'aacAudio';
+        preview.complete = tag.payloadComplete; preview.truncated = !tag.payloadComplete;
+        preview.fields = [{ id: '0', parentId: '', name: 'synthetic trend payload', type: 'bytes',
+          value: `Tag ${tag.id}; synthetic detail, no parser runs here`,
+          span: tag.availableDataSize ? { byteOffset: String(BigInt(tag.offset) + 11n), bitOffset: 0, bitLength: 8 } : null }];
+        preview.diagnostics = [];
       }
       latestDetail = { apiVersion: 1, ...request, state: 'ready', error: null, detail: preview };
       return structuredClone(latestDetail);
@@ -151,7 +200,7 @@ export function syntheticHost() {
       const start = BigInt(request.start), total = BigInt(info.retained), limit = window.smokeMode === 'summary-short-page' ? 37n : 100n;
       const next = start + limit < total ? start + limit : total;
       if (start > total) throw Error('Synthetic page out of bounds');
-      if (dataset.startsWith('filter-')) {
+      if (dataset.startsWith('filter-') || dataset.startsWith('trends')) {
         return { apiVersion: 1, sessionId: request.sessionId, requestId: request.requestId, kind: request.kind, error: null,
           page: { bounds: { start: request.start, next: String(next), total: info.retained, limit: 100 },
             events: filterSummaryEvents(request.kind).slice(Number(start), Number(next)) } };
@@ -175,10 +224,16 @@ export function syntheticHost() {
   function tagTotal() {
     return { 'filter-sparse': 8305, 'filter-multipage': 305, 'filter-ranges': 12,
       'filter-structures': 7, 'filter-truncated': 2, 'filter-empty': 0,
-      'filter-delayed': 12, 'filter-timeout': 12 }[dataset] ?? 205;
+      'filter-delayed': 12, 'filter-timeout': 12,
+      'trends': 300, 'trends-timeout': 300, 'trends-delayed': 300,
+      'trends-sparse': 4354, 'trends-structures': 7, 'trends-truncated': 2, 'trends-empty': 0,
+      'trends-huge': 9007199254741300n }[dataset] ?? 205;
   }
   function tagAt(id) {
+    const exactId = BigInt(id);
+    id = Number(dataset === 'trends-huge' ? exactId % 300n : exactId);
     let typeCode = id >= 6 && id <= 9 ? 8 : 9, dts = '-9223372036854775808';
+    let streamId = 0, filtered = false, dataSize = 64;
     if (dataset === 'filter-sparse') {
       typeCode = [4500, 5000, 8200].includes(id) ? 8 : id === 8304 ? 9 : 18;
       dts = String({ 4500: 10000, 5000: 12000, 8200: 11000, 8304: 11000 }[id] ?? 0);
@@ -190,17 +245,48 @@ export function syntheticHost() {
     } else if (dataset === 'filter-structures') {
       typeCode = [18, 8, 9, 31, 8, 9, 8][id]; dts = String(id * 10);
     } else if (dataset === 'filter-truncated') { typeCode = id ? 8 : 18; dts = id ? '12000' : '0'; }
-    const truncated = dataset === 'filter-truncated' && id === 1;
-    const missing = truncated || dataset === 'filter-structures' && id === 6;
-    const invalid = dataset === 'filter-structures' && [1, 3].includes(id);
-    const offset = String(9007199254740993n + BigInt(id));
-    return { id: String(id), typeCode, typeName: { 8: 'audio', 9: 'video', 18: 'script' }[typeCode] ?? 'unknown',
+    if (dataset.startsWith('trends')) {
+      const row = trendMetadata(id);
+      ({ typeCode, dts, streamId, filtered, dataSize } = row);
+    }
+    const truncated = ['filter-truncated', 'trends-truncated'].includes(dataset) && id === 1;
+    const missing = truncated || ['filter-structures', 'trends-structures'].includes(dataset) && id === 6;
+    const invalid = ['filter-structures', 'trends-structures'].includes(dataset) && [1, 3].includes(id);
+    const offset = String(9007199254740993n + exactId * (dataset.startsWith('trends') ? 100n : 1n));
+    return { id: String(exactId), typeCode, typeName: { 8: 'audio', 9: 'video', 18: 'script' }[typeCode] ?? 'unknown',
       offset, span: { ...span, byteOffset: offset }, headerSpan: span, payloadSpan: span,
-      rawTypeFlags: typeCode, filter: false, dataSize: truncated ? 10 : 64, availableDataSize: truncated ? 2 : 64,
-      dts, streamId: 0, payloadComplete: !truncated,
-      previousTagSize: { present: !missing, span: missing ? null : span, value: missing ? 0 : invalid ? 99 : 75, expected: truncated ? 21 : 75, valid: !missing && !invalid } };
+      rawTypeFlags: typeCode | (filtered ? 32 : 0), filter: filtered, dataSize: truncated ? 10 : dataSize, availableDataSize: truncated ? 2 : dataSize,
+      dts, streamId, payloadComplete: !truncated,
+      previousTagSize: { present: !missing, span: missing ? null : span, value: missing ? 0 : invalid ? 99 : 11 + dataSize, expected: truncated ? 21 : 11 + dataSize, valid: !missing && !invalid } };
+  }
+  function trendMetadata(id) {
+    let typeCode = id % 2 === 0 ? 8 : 9, dts = id * 20, streamId = 0, filtered = false;
+    let dataSize = typeCode === 8 ? 4 : 9;
+    if (dataset === 'trends-sparse') {
+      typeCode = [0, 4098, 4099].includes(id) ? 8 : [1, 4097, 4100].includes(id) ? 9 : id === 4101 ? 31 : 18;
+      dts = { 4097: 100, 4098: 10, 4099: 20, 4100: 90 }[id] ?? 0;
+      dataSize = typeCode === 8 ? 4 : typeCode === 9 ? (id === 1 ? 43 : 11) : 0;
+    } else if (dataset === 'trends-structures') {
+      typeCode = [18, 8, 31, 9, 8, 9, 8][id]; dts = id * 10; dataSize = 2;
+      streamId = id === 4 ? 16777215 : 0; filtered = id === 2;
+    } else if (dataset === 'trends-truncated') {
+      typeCode = id ? 8 : 18; dts = id ? 12000 : 0; dataSize = id ? 10 : 0;
+    } else if (id < 20) {
+      typeCode = [8, 9, 8, 9, 8, 9, 8, 9, 8, 8, 9, 9, 8, 8, 8, 8, 8, 8, 18, 31][id];
+      dts = [0, 0, 0, 0, 20, 40, 20, 80, 10, 30, 30, 60, 100, 126, 152, 152, 140, 200, 0, 0][id];
+      dataSize = [4, 43, 4, 11, 4, 11, 4, 11, 4, 4, 43, 9, 5, 5, 5, 5, 5, 4, 0, 3][id];
+    } else if ([254, 255, 256].includes(id)) dts = 5000;
+    else if (id === 257) dts = 4900;
+    else if (id === 258) dts = 7001;
+    else if ([259, 261].includes(id)) { typeCode = 8; dts = id === 259 ? 40 : 0; streamId = 1; dataSize = 4; }
+    else if (id === 260) dts = 4294967295;
+    else if (id === 262) { typeCode = 31; dts = 0; dataSize = 2; filtered = true; }
+    else if (id === 263) { typeCode = 18; dts = 0; dataSize = 0; }
+    else if (id === 264) dts = 0;
+    return { typeCode, dts: String(dts), streamId, filtered, dataSize };
   }
   function filterSummaryEvents(kind) {
+    if (dataset.startsWith('trends')) return [];
     // Tag 6 is the one explicit MP3 detail supplied by this synthetic host.
     // Framing-only filter datasets must not inherit out-of-range Tag 105 events
     // or the separate Summary retention/large-integer fixture's event counts.
@@ -238,7 +324,8 @@ export function syntheticHost() {
         observed: String(filterSummaryEvents(kind).length), retained: String(filterSummaryEvents(kind).length), truncated: false })) };
   }
   function summaryOverview() {
-    if (dataset.startsWith('filter-')) return filterSummaryOverview();
+    if (dataset === 'trends-huge') return hugeTrendSummaryOverview();
+    if (dataset.startsWith('filter-') || dataset.startsWith('trends')) return filterSummaryOverview();
     const metrics = [], metric = (section, name, value, unit = '') => metrics.push({ section, name, value, unit });
     for (const [name, value] of [['audio', '100'], ['video', '100'], ['script', '4'], ['other', '1']]) metric('tags', name, value, 'tags');
     for (const [name, value] of [['aacTagCount', '50'], ['mp3TagCount', '50'], ['switchCount', '2']]) metric('audioCodecs', name, value, 'count');
@@ -253,6 +340,20 @@ export function syntheticHost() {
     return { sourceSize: session.progress.sourceSize, indexedTags: String(tagTotal()), scanComplete: false, scanHasErrors: true, complete: true, hasErrors: false, metrics,
       lists: ['keyframes', 'aac', 'avc', 'mp3', 'diagnostics'].map(kind => ({ kind, observed: kind === 'diagnostics' ? null : '2000', retained: kind === 'keyframes' ? '205' : kind === 'diagnostics' ? '256' : '100', truncated: true })),
     };
+  }
+  function hugeTrendSummaryOverview() {
+    // The virtual index repeats the 300-row trend pattern. Count it algebraically
+    // so the huge-coordinate test never allocates or iterates the virtual index.
+    const total = BigInt(tagTotal()), cycles = total / 300n, remainder = Number(total % 300n);
+    const counts = { audio: 0n, video: 0n, script: 0n, other: 0n };
+    for (let id = 0; id < 300; id++) {
+      const kind = { 8: 'audio', 9: 'video', 18: 'script' }[trendMetadata(id).typeCode] ?? 'other';
+      counts[kind] += cycles + (id < remainder ? 1n : 0n);
+    }
+    const metrics = Object.entries(counts).map(([name, value]) => ({ section: 'tags', name, value: String(value), unit: 'tags' }));
+    return { sourceSize: session.progress.sourceSize, indexedTags: String(total), scanComplete: false, scanHasErrors: true,
+      complete: true, hasErrors: false, metrics,
+      lists: ['keyframes', 'aac', 'avc', 'mp3', 'diagnostics'].map(kind => ({ kind, observed: '0', retained: '0', truncated: false })) };
   }
   return true;
 }

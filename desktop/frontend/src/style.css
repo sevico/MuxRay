@@ -127,6 +127,61 @@ input:focus-visible { outline: 3px solid #7bc9dd; outline-offset: 1px; }
 .filter-note { color: #617389; font-size: 12px; line-height: 1.7; margin: 9px 0 0; overflow-wrap: anywhere; }
 .filter-pagination > .filter-note { padding: 0 17px 10px; margin: 0; }
 .filter-pagination .pagination > span { overflow-wrap: anywhere; }
+.trend-panel { min-width: 0; background: #fff; border: 1px solid #dfe6ee; border-radius: 9px; padding: 20px 22px; margin: 0 0 22px; scroll-margin-top: 16px; }
+.trend-heading, .trend-issues-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+.trend-heading h2 { font-size: 18px; margin: 0; }
+.trend-budget, .trend-issues-heading > span { color: #718094; font-size: 12px; }
+.trend-window-form { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin: 17px 0 10px; font-size: 12px; }
+.trend-window-form input { width: 180px; font-family: Consolas, monospace; }
+.trend-window-form button { font-size: 12px; padding: 7px 11px; }
+.trend-window-buttons { display: flex; flex-wrap: wrap; gap: 7px; }
+.trend-note { font-size: 12px; color: #617389; line-height: 1.75; margin: 10px 0; overflow-wrap: anywhere; }
+.trend-note a, .trend-return, .trend-selection a { color: #126c83; font-size: 12px; }
+.trend-coverage { background: #eef6f8; color: #306274; padding: 10px 12px; font-size: 12px; border-radius: 5px; overflow-wrap: anywhere; }
+.trend-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 14px; margin: 15px 0 10px; font-size: 12px; }
+.trend-controls label { display: flex; flex-direction: column; gap: 6px; color: #536475; }
+.trend-controls select { font: inherit; color: #243347; min-height: 34px; max-width: 210px; border: 1px solid #cbd7e2; border-radius: 5px; background: white; padding: 7px; }
+.trend-controls select:focus-visible { outline: 3px solid #7bc9dd; outline-offset: 1px; }
+.trend-controls form { display: flex; align-items: end; flex-wrap: wrap; gap: 8px; }
+.trend-controls input { width: 122px; }
+.trend-controls button { padding: 8px 10px; font-size: 12px; }
+.trend-metrics { display: flex; flex-wrap: wrap; gap: 5px; }
+.trend-metrics button[aria-pressed="true"] { background: #126c83; color: white; border-color: #126c83; }
+.trend-chart-scroll { overflow-x: auto; border: 1px solid #e2eaf0; border-radius: 6px; background: #fbfdff; }
+.trend-chart { display: block; width: 100%; min-width: 600px; }
+.trend-chart text { font: 11px Consolas, "Microsoft YaHei", monospace; fill: #617389; }
+.trend-grid { stroke: #e1e9ef; stroke-width: 1; }
+.trend-series { fill: none; stroke: #8694a8; stroke-width: 1.5; pointer-events: none; }
+.trend-series.audio { stroke: #298064; } .trend-series.video { stroke: #477db9; } .trend-series.script { stroke: #9e7742; }
+.trend-series .declared { stroke-dasharray: 5 4; opacity: .65; }
+.trend-dot > circle { fill: #8694a8; stroke: white; stroke-width: 1; pointer-events: none; }
+.trend-dot.audio > circle { fill: #298064; } .trend-dot.video > circle { fill: #477db9; } .trend-dot.script > circle { fill: #9e7742; }
+.trend-dot.has-issue > circle { stroke: #c36b23; stroke-width: 2; }
+.trend-dot.is-selected > circle { stroke: #243347; stroke-width: 2.5; }
+.trend-dot > circle.trend-declared-point { fill: white; stroke: #8694a8; stroke-width: 1.5; }
+.trend-dot.audio > circle.trend-declared-point { stroke: #298064; } .trend-dot.video > circle.trend-declared-point { stroke: #477db9; } .trend-dot.script > circle.trend-declared-point { stroke: #9e7742; }
+.trend-dot > .trend-hit { fill: transparent; stroke: none; cursor: pointer; pointer-events: fill; }
+.trend-hit:focus-visible { outline: none; stroke: #126c83 !important; stroke-width: 3 !important; }
+.trend-hit[aria-disabled="true"] { cursor: default; }
+.trend-key { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #8694a8; margin-right: 10px; }
+.trend-key.audio { background: #298064; } .trend-key.video { background: #477db9; } .trend-key.script { background: #9e7742; }
+.trend-placeholder { color: #718094; background: #f9fbfd; border: 1px dashed #dfe6ee; border-radius: 5px; padding: 25px 14px; font-size: 12px; }
+.trend-selection { padding: 14px; margin: 15px 0; border: 1px solid #c9e0e7; background: #f1f8fa; border-radius: 7px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.trend-selection > div { min-width: 0; }
+.trend-selection strong { font-size: 13px; }
+.trend-selection p { margin: 6px 0 0; color: #617389; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.trend-selection-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.trend-selection-actions button { padding: 7px 9px; font-size: 12px; }
+.trend-issues-heading h3 { font-size: 13px; margin: 8px 0 12px; }
+.trend-issues-heading h3 span { color: #718094; font-weight: 400; }
+.trend-issues-scroll { max-height: 360px; overflow: auto; border: 1px solid #e1e9ef; border-radius: 5px; }
+.trend-issues td { vertical-align: top; }
+.trend-issues td:nth-child(2) { white-space: normal; min-width: 150px; max-width: 260px; }
+.trend-issues td:last-child .source-link { display: block; margin-bottom: 7px; }
+.trend-row-type { display: block; margin-top: 5px; color: #718094; font-size: 11px; }
+.trend-issue { display: inline-block; color: #9c592b; background: #fff2e8; border-radius: 3px; padding: 2px 4px; margin: 0 4px 4px 0; }
+.trend-panel > .request-error { margin: 12px 0; font-size: 12px; }
+@media (max-width: 940px) { .trend-panel { padding: 17px; } .trend-controls { gap: 10px; } }
 .pagination { flex-wrap: wrap; }
 .hex-panel { min-width: 0; padding: 20px; margin-top: 22px; background: #fff; border: 1px solid #dfe6ee; border-radius: 9px; scroll-margin-top: 16px; }
 .hex-heading, .hex-window-heading { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 12px; }

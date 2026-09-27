@@ -1,5 +1,5 @@
 import type { desktop, main } from '../wailsjs/go/models';
-import type { DetailKind, DetailResponse, DiagnosticPage, HexResponse, PageResponse, PickResponse, Session, SessionResponse, TagPage, SummaryResponse, SummaryPageResponse, FilteredTagPage, TagFilter } from './protocol';
+import type { DetailKind, DetailResponse, DiagnosticPage, HexResponse, PageResponse, PickResponse, Session, SessionResponse, TagPage, SummaryResponse, SummaryPageResponse, FilteredTagPage, TagFilter, TagTrendPage, TagTrendPoint } from './protocol';
 import { validateTagFilter } from './tag-filter.ts';
 import { validateHexWindow } from './hex.ts';
 import { summaryKind, validateSummaryResponse, validateSummaryPage } from './summary.ts';
@@ -26,6 +26,22 @@ export function filteredTagResponse(value: desktop.FilteredTagPageResponse): Pag
     ...value.page, filter: normalizedFilter(value.page.filter),
     tags: value.page.tags.map(tag => ({ ...tag, previousTagSize: { ...tag.previousTagSize, span: tag.previousTagSize.span ?? null } })),
   } : null };
+}
+export function tagTrendResponse(value: desktop.TagTrendPageResponse): PageResponse<TagTrendPage> {
+  return { apiVersion: value.apiVersion, error: value.error ?? null, page: value.page ? {
+    ...value.page, points: value.page.points.map(point => ({ ...point,
+      previousTagId: point.previousTagId ?? null, previousDts: point.previousDts ?? null, deltaMs: point.deltaMs ?? null,
+      context: trendContext(point.context), previousTagSizeState: trendPreviousSize(point.previousTagSizeState),
+    })),
+  } : null };
+}
+function trendContext(value: string): TagTrendPoint['context'] {
+  if (value === 'found' || value === 'start' || value === 'budget_exhausted') return value;
+  throw Error('Invalid trend context.');
+}
+function trendPreviousSize(value: string): TagTrendPoint['previousTagSizeState'] {
+  if (value === 'valid' || value === 'missing' || value === 'invalid') return value;
+  throw Error('Invalid trend previous Tag size.');
 }
 function normalizedFilter(value: { type: string; structure: string; dtsMin?: string | null; dtsMax?: string | null }): TagFilter {
   const { type, structure } = value;

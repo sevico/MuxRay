@@ -420,6 +420,48 @@ python -B tools/desktop-native/filter_check.py --fixtures-dir C:\work\filter-fix
 
 浏览器合成 host 可在前端 build 后运行 `node test/browser-host.mjs`，通过 `?smoke=filter-ranges|filter-sparse|filter-multipage|filter-structures|filter-truncated|filter-empty` 选择同等数据；`filter-delayed` 延迟 1.8 秒回复以检查关闭/重开隔离，`filter-timeout` 丢失本会话第一次筛选回复以检查重试。`node --test test/browser-filter-fixture.test.mjs` 只核对合成 host 的分页与数据，不启动浏览器。现有 `browser-smoke.mjs` 已补筛选检查；真正浏览器/原生窗口是否执行应在本次验收报告单独记录。
 
+## Tag 趋势窗口样本（ADR-018）
+
+`trend_fixtures.py` 只生成新文件，不改变 ADR-017 样本；绝对输出目录必须不存在。
+清单记录每个 Tag 的源元数据、指定窗口及前驱期望。前驱按 `(typeCode, streamId)`
+分组，最多回看 4096 条源记录；找到当前窗口所有分组的前驱后可提前停止。
+每次 API 最多 512 点，桌面默认 256 点，EOF 空窗口不读取上下文。
+
+```powershell
+python -B tools/desktop-native/trend_fixtures.py --output-dir 'C:\work\trend-fixtures-001'
+python -B -m unittest discover -s tools/desktop-native -p trend_fixtures_test.py -v
+```
+
+| 文件 | 确定性期望 |
+| --- | --- |
+| `trends-mixed.flv` | 300 Tag，6496 byte；前 20 Tag 与 `summary-mixed.flv` 逐字节相同，后续 AAC/AVC 头链延续现有配置。窗口 `[0,256)` 后为 `[256,300)`；ID 256→254 的 DTS 差 0，257→255 为 -100，258→256 为 2001；259 首次 StreamID 1，无前驱；260 DTS 4294967295，261→259 为 -40，264→260 为 -4294967295；262 为 filtered Other |
+| `trends-sparse.flv` | 4354 Tag；起点 4097、256 点时上下文 `[1,4097)` 恰好 4096 条。ID 4097 的 Video 前驱 ID 1 可用；4098 的 Audio 前驱在预算外，因此 unknown；4099 的前驱为窗口内 4098，差 10；4100→4097 为 -10；从未见过的 Other 4101 同样只能判为预算不足 |
+| `trends-structures.flv` | 7 Tag；PreviousTagSize invalid 为 ID 1/3，missing 为 ID 6；ID 2 为 filtered；ID 4 的 StreamID 为 16777215 |
+| `trends-truncated.flv` | ID 1 声明 10 byte、实际 2 byte，Payload 不完整且 PreviousTagSize missing；实际 payload 为偏移 `[39,41)` 的 `AF 00` |
+| `trends-empty.flv` | 13 byte 合法 FLV 头，0 Tag；窗口为空、上下文读取 0 |
+
+趋势保留原始 DTS，负差不做时间轴修复；`budget_exhausted` 不能解释成“没有前驱”。
+这些文件用于容器、配置与固定头检查，不保证音视频帧完整或可播放。生成器的六项
+单测独立解析实际 FLV 字节，并核对窗口前驱、预算边界及拒绝覆盖行为；它不调用
+Go trend binding，也不替代原生 GUI 验收。
+
+合成浏览器 host 支持 `?smoke=trends|trends-sparse|trends-structures|trends-truncated|trends-empty`，
+类型、DTS、StreamID 和大小与上述场景一致，源 offset 特意大于 JavaScript 安全整数。
+`trends-timeout` 丢失第一次趋势回复，独立重试可完成；`trends-delayed` 延迟 1.8 秒且
+保留关闭/重开前的 session。`trends-huge` 是重复 300 条模式的虚拟索引，total 为
+9007199254741300，起点 9007199254740993 可检查 Tag ID、offset、delta 与分页的精确性。
+虚拟索引的 Summary 类型总数用算术计算；趋势合成场景不产生 codec Summary 事件。
+
+```powershell
+# 在 desktop/frontend 中执行；不启动浏览器。
+node --test test/browser-filter-fixture.test.mjs test/browser-trend-fixture.test.mjs
+```
+
+`.github/workflows/ci.yml` 另设 Windows 非 GUI job，安装锁定前端依赖后运行单测、
+构建、合成 host 契约检查、desktop Go test/vet、所有 Python fixture 测试，以及
+PowerShell 5.1/7 gate 自测。有 gcc 时额外运行 desktop race；缺少 gcc 时显式输出
+跳过通知。CI 不启动 Wails、浏览器或文件选择器，不能代替每次单独记录的原生验收。
+
 ## Summary 生产窗口、分页与数值样本
 
 标准库生成器输出到绝对、新目录；默认另外流式写入一个 200000 Tag、约 3 MB

@@ -48,7 +48,7 @@ export function HexPanel({ view, controller, disabled, message }: { view: ViewSt
   const busy = ['loading', 'pending', 'recovering'].includes(view.hexState);
   const end = window ? (unsigned(window.offset) + BigInt(window.hex.length / 2)).toString() : null;
   return <section ref={section} id="hex-panel" className="hex-panel" aria-label="原始字节 Hex" aria-busy={busy}>
-    <div className="hex-heading"><div><p className="eyebrow">只读 · 原始文件</p><h2>Hex / 字段定位</h2></div>{view.selectedTag && <a href="#tag-detail">返回 Tag {view.selectedTag.id} 详情 ↑</a>}</div>
+    <div className="hex-heading"><div><p className="eyebrow">只读 · 原始文件</p><h2>Hex / 字段定位</h2></div>{view.trendPage && <a href="#tag-trends">返回趋势窗口 ↑</a>}{view.selectedTag && <a href="#tag-detail">返回 Tag {view.selectedTag.id} 详情 ↑</a>}</div>
     <form className="hex-controls" onSubmit={event => { event.preventDefault(); controller.jumpHex(offset); }}>
       <label htmlFor="hex-offset-input">byte 偏移</label><input id="hex-offset-input" inputMode="numeric" value={offset} onChange={event => setOffset(event.target.value)} disabled={disabled} />
       <button disabled={disabled}>跳转偏移</button><span>每窗最多 {HEX_WINDOW_BYTES} byte · 每行 16 byte</span>

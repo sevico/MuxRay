@@ -38,6 +38,16 @@ export interface FilteredTagPage {
   sessionId: string; filter: TagFilter; start: string; next: string; indexedTotal: string;
   limit: number; scanLimit: number; scanned: number; exhausted: boolean; tags: Tag[];
 }
+export interface TagTrendPoint {
+  tagId: string; offset: string; dts: string; typeCode: number; streamId: number;
+  dataSize: number; availableDataSize: number; payloadComplete: boolean;
+  previousTagSizeState: 'valid' | 'missing' | 'invalid'; filtered: boolean;
+  previousTagId: string | null; previousDts: string | null; deltaMs: string | null;
+  context: 'found' | 'start' | 'budget_exhausted';
+}
+export interface TagTrendPage {
+  sessionId: string; bounds: Bounds; contextStart: string; contextScanned: number; points: TagTrendPoint[];
+}
 export interface DiagnosticPage { sessionId: string; bounds: Bounds; diagnostics: Diagnostic[] }
 export interface PageResponse<P> { apiVersion: number; page: P | null; error: Fault | null }
 export interface DetailRequest { sessionId: string; requestId: string; tagId: string }
@@ -84,6 +94,7 @@ export interface API {
   close(id: string): Promise<SessionResponse>;
   tags(request: PageRequest): Promise<PageResponse<TagPage>>;
   filteredTags(request: FilteredTagRequest): Promise<PageResponse<FilteredTagPage>>;
+  tagTrends(request: PageRequest): Promise<PageResponse<TagTrendPage>>;
   diagnostics(request: PageRequest): Promise<PageResponse<DiagnosticPage>>;
   startDetail(request: DetailRequest): Promise<DetailResponse>;
   detailResult(request: DetailQuery): Promise<DetailResponse>;

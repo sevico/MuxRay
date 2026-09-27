@@ -22,6 +22,8 @@ export function GetSummary(arg1:desktop.SummaryQuery):Promise<desktop.SummaryRes
 
 export function GetSummaryEvents(arg1:desktop.SummaryPageRequest):Promise<desktop.SummaryPageResponse>;
 
+export function GetTagTrends(arg1:desktop.PageRequest):Promise<desktop.TagTrendPageResponse>;
+
 export function GetTags(arg1:desktop.PageRequest):Promise<desktop.TagPageResponse>;
 
 export function OpenFile(arg1:desktop.OpenRequest):Promise<desktop.SessionResponse>;

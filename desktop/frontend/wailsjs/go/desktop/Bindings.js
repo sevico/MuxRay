@@ -42,6 +42,10 @@ export function GetSummaryEvents(arg1) {
   return window['go']['desktop']['Bindings']['GetSummaryEvents'](arg1);
 }
 
+export function GetTagTrends(arg1) {
+  return window['go']['desktop']['Bindings']['GetTagTrends'](arg1);
+}
+
 export function GetTags(arg1) {
   return window['go']['desktop']['Bindings']['GetTags'](arg1);
 }

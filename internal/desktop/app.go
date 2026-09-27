@@ -56,6 +56,7 @@ type scanSession interface {
 	Close(context.Context) error
 	Page(uint64, uint32) (flv.TagPage, error)
 	FilteredPage(uint64, uint32, flv.TagFilter) (flv.FilteredTagPage, error)
+	TrendPage(uint64, uint32) (flv.TagTrendPage, error)
 	DiagnosticPage(uint64, uint32) (session.DiagnosticPage, error)
 }
 

@@ -6,6 +6,8 @@ import type { DetailQuery, SummaryKind, SummaryOverview, SummaryPage, SummaryPag
 import { summaryKind, validateSummaryPage, validateSummaryResponse } from './summary.ts';
 import type { FilteredTagPage, TagFilter } from './protocol.ts';
 import { FILTER_HISTORY_LIMIT, validateFilteredTagPage, validateTagFilter } from './tag-filter.ts';
+import type { TagTrendPage } from './protocol.ts';
+import { TREND_PAGE_SIZE, validateTagTrendPage } from './tag-trend-protocol.ts';
 
 export const PAGE_SIZE = 100;
 export const POLL_MS = 200;
@@ -29,6 +31,11 @@ export interface ViewState {
   filterError: string | null;
   filterPrevious: string | null;
   filterHistoryLimited: boolean;
+  trendPage: TagTrendPage | null;
+  trendLoading: boolean;
+  trendError: string | null;
+  trendStart: string;
+  trendSelectedId: string | null;
   selectedTag: Tag | null;
   detail: Detail | null;
   detailState: '' | 'loading' | 'pending' | 'recovering' | 'ready' | 'failed';
@@ -63,7 +70,7 @@ const scheduler: Scheduler = {
 
 class RequestError extends Error {}
 class ReplyUnconfirmed extends Error {}
-type ReplySlot = 'open' | 'command' | 'status' | 'page' | 'detail' | 'hex' | 'summary' | 'summaryPage';
+type ReplySlot = 'open' | 'command' | 'status' | 'page' | 'detail' | 'hex' | 'summary' | 'summaryPage' | 'trend';
 function check(response: { apiVersion: number; error: { code: string } | null }): void {
   if (response.apiVersion !== 1) throw new RequestError('incompatible_api');
   if (response.error) throw new RequestError(response.error.code);
@@ -117,7 +124,7 @@ export class Controller {
   private api: API;
   private clock: Scheduler;
   private listeners = new Set<() => void>();
-  private state: ViewState = { fileName: '', session: null, operation: '', error: null, tab: 'tags', start: '0', page: null, loading: false, tagFilter: null, filteredPage: null, filterError: null, filterPrevious: null, filterHistoryLimited: false, selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '', hex: null, hexSelection: null, hexState: '', hexError: null, hexRetry: '', tagJumpError: null, sourceChanged: false, summary: null, summaryState: '', summaryRunning: false, summaryCancelRequested: false, summaryProcessed: '0', summaryTotal: '0', summaryError: null, summaryRetry: '', summaryKind: 'keyframes', summaryStart: '0', summaryPage: null, summaryPageLoading: false, summaryPageError: null, summaryPrevious: null };
+  private state: ViewState = { fileName: '', session: null, operation: '', error: null, tab: 'tags', start: '0', page: null, loading: false, tagFilter: null, filteredPage: null, filterError: null, filterPrevious: null, filterHistoryLimited: false, trendPage: null, trendLoading: false, trendError: null, trendStart: '0', trendSelectedId: null, selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '', hex: null, hexSelection: null, hexState: '', hexError: null, hexRetry: '', tagJumpError: null, sourceChanged: false, summary: null, summaryState: '', summaryRunning: false, summaryCancelRequested: false, summaryProcessed: '0', summaryTotal: '0', summaryError: null, summaryRetry: '', summaryKind: 'keyframes', summaryStart: '0', summaryPage: null, summaryPageLoading: false, summaryPageError: null, summaryPrevious: null };
   private disposed = false;
   private statusVersion = 0;
   private pageVersion = 0;
@@ -155,6 +162,9 @@ export class Controller {
   private summaryPageBusy = false;
   private summaryHistory: string[] = [];
   private filterHistory: string[] = [];
+  private trendVersion = 0;
+  private trendBusy = false;
+  private trendWanted = false;
 
   constructor(api: API, clock: Scheduler = scheduler) { this.api = api; this.clock = clock; }
   getSnapshot = (): ViewState => this.state;
@@ -169,6 +179,7 @@ export class Controller {
   }
   private accept(session: Session): void {
     if (session.closed && session.terminal) {
+      this.clearTrend();
       this.clearFilter();
       this.clearSummary();
       this.clearDetail();
@@ -178,11 +189,12 @@ export class Controller {
       this.jumpTagId = null;
       this.update({ session: null, fileName: '', operation: '', page: null, loading: false, start: '0', sourceChanged: false, error: null });
     } else {
-      if (session.closed) { this.clearFilter(); this.clearSummary(); this.clearDetail(); }
+      if (session.closed) { this.clearTrend(); this.clearFilter(); this.clearSummary(); this.clearDetail(); }
       this.update({ session, operation: session.closed ? 'closing' : '' });
       this.ensureDetail();
       this.ensureHex();
       this.ensureSummary();
+      this.ensureTrend();
     }
   }
   async open(): Promise<void> {
@@ -239,6 +251,7 @@ export class Controller {
     this.update({ operation: '', error: null });
     check(result);
     if (session) {
+      this.clearTrend();
       this.clearFilter();
       this.clearSummary();
       this.clearDetail();
@@ -262,6 +275,7 @@ export class Controller {
     this.pollFailed = false;
     this.refreshStatus = false;
     if (operation === 'closing') {
+      this.clearTrend();
       this.clearFilter();
       this.clearSummary();
       this.clearDetail();
@@ -384,6 +398,80 @@ export class Controller {
   private ready(): boolean {
     const session = this.state.session;
     return !!session?.terminal && !session.closed && session.scan !== null && this.state.operation !== 'closing' && !this.state.sourceChanged;
+  }
+  private clearTrend(): void {
+    this.trendVersion++; this.trendWanted = false;
+    this.replyStops.get('trend')?.();
+    this.update({ trendPage: null, trendLoading: false, trendError: null, trendStart: '0', trendSelectedId: null });
+  }
+  loadTagTrends(start = '0'): void {
+    if (this.disposed || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    try {
+      if (unsigned(start) > unsigned(this.state.session!.progress!.tagCount)) throw Error('Out of index.');
+    } catch { this.update({ trendError: 'invalid_argument' }); return; }
+    this.trendVersion++; this.trendWanted = true;
+    this.update({ trendStart: start, trendPage: null, trendLoading: true, trendError: null, trendSelectedId: null });
+    this.ensureTrend();
+  }
+  pageTagTrends(direction: 'first' | 'previous' | 'next'): void {
+    const page = this.state.trendPage;
+    if (!page || this.state.trendLoading) return;
+    const start = unsigned(page.bounds.start);
+    if (direction === 'next') {
+      if (unsigned(page.bounds.next) >= unsigned(page.bounds.total)) return;
+      this.loadTagTrends(page.bounds.next);
+    } else if (direction === 'first') this.loadTagTrends('0');
+    else this.loadTagTrends((start > BigInt(TREND_PAGE_SIZE) ? start - BigInt(TREND_PAGE_SIZE) : 0n).toString());
+  }
+  retryTagTrends(): void {
+    if (!this.state.trendError || this.trendBusy) return;
+    this.loadTagTrends(this.state.trendStart);
+  }
+  private ensureTrend(): void {
+    if (this.disposed || this.trendBusy || !this.trendWanted || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    void this.readTrend();
+  }
+  private async readTrend(): Promise<void> {
+    const session = this.state.session!, version = this.trendVersion;
+    const request = { sessionId: session.sessionId, start: this.state.trendStart, count: TREND_PAGE_SIZE };
+    this.trendBusy = true; this.trendWanted = false;
+    try {
+      const response = await this.awaitReply('trend', () => this.api.tagTrends(request));
+      if (this.disposed || version !== this.trendVersion || this.state.session?.sessionId !== session.sessionId || !this.ready()) return;
+      if (response.apiVersion !== 1) throw new RequestError('incompatible_api');
+      if (response.error && response.page) throw new RequestError('invalid_response');
+      check(response);
+      if (!response.page) throw new RequestError('invalid_response');
+      try {
+        validateTagTrendPage(response.page, request, session.progress?.sourceSize);
+        if (response.page.bounds.total !== session.progress?.tagCount) throw Error('Invalid index coverage.');
+      } catch { throw new RequestError('invalid_response'); }
+      this.update({ trendPage: response.page });
+    } catch (error) {
+      if (this.disposed || version !== this.trendVersion || this.state.session?.sessionId !== session.sessionId || !this.ready()) return;
+      const code = errorCode(error);
+      if (code === 'source_changed') this.invalidateSource();
+      else this.update({ trendError: code });
+    } finally {
+      this.trendBusy = false;
+      if (version === this.trendVersion) this.update({ trendLoading: false });
+      this.ensureTrend();
+    }
+  }
+  selectTrendTag(id: string): void {
+    if (this.disposed || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed || !this.state.trendPage?.points.some(point => point.tagId === id)) return;
+    this.update({ trendSelectedId: id });
+    this.jumpTag(id);
+  }
+  showTrendHex(id: string, target: 'tag' | 'payload'): void {
+    if (this.disposed || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    const point = this.state.trendPage?.points.find(item => item.tagId === id);
+    if (!point || (target !== 'tag' && target !== 'payload')) return;
+    if (this.state.selectedTag?.id !== id) this.clearDetail();
+    this.update({ trendSelectedId: id });
+    this.showHex({ offset: (unsigned(point.offset) + (target === 'payload' ? 11n : 0n)).toString(), bitOffset: 0,
+      bitLength: (point.availableDataSize + (target === 'tag' ? 11 : 0)) * 8,
+      label: target === 'tag' ? `Tag ${id} 范围` : `Tag ${id} payload（实际 ${point.availableDataSize} / 声明 ${point.dataSize} byte）` });
   }
   private ensurePage(): void {
     if (this.disposed || this.paging || this.refreshStatus || this.pollFailed || !this.ready() || this.state.page || this.state.filteredPage || this.state.summaryRunning) return;
@@ -561,6 +649,10 @@ export class Controller {
   private requestHex(offset: string, selection: HexSelection | null): void {
     if (this.disposed || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (this.nextReadID === 18446744073709551615n) { this.update({ hexError: 'id_exhausted' }); return; }
+    // A direct byte selection supersedes a Tag jump whose index page is still
+    // arriving. Keep that page usable, but do not open its obsolete detail and
+    // clear the newer Hex selection when the delayed page finishes.
+    this.jumpTagId = null;
     this.pauseDetailForHex();
     this.stopHexTimer?.(); this.stopHexTimer = null;
     this.hexRequest = { sessionId: this.state.session!.sessionId, requestId: (++this.nextReadID).toString(), offset, count: HEX_WINDOW_BYTES };
@@ -575,6 +667,7 @@ export class Controller {
     this.update({ hex: null, hexSelection: null, hexState: '', hexError: null, hexRetry: '', tagJumpError: null });
   }
   private invalidateSource(): void {
+    this.clearTrend();
     this.clearFilter();
     this.clearSummary();
     this.clearDetail();
@@ -794,6 +887,7 @@ export class Controller {
   dispose(): void {
     this.disposed = true;
     this.statusVersion++; this.pageVersion++;
+    this.trendVersion++; this.trendWanted = false;
     this.stopTimer?.(); this.stopTimer = null;
     this.detailRequest = null;
     this.stopDetailTimer?.(); this.stopDetailTimer = null;

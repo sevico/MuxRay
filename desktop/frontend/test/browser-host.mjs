@@ -4,6 +4,8 @@
 // summary-source-changed|summary-short-page selects a deterministic host case.
 // ADR-017: ?smoke=filter-ranges|filter-sparse|filter-multipage|filter-structures|
 // filter-truncated|filter-empty|filter-delayed|filter-timeout selects Tag data.
+// ADR-018: ?smoke=trends|trends-sparse|trends-structures|trends-truncated|
+// trends-empty|trends-timeout|trends-delayed|trends-huge selects bounded trends.
 import { createServer } from 'node:http';
 import { readFile, readdir } from 'node:fs/promises';
 import { resolve, dirname, extname } from 'node:path';

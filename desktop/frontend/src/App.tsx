@@ -1,4 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
+import { TagTrendPanel } from './TagTrendPanel';
 import { Controller, PAGE_SIZE } from './controller';
 import type { Diagnostic, Session, Tag } from './protocol';
 import type { ViewState } from './controller';
@@ -96,6 +97,8 @@ export function App({ controller }: { controller: Controller }) {
 
         <SummaryPanel view={view} controller={controller} disabled={!scanReady || !!isClosing} message={fault} />
 
+        <TagTrendPanel key={session.sessionId} view={view} controller={controller} disabled={!scanReady || !!operation} readDisabled={!canPage || !!operation} message={fault} />
+
         <div className={`result-layout ${view.selectedTag ? 'has-detail' : ''}`}>
         <section className="results" aria-label="扫描结果">
           <div className="results-toolbar">
@@ -147,6 +150,7 @@ function DetailPanel({ view, onRetry, onLocate }: { view: ViewState; onRetry: ()
   const busy = ['loading', 'pending', 'recovering'].includes(view.detailState);
   return <section id="tag-detail" className="detail-panel" aria-label={`Tag ${view.selectedTag!.id} 详情`} aria-busy={busy}>
     <div className="detail-heading"><div><p className="eyebrow">按需解析 · TAG {view.selectedTag!.id}</p><h2>{kind}</h2></div>
+      {view.trendPage && <a className="trend-return" href="#tag-trends">返回趋势 ↑</a>}
       {detail && <div className="detail-badges"><span className={`status ${detail.complete ? '' : 'partial'}`}>{detail.complete ? '语法解析完成' : '部分解析'}</span>{detail.truncated && <span className="status partial">内容截断或展示省略</span>}</div>}
     </div>
     {busy && <p className="detail-note" role="status">{view.detailState === 'recovering' ? '正在确认详情请求…' : '正在读取当前 Tag 的详情…'}</p>}
