@@ -8,6 +8,7 @@ import type { FilteredTagPage, TagFilter } from './protocol.ts';
 import { FILTER_HISTORY_LIMIT, validateFilteredTagPage, validateTagFilter } from './tag-filter.ts';
 import type { TagTrendPage } from './protocol.ts';
 import { TREND_PAGE_SIZE, validateTagTrendPage } from './tag-trend-protocol.ts';
+import type { SaveRequest, SaveResponse, SnapshotRequest, SnapshotTrend } from './protocol.ts';
 
 export const PAGE_SIZE = 100;
 export const POLL_MS = 200;
@@ -36,6 +37,17 @@ export interface ViewState {
   trendError: string | null;
   trendStart: string;
   trendSelectedId: string | null;
+  trendMetric: SnapshotTrend['metric'];
+  trendType: SnapshotTrend['type'];
+  trendGapThreshold: string;
+  saveState: '' | 'saving' | 'recovering' | 'saved' | 'canceled' | 'failed';
+  savePending: boolean;
+  saveError: string | null;
+  saveRetry: boolean;
+  saveSourceName: string;
+  saveSessionId: string | null;
+  saveFileName: string;
+  saveBytesWritten: string;
   selectedTag: Tag | null;
   detail: Detail | null;
   detailState: '' | 'loading' | 'pending' | 'recovering' | 'ready' | 'failed';
@@ -70,7 +82,7 @@ const scheduler: Scheduler = {
 
 class RequestError extends Error {}
 class ReplyUnconfirmed extends Error {}
-type ReplySlot = 'open' | 'command' | 'status' | 'page' | 'detail' | 'hex' | 'summary' | 'summaryPage' | 'trend';
+type ReplySlot = 'open' | 'command' | 'status' | 'page' | 'detail' | 'hex' | 'summary' | 'summaryPage' | 'trend' | 'save';
 function check(response: { apiVersion: number; error: { code: string } | null }): void {
   if (response.apiVersion !== 1) throw new RequestError('incompatible_api');
   if (response.error) throw new RequestError(response.error.code);
@@ -118,13 +130,26 @@ function hexResult(response: HexResponse, request: HexRequest): HexResponse {
   return response;
 }
 
+function validateSaveResult(response: SaveResponse, requestId: string): void {
+  if (response.apiVersion !== 1) throw new RequestError('incompatible_api');
+  if (response.requestId !== requestId || typeof response.pending !== 'boolean' || typeof response.canceled !== 'boolean' ||
+      typeof response.fileName !== 'string' || response.fileName.length > 512 || /[\\/\u0000]/.test(response.fileName) ||
+      typeof response.bytesWritten !== 'string' || (response.pending && (response.canceled || response.error)) || (response.canceled && response.error)) throw new RequestError('invalid_response');
+  if (response.error !== null && (!response.error || typeof response.error.code !== 'string' || !response.error.code || typeof response.error.message !== 'string')) throw new RequestError('invalid_response');
+  let bytes: bigint;
+  try { bytes = unsigned(response.bytesWritten); } catch { throw new RequestError('invalid_response'); }
+  if (response.pending || response.canceled || response.error) {
+    if (bytes !== 0n) throw new RequestError('invalid_response');
+  } else if (bytes === 0n || bytes > 2097152n || !response.fileName) throw new RequestError('invalid_response');
+}
+
 // Framework-independent controller: one poll, one page, one user command at a
 // time. Old replies cannot overwrite a close/cancel/new-session transition.
 export class Controller {
   private api: API;
   private clock: Scheduler;
   private listeners = new Set<() => void>();
-  private state: ViewState = { fileName: '', session: null, operation: '', error: null, tab: 'tags', start: '0', page: null, loading: false, tagFilter: null, filteredPage: null, filterError: null, filterPrevious: null, filterHistoryLimited: false, trendPage: null, trendLoading: false, trendError: null, trendStart: '0', trendSelectedId: null, selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '', hex: null, hexSelection: null, hexState: '', hexError: null, hexRetry: '', tagJumpError: null, sourceChanged: false, summary: null, summaryState: '', summaryRunning: false, summaryCancelRequested: false, summaryProcessed: '0', summaryTotal: '0', summaryError: null, summaryRetry: '', summaryKind: 'keyframes', summaryStart: '0', summaryPage: null, summaryPageLoading: false, summaryPageError: null, summaryPrevious: null };
+  private state: ViewState = { fileName: '', session: null, operation: '', error: null, tab: 'tags', start: '0', page: null, loading: false, tagFilter: null, filteredPage: null, filterError: null, filterPrevious: null, filterHistoryLimited: false, trendPage: null, trendLoading: false, trendError: null, trendStart: '0', trendSelectedId: null, trendMetric: 'dts', trendType: 'all', trendGapThreshold: '1000', saveState: '', savePending: false, saveError: null, saveRetry: false, saveSourceName: '', saveSessionId: null, saveFileName: '', saveBytesWritten: '0', selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '', hex: null, hexSelection: null, hexState: '', hexError: null, hexRetry: '', tagJumpError: null, sourceChanged: false, summary: null, summaryState: '', summaryRunning: false, summaryCancelRequested: false, summaryProcessed: '0', summaryTotal: '0', summaryError: null, summaryRetry: '', summaryKind: 'keyframes', summaryStart: '0', summaryPage: null, summaryPageLoading: false, summaryPageError: null, summaryPrevious: null };
   private disposed = false;
   private statusVersion = 0;
   private pageVersion = 0;
@@ -165,6 +190,11 @@ export class Controller {
   private trendVersion = 0;
   private trendBusy = false;
   private trendWanted = false;
+  private nextSaveID = 0n;
+  private saveRequest: SaveRequest | null = null;
+  private saveBusy = false;
+  private savePaused = false;
+  private stopSaveTimer: (() => void) | null = null;
 
   constructor(api: API, clock: Scheduler = scheduler) { this.api = api; this.clock = clock; }
   getSnapshot = (): ViewState => this.state;
@@ -198,7 +228,7 @@ export class Controller {
     }
   }
   async open(): Promise<void> {
-    if (this.disposed || this.state.session || this.state.operation) return;
+    if (this.disposed || this.state.session || this.state.operation || this.state.savePending) return;
     if (this.nextOpenID === 18446744073709551615n) { this.update({ error: 'id_exhausted' }); return; }
     const requestId = (++this.nextOpenID).toString();
     this.openingID = requestId;
@@ -251,6 +281,8 @@ export class Controller {
     this.update({ operation: '', error: null });
     check(result);
     if (session) {
+      this.clearCompletedSave();
+      this.update({ trendMetric: 'dts', trendType: 'all', trendGapThreshold: '1000' });
       this.clearTrend();
       this.clearFilter();
       this.clearSummary();
@@ -263,6 +295,75 @@ export class Controller {
       this.update({ fileName: result.fileName, tab: 'tags', start: '0', page: null, sourceChanged: false });
       this.accept(session);
     }
+  }
+  private clearCompletedSave(): void {
+    if (this.state.savePending) return;
+    this.saveRequest = null; this.savePaused = false;
+    this.stopSaveTimer?.(); this.stopSaveTimer = null;
+    this.update({ saveState: '', saveError: null, saveRetry: false, saveSourceName: '', saveSessionId: null, saveFileName: '', saveBytesWritten: '0' });
+  }
+  private freezeSnapshot(): SnapshotRequest {
+    const summaryPage = this.state.summaryPage;
+    const trendPage = this.state.trendPage;
+    return Object.freeze({
+      sessionId: this.state.session!.sessionId, selectedTagId: this.state.selectedTag?.id ?? null,
+      detailRequestId: this.detailRequest?.requestId ?? null, hexRequestId: this.hexRequest?.requestId ?? null,
+      summaryRequestId: this.summaryRequest?.requestId ?? null,
+      summaryPage: summaryPage ? Object.freeze({ kind: this.state.summaryKind, start: summaryPage.bounds.start, count: summaryPage.bounds.limit }) : null,
+      trend: trendPage ? Object.freeze({ start: trendPage.bounds.start, count: trendPage.bounds.limit,
+        type: this.state.trendType, metric: this.state.trendMetric, gapThreshold: this.state.trendGapThreshold }) : null,
+    });
+  }
+  async saveSnapshot(): Promise<void> {
+    if (this.disposed || this.state.savePending || this.saveBusy || this.state.operation || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.nextSaveID === 18446744073709551615n) { this.update({ saveState: 'failed', saveError: 'id_exhausted' }); return; }
+    const request: SaveRequest = Object.freeze({ requestId: (++this.nextSaveID).toString(), snapshot: this.freezeSnapshot() });
+    this.saveRequest = request; this.savePaused = false;
+    this.update({ saveState: 'saving', savePending: true, saveError: null, saveRetry: false,
+      saveSourceName: this.state.fileName, saveSessionId: request.snapshot.sessionId, saveFileName: '', saveBytesWritten: '0' });
+    await this.readSave(true);
+  }
+  private currentSave(request: SaveRequest): boolean {
+    // Saving owns a frozen snapshot, independent of the current document. Close
+    // cannot release the native dialog gate or reinterpret this receipt.
+    return !this.disposed && this.saveRequest === request && this.state.savePending;
+  }
+  private acceptSave(response: SaveResponse, request: SaveRequest): void {
+    validateSaveResult(response, request.requestId);
+    if (response.pending) { this.update({ saveState: 'saving', saveError: null, saveRetry: false }); return; }
+    this.savePaused = false;
+    this.update({ savePending: false, saveState: response.error ? 'failed' : response.canceled ? 'canceled' : 'saved',
+      saveError: response.error?.code ?? null, saveRetry: false, saveFileName: response.fileName, saveBytesWritten: response.bytesWritten });
+    if (response.error?.code === 'source_changed' && this.state.session?.sessionId === request.snapshot.sessionId) this.invalidateSource();
+  }
+  private async readSave(initial: boolean): Promise<void> {
+    const request = this.saveRequest;
+    if (!request || this.saveBusy || !this.currentSave(request)) return;
+    this.saveBusy = true;
+    try {
+      const response = await this.awaitReply('save', () => initial ? this.api.saveSnapshot(request) : this.api.saveResult(request.requestId));
+      if (this.currentSave(request)) this.acceptSave(response, request);
+    } catch (error) {
+      if (!this.currentSave(request)) return;
+      if (initial) {
+        // Transport failure or a malformed receipt cannot prove whether saving
+        // happened. Confirm the same ID; never repeat a dialog or write.
+        this.update({ saveState: 'recovering', saveError: error instanceof ReplyUnconfirmed ? null : errorCode(error), saveRetry: false });
+      } else {
+        this.savePaused = true;
+        this.update({ saveState: 'recovering', saveError: errorCode(error), saveRetry: true });
+      }
+    } finally { this.saveBusy = false; this.scheduleSave(); }
+  }
+  private scheduleSave(): void {
+    if (this.disposed || !this.state.savePending || this.saveBusy || this.savePaused || this.stopSaveTimer) return;
+    this.stopSaveTimer = this.clock.after(() => { this.stopSaveTimer = null; void this.readSave(false); }, POLL_MS);
+  }
+  retrySave(): void {
+    if (this.disposed || !this.state.savePending || !this.state.saveRetry || this.saveBusy) return;
+    this.savePaused = false;
+    this.update({ saveState: 'recovering', saveError: null, saveRetry: false });
+    this.scheduleSave();
   }
   async cancel(): Promise<void> { await this.command('canceling'); }
   async close(): Promise<void> { await this.command('closing'); }
@@ -403,6 +504,16 @@ export class Controller {
     this.trendVersion++; this.trendWanted = false;
     this.replyStops.get('trend')?.();
     this.update({ trendPage: null, trendLoading: false, trendError: null, trendStart: '0', trendSelectedId: null });
+  }
+  setTrendOptions(options: Partial<Pick<ViewState, 'trendMetric' | 'trendType' | 'trendGapThreshold'>>): void {
+    if (this.disposed || !this.state.session) return;
+    if (options.trendMetric !== undefined && !['dts', 'delta', 'size'].includes(options.trendMetric)) throw Error('Invalid trend metric.');
+    if (options.trendType !== undefined && !['all', 'audio', 'video', 'script', 'other'].includes(options.trendType)) throw Error('Invalid trend type.');
+    if (options.trendGapThreshold !== undefined) {
+      const gap = unsigned(options.trendGapThreshold);
+      if (gap < 1n || gap > 4294967295n) throw Error('Invalid trend threshold.');
+    }
+    this.update(options);
   }
   loadTagTrends(start = '0'): void {
     if (this.disposed || !this.ready() || this.refreshStatus || this.pollFailed) return;
@@ -888,6 +999,8 @@ export class Controller {
     this.disposed = true;
     this.statusVersion++; this.pageVersion++;
     this.trendVersion++; this.trendWanted = false;
+    this.saveRequest = null;
+    this.stopSaveTimer?.(); this.stopSaveTimer = null;
     this.stopTimer?.(); this.stopTimer = null;
     this.detailRequest = null;
     this.stopDetailTimer?.(); this.stopDetailTimer = null;

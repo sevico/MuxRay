@@ -10,6 +10,7 @@ import type { HexSelection } from './hex';
 import { HexPanel } from './HexPanel';
 import { SummaryPanel } from './SummaryPanel';
 import { FilterPagination, TagFilterPanel } from './TagFilterPanel';
+import { SnapshotStatus } from './SnapshotStatus';
 
 const stateNames: Record<string, string> = {
   opening: '正在打开', running: '扫描中', canceling: '正在取消', finished: '扫描结束', canceled: '已取消', failed: '扫描失败',
@@ -36,6 +37,11 @@ const errors: Record<string, string> = {
   summary_not_found: '尚未确认媒体分析请求，请确认原请求的结果。', summary_failed: '媒体分析失败；未发布未完成的汇总，可重新分析。',
   summary_unsupported: '当前源不支持媒体分析。', summary_wait_paused: '媒体分析等待已暂停；任务可能仍在读取，请确认结果或取消。',
   summary_cancel_unconfirmed: '尚未确认取消命令生效；请再次确认取消，或关闭文件。',
+  source_unavailable: '源文件身份已不可用，请重新打开媒体后再导出。',
+  source_overwrite: '保存目标是当前媒体文件或它的别名，请选择其他 JSON 文件。',
+  target_changed: '保存目标在确认后发生变化，请重新选择保存位置。',
+  write_failed: '无法写入诊断报告，请检查保存位置和可用空间后重新导出。',
+  snapshot_failed: '无法生成诊断快照，请重新查询当前结果后再导出。',
 };
 export function fault(code: string): string { return errors[code] ?? '请求失败，请重试。'; }
 
@@ -66,20 +72,22 @@ export function App({ controller }: { controller: Controller }) {
       <div className="brand"><span className="brand-mark" aria-hidden="true">M</span><div><h1>MuxRay <span>码流透镜</span></h1><p>FLV STRUCTURE INSPECTOR</p></div></div>
       <div className="actions">
         {session && <>
+          <button onClick={() => void controller.saveSnapshot()} disabled={!scanReady || !!operation || view.savePending}>导出诊断 JSON</button>
           <button onClick={() => void controller.cancel()} disabled={!!operation || session.terminal || session.state === 'canceling'}>取消扫描</button>
           <button onClick={() => void controller.close()} disabled={!!operation}>关闭文件</button>
         </>}
-        <button className="primary" onClick={() => void controller.open()} disabled={!!session || !!operation}>{operation === 'picking' ? '正在选择…' : operation === 'recovering' ? '正在确认打开结果…' : '打开 FLV 文件'}</button>
+        <button className="primary" onClick={() => void controller.open()} disabled={!!session || !!operation || view.savePending}>{operation === 'picking' ? '正在选择…' : operation === 'recovering' ? '正在确认打开结果…' : '打开 FLV 文件'}</button>
       </div>
     </header>
 
     <main>
+      <SnapshotStatus view={view} controller={controller} message={fault} />
       {view.error && <div className="request-error" role="alert"><span>{fault(view.error)}</span>{!view.sourceChanged && <button onClick={() => controller.retry()}>重试查询</button>}</div>}
       {!session ? <section className="empty-state">
         <div className="file-symbol" aria-hidden="true">FLV</div>
         <h2>从一个文件开始，看清码流结构</h2>
         <p>选择本机 FLV 文件，查看 Tag 索引、时间戳和结构诊断。</p>
-        <button className="primary" onClick={() => void controller.open()} disabled={!!operation}>选择 FLV 文件</button>
+        <button className="primary" onClick={() => void controller.open()} disabled={!!operation || view.savePending}>选择 FLV 文件</button>
         <div className="empty-features"><span>只读分析</span><span>可取消扫描</span><span>按需分页</span></div>
         <p className="scope-note">按需查看 AMF0、AAC、AVC 与 MP3 字段 · 更多解析能力可通过 CLI 使用</p>
       </section> : <>
@@ -93,6 +101,7 @@ export function App({ controller }: { controller: Controller }) {
           </div>
           <div className="progress-line"><progress max="100" value={percent} aria-label="扫描进度" /><span>{percent.toFixed(1)}%</span></div>
           <p className="scan-note" role="status">{scanNote(session)}</p>
+          <p className="snapshot-scope">导出诊断 JSON 保存当前已载入的概览、事件页、Tag 详情、Hex 与趋势窗口，不代表全文件分析。报告可能包含有限媒体字节和 AMF 字段文本。</p>
         </section>
 
         <SummaryPanel view={view} controller={controller} disabled={!scanReady || !!isClosing} message={fault} />
@@ -132,7 +141,7 @@ export function App({ controller }: { controller: Controller }) {
         <HexPanel view={view} controller={controller} disabled={!canPage || !!isClosing} message={fault} />
       </>}
     </main>
-    <footer><span><i aria-hidden="true" /> 本地只读 · 不上传媒体</span><span>桌面预览版 / 单文件会话</span></footer>
+    <footer><span><i aria-hidden="true" /> 源文件只读 · 不上传媒体</span><span>桌面预览版 / 单文件会话</span></footer>
   </div>;
 }
 

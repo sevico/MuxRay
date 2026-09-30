@@ -20,18 +20,23 @@ type host struct {
 	stop   sync.Once
 }
 
-// Native exposes only picker commands and their bounded recovery result.
+// Native exposes only native dialogs and their bounded recovery results.
 // Host lifecycle and the Wails context must never become callable from
 // JavaScript through binding reflection.
 type Native struct {
-	mu      sync.Mutex
-	ctx     context.Context
-	closing bool
-	picking bool
-	dialog  fileDialog
-	api     *desktop.Bindings
-	openID  uint64
-	opened  PickResponse
+	mu            sync.Mutex
+	ctx           context.Context
+	closing       bool
+	picking       bool
+	dialog        fileDialog
+	api           *desktop.Bindings
+	openID        uint64
+	opened        PickResponse
+	saveDialog    snapshotDialog
+	capture       func(desktop.SnapshotRequest) (desktop.SnapshotCapture, *desktop.Fault)
+	writeSnapshot snapshotWriter
+	saveID        uint64
+	saved         SaveResponse
 }
 
 type PickResponse struct {
@@ -46,7 +51,7 @@ type PickResponse struct {
 
 func newHost(dialog fileDialog) *host {
 	app := desktop.New(context.Background())
-	return &host{app: app, native: &Native{dialog: dialog, api: app.Bindings()}}
+	return &host{app: app, native: &Native{dialog: dialog, api: app.Bindings(), capture: app.CaptureSnapshot, writeSnapshot: writeSnapshotFile}}
 }
 
 func (h *host) startup(ctx context.Context) {

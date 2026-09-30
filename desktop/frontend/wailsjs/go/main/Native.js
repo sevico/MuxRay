@@ -6,6 +6,14 @@ export function GetOpenResult(arg1) {
   return window['go']['main']['Native']['GetOpenResult'](arg1);
 }
 
+export function GetSaveResult(arg1) {
+  return window['go']['main']['Native']['GetSaveResult'](arg1);
+}
+
 export function OpenFLV(arg1) {
   return window['go']['main']['Native']['OpenFLV'](arg1);
+}
+
+export function SaveSnapshot(arg1) {
+  return window['go']['main']['Native']['SaveSnapshot'](arg1);
 }

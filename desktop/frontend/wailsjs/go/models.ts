@@ -683,6 +683,86 @@ export namespace desktop {
 		}
 	}
 	
+	export class SnapshotTrendRequest {
+	    start: string;
+	    count: number;
+	    type: string;
+	    metric: string;
+	    gapThreshold: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SnapshotTrendRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.start = source["start"];
+	        this.count = source["count"];
+	        this.type = source["type"];
+	        this.metric = source["metric"];
+	        this.gapThreshold = source["gapThreshold"];
+	    }
+	}
+	export class SnapshotSummaryPageRequest {
+	    kind: string;
+	    start: string;
+	    count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SnapshotSummaryPageRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.start = source["start"];
+	        this.count = source["count"];
+	    }
+	}
+	export class SnapshotRequest {
+	    sessionId: string;
+	    selectedTagId?: string;
+	    detailRequestId?: string;
+	    hexRequestId?: string;
+	    summaryRequestId?: string;
+	    summaryPage?: SnapshotSummaryPageRequest;
+	    trend?: SnapshotTrendRequest;
+	
+	    static createFrom(source: any = {}) {
+	        return new SnapshotRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.selectedTagId = source["selectedTagId"];
+	        this.detailRequestId = source["detailRequestId"];
+	        this.hexRequestId = source["hexRequestId"];
+	        this.summaryRequestId = source["summaryRequestId"];
+	        this.summaryPage = this.convertValues(source["summaryPage"], SnapshotSummaryPageRequest);
+	        this.trend = this.convertValues(source["trend"], SnapshotTrendRequest);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
 	
 	export class SummaryPage {
 	    bounds: PageBounds;
@@ -1165,6 +1245,80 @@ export namespace main {
 	        this.canceled = source["canceled"];
 	        this.fileName = source["fileName"];
 	        this.session = this.convertValues(source["session"], desktop.SessionSnapshot);
+	        this.error = this.convertValues(source["error"], desktop.Fault);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SaveRequest {
+	    requestId: string;
+	    snapshot: desktop.SnapshotRequest;
+	
+	    static createFrom(source: any = {}) {
+	        return new SaveRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.requestId = source["requestId"];
+	        this.snapshot = this.convertValues(source["snapshot"], desktop.SnapshotRequest);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SaveResponse {
+	    apiVersion: number;
+	    requestId: string;
+	    pending: boolean;
+	    canceled: boolean;
+	    fileName: string;
+	    bytesWritten: string;
+	    error?: desktop.Fault;
+	
+	    static createFrom(source: any = {}) {
+	        return new SaveResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.apiVersion = source["apiVersion"];
+	        this.requestId = source["requestId"];
+	        this.pending = source["pending"];
+	        this.canceled = source["canceled"];
+	        this.fileName = source["fileName"];
+	        this.bytesWritten = source["bytesWritten"];
 	        this.error = this.convertValues(source["error"], desktop.Fault);
 	    }
 	

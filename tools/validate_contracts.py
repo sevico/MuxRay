@@ -12,6 +12,8 @@ from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parent.parent
 CONTRACTS = (
+    ("docs/schemas/desktop-diagnostic-snapshot-v1.schema.json", "testdata/golden/desktop-diagnostic-snapshot-minimal-v1.json"),
+    ("docs/schemas/desktop-diagnostic-snapshot-v1.schema.json", "testdata/golden/desktop-diagnostic-snapshot-full-v1.json"),
     ("docs/schemas/flv-tag-page-v1.schema.json", "testdata/golden/flv-tag-page-v1.json"),
     ("docs/schemas/flv-tag-page-v1.schema.json", "testdata/golden/flv-tag-page-empty-v1.json"),
     ("docs/schemas/flv-tag-page-v1.schema.json", "testdata/golden/flv-tag-page-partial-v1.json"),
@@ -113,6 +115,51 @@ def require_valid(validator: Draft202012Validator, instance: object, label: str)
 def require_invalid(validator: Draft202012Validator, instance: object, label: str) -> None:
     if not validation_errors(validator, instance):
         raise SystemExit(f"{label}: invalid contract mutation was accepted")
+
+
+def validate_desktop_snapshot_edge_cases(validator: Draft202012Validator) -> None:
+    full = load_json("testdata/golden/desktop-diagnostic-snapshot-full-v1.json")
+    minimal = load_json("testdata/golden/desktop-diagnostic-snapshot-minimal-v1.json")
+    mutations = (
+        ("wrong snapshot version", ["schemaVersion"], 2),
+        ("CLI identity is not desktop snapshot", ["documentType"], "flv-media-summary"),
+        ("absolute source path is not a file name", ["fileName"], "C:\\private\\media.flv"),
+        ("timestamp must be UTC", ["createdAt"], "2026-09-29T08:00:00+08:00"),
+        ("lossy numeric offset", ["selectedTag", "offset"], 9007199254740993),
+        ("noncanonical offset", ["selectedTag", "offset"], "01"),
+        ("uint64 offset overflow", ["selectedTag", "offset"], "18446744073709551616"),
+        ("uint32 DTS overflow", ["trend", "points", 0, "dts"], "4294967296"),
+        ("source window point bound", ["trend", "points"], full["trend"]["points"][:1] * 513),
+        ("context visit bound", ["trend", "contextScanned"], 4097),
+        ("unknown context must not invent a delta", ["trend", "points", 0, "deltaMs"], "0"),
+        ("positive gap threshold", ["selection", "trend", "gapThreshold"], "0"),
+        ("gap threshold overflow", ["selection", "trend", "gapThreshold"], "4294967296"),
+        ("bounded retained Hex", ["hex", "window", "hex"], "00" * 4097),
+        ("even Hex bytes", ["hex", "window", "hex"], "abc"),
+        ("local observation is not corruption diagnostic", ["trendIssues", 0, "kind"], "parser_error"),
+        ("ready-only detail", ["detail", "state"], "pending"),
+        ("summary page limit", ["summaryPage", "page", "bounds", "limit"], 101),
+    )
+    for label, path, value in mutations:
+        changed = deepcopy(full)
+        parent = changed
+        for key in path[:-1]:
+            parent = parent[key]
+        parent[path[-1]] = value
+        require_invalid(validator, changed, label)
+    omitted = deepcopy(minimal)
+    omitted["omitted"] = []
+    require_invalid(validator, omitted, "every missing section has an omission reason")
+    misleading = deepcopy(full)
+    misleading["omitted"] = [{"section": "detail", "reason": "not_requested"}]
+    require_invalid(validator, misleading, "present section cannot also be omitted")
+    extra = deepcopy(full)
+    extra["sourcePath"] = "C:\\private\\media.flv"
+    require_invalid(validator, extra, "closed snapshot envelope")
+    for name in ("minimal", "full"):
+        path = ROOT / f"testdata/golden/desktop-diagnostic-snapshot-{name}-v1.json"
+        if path.stat().st_size > 2 << 20:
+            raise SystemExit(f"{path}: snapshot exceeds 2 MiB")
 
 
 def validate_media_summary_edge_cases(validator: Draft202012Validator) -> None:
@@ -1364,6 +1411,7 @@ def main() -> None:
     mp3_detail_validator = None
     media_summary_validator = None
     media_summary_v2_validator = None
+    desktop_snapshot_validator = None
     for schema_path, instance_path in CONTRACTS:
         schema = load_json(schema_path)
         Draft202012Validator.check_schema(schema)
@@ -1384,6 +1432,8 @@ def main() -> None:
             media_summary_validator = validator
         if schema_path == "docs/schemas/flv-media-summary-v2.schema.json":
             media_summary_v2_validator = validator
+        if schema_path == "docs/schemas/desktop-diagnostic-snapshot-v1.schema.json":
+            desktop_snapshot_validator = validator
 
     if tag_page_validator is None:
         raise SystemExit("tag page schema was not validated")
@@ -1413,6 +1463,10 @@ def main() -> None:
         raise SystemExit("media summary v2 schema was not validated")
     validate_media_summary_v2_edge_cases(media_summary_v2_validator)
     print("validated media-summary v2 version isolation, MP3 parameters, bitrate modes, retention, and recovery cases")
+    if desktop_snapshot_validator is None:
+        raise SystemExit("desktop snapshot schema was not validated")
+    validate_desktop_snapshot_edge_cases(desktop_snapshot_validator)
+    print("validated desktop snapshot identity, exact coordinates, bounded sections, omissions, and local observations")
 
 
 if __name__ == "__main__":

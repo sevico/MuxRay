@@ -39,6 +39,7 @@ function setup(overrides: Partial<API> = {}, total = '530') {
   const sourceSize = (BigInt(total) * 20n + 1000n).toString();
   const session = (id = `scan-${opens}`): Session => ({ sessionId: id, state: 'canceled', terminal: true, closed: false, scan: { complete: false, hasErrors: false }, failure: null, progress: { sourceSize, bytesScanned: sourceSize, tagCount: total, diagnosticCount: 0 } });
   const api: API = {
+    saveSnapshot: async () => { throw Error('unexpected save'); }, saveResult: async () => { throw Error('unexpected save confirmation'); },
     open: async requestId => { opens++; return { apiVersion: 1, requestId, pending: false, canceled: false, fileName: 'trends.flv', session: session(), error: null }; },
     openResult: async () => { throw Error('Unexpected open recovery'); }, status: async id => ({ apiVersion: 1, session: session(id), error: null }), cancel: async id => ({ apiVersion: 1, session: session(id), error: null }),
     close: async id => ({ apiVersion: 1, session: { ...session(id), closed: true }, error: null }),

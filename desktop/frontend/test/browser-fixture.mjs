@@ -1,16 +1,22 @@
 // Browser fixture only: no Go parser or native I/O runs here.
 export function syntheticHost() {
   let session, latestPick, latestDetail, latestHex, latestSummary, sequence = 0, dataset = 'finished', filterCalls = 0, trendCalls = 0;
+  let saveID = 0n, saved, saveBusy = false, lostSaveQuery = null;
   window.smokeMode = new URL(window.location.href).searchParams.get('smoke') ?? 'finished';
   window.smokeReads = [];
   window.smokeSummaryCalls = [];
   window.smokeFilterCalls = [];
   window.smokeTrendCalls = [];
+  window.smokeSaveCalls = [];
+  window.smokeSaveQueries = [];
+  window.smokeSaveCaptures = [];
+  window.smokeSavedSnapshots = [];
   const envelope = () => structuredClone({ apiVersion: 1, session, error: null });
   const span = { byteOffset: '9007199254740993', bitOffset: 0, bitLength: 88 };
   window.go = { main: { Native: { OpenFLV: async requestId => {
+    if (saveBusy) return { apiVersion: 1, requestId, pending: false, canceled: false, session: null, fileName: '', error: { code: 'busy', message: 'A synthetic save is still pending.' } };
     if (window.smokeMode === 'picker-cancel') return latestPick = { apiVersion: 1, requestId, pending: false, canceled: true, session: null, error: null, fileName: '' };
-    dataset = window.smokeMode;
+    dataset = window.smokeMode.startsWith('snapshot-') ? 'trends' : window.smokeMode;
     filterCalls = 0;
     trendCalls = 0;
     session = { sessionId: `synthetic-${++sequence}`, state: window.smokeMode === 'running' ? 'running' : 'finished', terminal: window.smokeMode !== 'running', closed: false,
@@ -20,6 +26,47 @@ export function syntheticHost() {
   }, GetOpenResult: async requestId => {
     if (latestPick?.requestId !== requestId) throw Error('Unexpected synthetic open result request');
     return structuredClone({ ...latestPick, session: latestPick.canceled ? null : session });
+  }, SaveSnapshot: async request => {
+    window.smokeSaveCalls.push(structuredClone(request));
+    const id = saveRequestID(request.requestId);
+    if (id === null) return saveFailure(request.requestId, 'invalid_argument');
+    if (id < saveID) return saveFailure(request.requestId, 'stale_request');
+    if (id === saveID) return structuredClone(saved);
+    if (saveBusy) return saveFailure(request.requestId, 'busy');
+    saveID = id; saved = { ...saveResponse(request.requestId), pending: true }; saveBusy = true; lostSaveQuery = null;
+    const finish = response => { saved = response; saveBusy = false; return structuredClone(response); };
+    if (!session || session.closed || !session.terminal || request.snapshot?.sessionId !== session.sessionId) {
+      return finish(saveFailure(request.requestId, session?.closed ? 'session_closed' : 'not_ready'));
+    }
+    const mode = window.smokeMode;
+    const selection = { ...structuredClone(request.snapshot) };
+    for (const field of ['selectedTagId', 'detailRequestId', 'hexRequestId', 'summaryRequestId', 'summaryPage', 'trend']) selection[field] ??= null;
+    // Freeze before the simulated dialog/write delay. These are observable test
+    // facts only: no real save dialog, Go exporter, or filesystem write occurs.
+    const capture = { documentType: 'syntheticBrowserSnapshot', session: structuredClone(session), selection };
+    window.smokeSaveCaptures.push(structuredClone({ requestId: request.requestId, capture }));
+    if (mode === 'snapshot-delayed') await new Promise(resolve => setTimeout(resolve, 6500));
+    if (mode === 'snapshot-cancel') return finish({ ...saveResponse(request.requestId), canceled: true });
+    if (mode === 'snapshot-write-failed') return finish(saveFailure(request.requestId, 'write_failed'));
+    const data = JSON.stringify(capture) + '\n';
+    const result = finish({ ...saveResponse(request.requestId), fileName: 'browser-synthetic.muxray.json', bytesWritten: String(new TextEncoder().encode(data).length) });
+    window.smokeSavedSnapshots.push({ requestId: request.requestId, fileName: result.fileName, data });
+    if (mode === 'snapshot-lost-reply' || mode === 'snapshot-recovery-timeout') {
+      lostSaveQuery = mode === 'snapshot-recovery-timeout' ? id : null;
+      return new Promise(() => {});
+    }
+    return result;
+  }, GetSaveResult: async requestId => {
+    window.smokeSaveQueries.push(requestId);
+    const id = saveRequestID(requestId);
+    if (id === null) return saveFailure(requestId, 'invalid_argument');
+    if (id < saveID) return saveFailure(requestId, 'stale_request');
+    if (id > saveID) {
+      if (saveBusy) return saveFailure(requestId, 'busy');
+      saveID = id; saved = { ...saveResponse(requestId), canceled: true };
+    }
+    if (lostSaveQuery === id) { lostSaveQuery = null; return new Promise(() => {}); }
+    return structuredClone(saved);
   } } }, desktop: { Bindings: {
     GetSession: async () => envelope(),
     CancelScan: async () => { session.state = 'canceled'; session.terminal = true; session.scan = { complete: false, hasErrors: false }; session.failure = { code: 'canceled', message: 'Canceled.' }; return envelope(); },
@@ -215,6 +262,15 @@ export function syntheticHost() {
         })) } };
     },
   } } };
+  function saveRequestID(value) {
+    return typeof value === 'string' && /^[1-9][0-9]{0,19}$/.test(value) && BigInt(value) <= 18446744073709551615n ? BigInt(value) : null;
+  }
+  function saveResponse(requestId) {
+    return { apiVersion: 1, requestId, pending: false, canceled: false, fileName: '', bytesWritten: '0', error: null };
+  }
+  function saveFailure(requestId, code) {
+    return { ...saveResponse(requestId), error: { code, message: `Synthetic snapshot ${code}.` } };
+  }
   function assertRequest(request) {
     if (!session.terminal || session.closed || request.sessionId !== session.sessionId || request.count !== 100) throw Error('Unexpected synthetic page request');
   }

@@ -14,6 +14,7 @@ AVC 上下文查找和准确源位置见 [ADR-014](../docs/decisions/014-bounded
 - 扫描结束后查看完整或部分 Tag/结构诊断，每页最多 100 条，不缓存历史页。
 - 按 Tag 类型、DTS 区间和结构状态组合筛选；有界搜索后继续定位到详情与 Hex。
 - 按需查看 Tag 趋势窗口：DTS、载荷大小和同类型时间差，观察项直接定位详情与 Hex。
+- 通过原生保存对话框导出有界诊断快照 JSON，包含当前已载入证据及明确的覆盖/省略信息。
 - 选择完整的 Tag 查看 AMF0 字段树、AAC 音频头、AudioSpecificConfig 或 raw 包范围，保留原始 byte/bit 位置和语法诊断。
 - AVC Video 包头、有符号 CTS 与派生 PTS、avcC/SPS/PPS 基础摘要、NAL 长度及头字段，并说明所用前置配置的来源。
 - MP3 FLV 音频头、首个 MPEG Audio Layer III 固定帧头、可推导参数与原始数据范围。
@@ -23,7 +24,25 @@ AVC 上下文查找和准确源位置见 [ADR-014](../docs/decisions/014-bounded
 
 “扫描结束”不是“媒体语义全部正常”。不完整索引明确显示部分结果，结构
 诊断与打开/读取/通信失败分开。仍使用核心的百万 Tag 上限和诊断预算。
-全文件媒体码率/GOP 曲线、导出、拖放、多文件、边扫描边分页尚未接入。
+全文件媒体码率/GOP 曲线、拖放、多文件、边扫描边分页尚未接入。
+
+## 诊断快照导出
+
+扫描结束后点击“导出诊断 JSON”，先冻结当前会话的有界结果，再选择保存位置。
+文件采用独立的 `desktopDiagnosticSnapshot` v1 格式，包含文件名、生成时间、扫描
+覆盖、前 100 条保留结构诊断、选中 Tag、匹配的已完成详情/Hex、已有 Summary 概览
+与当前事件页，以及当前趋势窗口、阈值和局部观察项。坐标保持十进制字符串。
+缺失、未请求或已淘汰的部分显式列入 `omitted`；不会为导出补跑分析或读取媒体。
+
+快照最多 2 MiB，Hex 最多为已有窗口的 4 KiB 实际字节；报告可能包含 AMF 字段文本
+和原始媒体字节。只保存源文件名，不包含源绝对路径。它不是完整 CLI 报告，也不是
+全文件时间线；部分索引、事件保留上限和未知前驱仍保留原有含义。
+
+关闭源文件不会取消已经冻结的保存。保存期间可继续浏览或关闭当前文件；新保存
+和打开操作会等待结果确认。通信超时后查询原请求，失败时“重试”只确认保存结果，
+不重复弹窗或写文件。写入失败不替换已有目标，源文件和硬链接别名禁止作为目标。
+详情见 [ADR-019](../docs/decisions/019-desktop-diagnostic-snapshot.md)，实际导出、保存恢复
+及检查范围见 [诊断快照验收记录](../docs/desktop-snapshot-20260929.md)。
 
 ## Tag 筛选与时间定位
 
@@ -174,7 +193,7 @@ go install github.com/wailsapp/wails/v2/cmd/wails@v2.14.0
 
 # 从仓库根目录进入独立模块
 cd desktop
-wails build -webview2 error -nopackage -trimpath
+.\build-production.ps1
 .\build\bin\MuxRay.exe
 ```
 

@@ -63,14 +63,15 @@ type scanSession interface {
 type opener func(context.Context, string, flv.Options) (scanSession, error)
 
 type slot struct {
-	id       string
-	ctx      context.Context
-	cancel   context.CancelFunc
-	opening  bool
-	openDone chan struct{}
-	openErr  error
-	closed   bool
-	scan     scanSession
+	id         string
+	sourcePath string // host-only target protection; never part of a transport DTO
+	ctx        context.Context
+	cancel     context.CancelFunc
+	opening    bool
+	openDone   chan struct{}
+	openErr    error
+	closed     bool
+	scan       scanSession
 }
 
 // New uses ctx as the application lifetime; nil means Background. Canceling
@@ -127,7 +128,7 @@ func (b *Bindings) OpenFile(request OpenRequest) SessionResponse {
 	}
 	a.nextID++
 	ctx, cancel := context.WithCancel(a.ctx)
-	e := &slot{id: "scan-" + decimal(a.nextID), ctx: ctx, cancel: cancel, opening: true, openDone: make(chan struct{})}
+	e := &slot{id: "scan-" + decimal(a.nextID), sourcePath: request.Path, ctx: ctx, cancel: cancel, opening: true, openDone: make(chan struct{})}
 	a.current = e
 	go a.openSlot(e, request)
 	return a.responseLocked(e)

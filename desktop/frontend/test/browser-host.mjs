@@ -6,6 +6,9 @@
 // filter-truncated|filter-empty|filter-delayed|filter-timeout selects Tag data.
 // ADR-018: ?smoke=trends|trends-sparse|trends-structures|trends-truncated|
 // trends-empty|trends-timeout|trends-delayed|trends-huge selects bounded trends.
+// ADR-019: ?smoke=snapshot-success|snapshot-cancel|snapshot-lost-reply|
+// snapshot-delayed|snapshot-write-failed|snapshot-recovery-timeout simulates save
+// responses over the 300-Tag trend fixture; no dialog or filesystem write runs.
 import { createServer } from 'node:http';
 import { readFile, readdir } from 'node:fs/promises';
 import { resolve, dirname, extname } from 'node:path';

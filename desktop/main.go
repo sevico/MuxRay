@@ -27,6 +27,12 @@ func runDesktop() error {
 			Filters: []runtime.FileFilter{{DisplayName: "FLV 文件 (*.flv)", Pattern: "*.flv"}},
 		})
 	})
+	host.native.saveDialog = func(ctx context.Context, name string) (string, error) {
+		return runtime.SaveFileDialog(ctx, runtime.SaveDialogOptions{
+			Title: "导出诊断快照 JSON", DefaultFilename: name,
+			Filters: []runtime.FileFilter{{DisplayName: "JSON 诊断快照 (*.json)", Pattern: "*.json"}},
+		})
+	}
 	defer host.shutdown(context.Background())
 	return wails.Run(appOptions(host))
 }

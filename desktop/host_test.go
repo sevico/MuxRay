@@ -45,7 +45,7 @@ func TestShutdownMessage(t *testing.T) {
 
 func TestNativeSurface(t *testing.T) {
 	typ := reflect.TypeOf((*Native)(nil))
-	if typ.NumMethod() != 2 || typ.Method(0).Name != "GetOpenResult" || typ.Method(1).Name != "OpenFLV" {
+	if typ.NumMethod() != 4 || typ.Method(0).Name != "GetOpenResult" || typ.Method(1).Name != "GetSaveResult" || typ.Method(2).Name != "OpenFLV" || typ.Method(3).Name != "SaveSnapshot" {
 		t.Fatalf("unexpected native surface: %v", typ)
 	}
 }

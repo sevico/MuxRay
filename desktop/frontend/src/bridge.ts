@@ -1,14 +1,25 @@
 import { CancelScan, CloseFile, GetDetail, GetDiagnostics, GetHex, GetSession, GetTags, GetFilteredTags, GetTagTrends, StartDetail, StartHex, StartSummary, GetSummary, CancelSummary, GetSummaryEvents } from '../wailsjs/go/desktop/Bindings';
-import { OpenFLV, GetOpenResult } from '../wailsjs/go/main/Native';
-import { desktop } from '../wailsjs/go/models';
+import { OpenFLV, GetOpenResult, SaveSnapshot, GetSaveResult } from '../wailsjs/go/main/Native';
+import { desktop, main } from '../wailsjs/go/models';
 import type { API } from './protocol';
-import { detailResponse, diagnosticResponse, hexResponse, pickResponse, sessionResponse, tagResponse, filteredTagResponse, tagTrendResponse, summaryResponse, summaryPageResponse } from './normalize';
+import { detailResponse, diagnosticResponse, hexResponse, pickResponse, sessionResponse, tagResponse, filteredTagResponse, tagTrendResponse, summaryResponse, summaryPageResponse, saveResponse } from './normalize';
 
 // Actual generated bindings, not a mock HTTP API. No arbitrary URL, filesystem,
 // runtime lifecycle, or full-index endpoint is added to the UI.
 export const api: API = {
   open: async requestId => pickResponse(await OpenFLV(requestId)),
   openResult: async requestId => pickResponse(await GetOpenResult(requestId)),
+  saveSnapshot: async request => {
+    const value = request.snapshot;
+    const snapshot: Omit<desktop.SnapshotRequest, 'convertValues'> = { ...value,
+      selectedTagId: value.selectedTagId ?? undefined, detailRequestId: value.detailRequestId ?? undefined,
+      hexRequestId: value.hexRequestId ?? undefined, summaryRequestId: value.summaryRequestId ?? undefined,
+      summaryPage: value.summaryPage ?? undefined, trend: value.trend ?? undefined,
+    };
+    const wire: Omit<main.SaveRequest, 'convertValues'> = { requestId: request.requestId, snapshot: new desktop.SnapshotRequest(snapshot) };
+    return saveResponse(await SaveSnapshot(new main.SaveRequest(wire)));
+  },
+  saveResult: async requestId => saveResponse(await GetSaveResult(requestId)),
   status: async id => sessionResponse(await GetSession(id)),
   cancel: async id => sessionResponse(await CancelScan(id)),
   close: async id => sessionResponse(await CloseFile(id)),

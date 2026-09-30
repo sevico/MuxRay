@@ -10,7 +10,9 @@ permissions:
 
 jobs:
   windows-shell:
+    name: Desktop Windows tests and production build (non-GUI)
     runs-on: windows-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: desktop
@@ -25,6 +27,9 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: desktop/frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
       - name: Install reviewed Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.14.0
       - name: Generate and verify bindings
@@ -41,10 +46,41 @@ jobs:
       - name: Type-check and build frontend
         run: npm run build
         working-directory: desktop/frontend
+      - name: Synthetic host contract tests (no browser)
+        run: node --test test/browser-filter-fixture.test.mjs test/browser-trend-fixture.test.mjs test/browser-save-fixture.test.mjs
+        working-directory: desktop/frontend
       - name: Host tests and vet
         run: |
           go test -count=1 ./...
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go vet ./...
+      - name: Desktop race detector when gcc is available
+        shell: pwsh
+        run: |
+          if (Get-Command gcc -ErrorAction SilentlyContinue) {
+            $env:CGO_ENABLED = '1'
+            go test -race -count=1 ./...
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } else {
+            Write-Output '::notice::Desktop race check skipped because gcc is unavailable on this runner.'
+          }
+      - name: Deterministic native fixture tests
+        working-directory: .
+        run: python -B -m unittest discover -s tools/desktop-native -p '*fixtures_test.py' -v
+      - name: Native save overlay generator tests (no build or GUI)
+        working-directory: .
+        run: python -B -m unittest discover -s tools/desktop-native -p '*_build_test.py' -v
+      - name: Native gate self-tests (PowerShell 7, no GUI)
+        working-directory: .
+        shell: pwsh
+        run: |
+          & ./tools/desktop-native/self-test.ps1
+          & ./tools/desktop-native/summary-recovery-self-test.ps1
+      - name: Native gate self-tests (Windows PowerShell 5.1, no GUI)
+        working-directory: .
+        shell: powershell
+        run: |
+          & ./tools/desktop-native/self-test.ps1
+          & ./tools/desktop-native/summary-recovery-self-test.ps1
       - name: Production Windows build (no installer)
-        run: wails build -webview2 error -nopackage -trimpath
+        run: ./build-production.ps1

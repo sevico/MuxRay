@@ -11,10 +11,10 @@ export function TagTrendPanel({ view, controller, disabled, readDisabled, messag
   view: ViewState; controller: Controller; disabled: boolean; readDisabled: boolean; message: (code: string) => string;
 }) {
   const [start, setStart] = useState('0');
-  const [metric, setMetric] = useState<TrendMetric>('dts');
-  const [type, setType] = useState<TrendType>('all');
+  const metric = view.trendMetric;
+  const type = view.trendType;
   const [gapDraft, setGapDraft] = useState(TREND_GAP_DEFAULT);
-  const [gap, setGap] = useState(TREND_GAP_DEFAULT);
+  const gap = view.trendGapThreshold;
   const [gapError, setGapError] = useState(false);
   const [issuePage, setIssuePage] = useState(0);
   const page = view.trendPage;
@@ -41,10 +41,10 @@ export function TagTrendPanel({ view, controller, disabled, readDisabled, messag
     {page && <>
       <p className="trend-coverage" role="status">趋势窗口 Tag [{page.bounds.start}, {page.bounds.next}) · {page.points.length} 条 / 已索引 {page.bounds.total}{sourcePartial ? ' · 部分索引，仅覆盖已保留 Tag' : ''}</p>
       <div className="trend-controls">
-        <div className="trend-metrics" role="group" aria-label="趋势指标">{Object.entries(metricNames).map(([value, label]) => <button key={value} type="button" aria-pressed={metric === value} onClick={() => setMetric(value as TrendMetric)}>{label}</button>)}</div>
-        <label htmlFor="trend-type">图中类型<select id="trend-type" value={type} onChange={event => setType(event.target.value as TrendType)}>{Object.entries(trendTypeNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <div className="trend-metrics" role="group" aria-label="趋势指标">{Object.entries(metricNames).map(([value, label]) => <button key={value} type="button" aria-pressed={metric === value} onClick={() => controller.setTrendOptions({ trendMetric: value as TrendMetric })}>{label}</button>)}</div>
+        <label htmlFor="trend-type">图中类型<select id="trend-type" value={type} onChange={event => controller.setTrendOptions({ trendType: event.target.value as TrendType })}>{Object.entries(trendTypeNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label htmlFor="trend-point">定位本窗口 Tag<select id="trend-point" value={points.some(point => point.tagId === view.trendSelectedId) ? view.trendSelectedId! : ''} disabled={readDisabled || busy || !points.length} onChange={event => { if (event.target.value) controller.selectTrendTag(event.target.value); }}><option value="">选择一个 Tag</option>{points.map(point => <option key={point.tagId} value={point.tagId}>Tag {point.tagId} · {trendTypeNames[trendType(point)]}</option>)}</select></label>
-        <form onSubmit={event => { event.preventDefault(); try { trendGap(gapDraft); setGap(gapDraft); setGapError(false); } catch { setGapError(true); } }}>
+        <form onSubmit={event => { event.preventDefault(); try { trendGap(gapDraft); controller.setTrendOptions({ trendGapThreshold: gapDraft }); setGapError(false); } catch { setGapError(true); } }}>
           <label htmlFor="trend-gap">大间隔阈值 (ms)<input id="trend-gap" inputMode="numeric" value={gapDraft} onChange={event => setGapDraft(event.target.value)} /></label><button>应用阈值</button>
         </form>
       </div>

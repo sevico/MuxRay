@@ -14,6 +14,7 @@ MuxRay 是一个面向 FLV 和音视频码流的跨平台诊断工具。项目�
 - 有界 Hex 桌面窗口、字段/诊断源位置联动及 Tag ID 跳转，共用保留源文件与读取任务；
 - 媒体概览 v2 桌面视图：可取消分析、精确时间/码率指标、有界事件分页与 Tag/Hex 联动；
 - 有界 Tag 趋势窗口：原始 DTS、声明/实际载荷、同类型及 Stream ID 前驱时间差，异常观察项可定位详情与 Hex；
+- 桌面诊断快照 JSON 导出：冻结已有有界详情、Hex、概览和趋势，通过原生保存对话框写出并恢复丢失的保存回复；
 - AVC 桌面有界前置配置查找、NAL 长度来源、SPS/PPS 摘要与不伪造的派生字段位置；
 - 按 Tag、资源有界的通用详情分发；
 - AMF0 ScriptData 详情解析；
@@ -82,5 +83,10 @@ Go 应用层新增 `internal/session.Open`：一个会话拥有一个后台扫�
 直接查看实际原始字节，窗口与已完成的媒体概览保留。口径见
 [`ADR-018`](docs/decisions/018-bounded-tag-trends.md)，验证见
 [`趋势验证记录`](docs/desktop-trends-20260927.md)。
+
+桌面导出采用独立的 `desktopDiagnosticSnapshot` v1 格式，只保存当前已载入的有界
+证据，明确标记部分覆盖与省略项，不重跑媒体分析；原生保存支持结果恢复及源文件
+保护。设计见 [`ADR-019`](docs/decisions/019-desktop-diagnostic-snapshot.md)，实际保存与
+恢复结果见 [`诊断快照验收记录`](docs/desktop-snapshot-20260929.md)。
 
 项目许可证尚待确定；在许可证落定前，不应把代码作为已授权的正式发行版分发。

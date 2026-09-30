@@ -87,6 +87,8 @@ type Document struct {
 	request        work
 	latest         DetailResult
 	hex            HexResult
+	snapshotDetail DetailResult
+	snapshotHex    HexResult
 	summary        SummaryResult
 	summaryReport  *summaryview.Report
 	pending        *work
@@ -144,6 +146,7 @@ func (d *Document) run() {
 			d.pending = nil
 			d.latest.Detail = nil
 			d.hex.Window = nil
+			d.clearSnapshotReadsLocked()
 			d.summary.Overview, d.summaryReport = nil, nil
 			d.mu.Unlock()
 			// This single worker owns closure. No read or parse remains active.
@@ -210,11 +213,15 @@ func (d *Document) run() {
 				d.hex.Window, d.hex.Err, d.hex.State = window, err, "ready"
 				if err != nil {
 					d.hex.Window, d.hex.State = nil, "failed"
+				} else {
+					d.snapshotHex = d.hex
 				}
 			} else {
 				d.latest.Detail, d.latest.Err, d.latest.State = detail, err, "ready"
 				if err != nil {
 					d.latest.Detail, d.latest.State = nil, "failed"
+				} else {
+					d.snapshotDetail = d.latest
 				}
 			}
 		}
@@ -236,6 +243,7 @@ func (d *Document) sourceUnchanged() error {
 	if !os.SameFile(d.initial, info) || d.initial.Size() != info.Size() || !d.initial.ModTime().Equal(info.ModTime()) || d.initial.Mode() != info.Mode() {
 		d.mu.Lock()
 		d.changed = true
+		d.clearSnapshotReadsLocked()
 		d.invalidateSummaryLocked(ErrSourceChanged)
 		d.mu.Unlock()
 		return ErrSourceChanged
@@ -310,10 +318,13 @@ func (d *Document) admitLocked(task work) {
 	d.pending = &task
 	d.latest, d.hex = DetailResult{}, HexResult{}
 	if task.kind == hexWork {
+		d.snapshotHex = HexResult{}
 		d.hex = HexResult{RequestID: task.id, Offset: task.offset, Count: task.count, State: "pending"}
 	} else if task.kind == detailWork {
+		d.snapshotDetail = DetailResult{}
 		d.latest = DetailResult{RequestID: task.id, TagID: task.tag.ID, State: "pending"}
 	} else {
+		d.clearSnapshotReadsLocked()
 		d.summary = SummaryResult{RequestID: task.id, State: "pending", Total: d.scan.Snapshot().Progress.TagCount}
 		d.summaryReport = nil
 	}
@@ -408,6 +419,7 @@ func (d *Document) Close(ctx context.Context) error {
 	d.pending = nil
 	d.latest.Detail = nil
 	d.hex.Window = nil
+	d.clearSnapshotReadsLocked()
 	d.summary.Overview, d.summaryReport = nil, nil
 	if d.activeCancel != nil {
 		d.activeCancel()

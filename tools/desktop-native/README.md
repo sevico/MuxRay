@@ -457,10 +457,62 @@ Go trend binding，也不替代原生 GUI 验收。
 node --test test/browser-filter-fixture.test.mjs test/browser-trend-fixture.test.mjs
 ```
 
-`.github/workflows/ci.yml` 另设 Windows 非 GUI job，安装锁定前端依赖后运行单测、
-构建、合成 host 契约检查、desktop Go test/vet、所有 Python fixture 测试，以及
-PowerShell 5.1/7 gate 自测。有 gcc 时额外运行 desktop race；缺少 gcc 时显式输出
-跳过通知。CI 不启动 Wails、浏览器或文件选择器，不能代替每次单独记录的原生验收。
+`.github/workflows/desktop.yml` 的 Windows 非 GUI job 统一执行 bindings 漂移检查、
+前端单测和构建、合成 host 契约检查、desktop Go test/vet、Python fixture 与保存
+overlay 测试、PowerShell 5.1/7 gate 自测，最后调用 `desktop/build-production.ps1`。
+有 gcc 时额外运行 desktop race；缺少 gcc 时显式输出跳过通知。根模块多平台、
+Schema 与 fuzz 检查仍在 `ci.yml`。CI 不启动 Wails 窗口、浏览器或文件选择器，
+不能代替每次单独记录的原生验收。
+
+## 诊断快照保存（ADR-019）
+
+普通生产验收先运行 `desktop/build-production.ps1`，再通过真实窗口选择样本、载入
+所需详情/Hex/Summary/趋势，点击“导出诊断 JSON”，操作 Windows 保存对话框。
+取消后确认当前文档仍可浏览。原生操作及生成文件应分别保存证据；文件存在本身
+不能证明保存状态正确，截图也不能证明 JSON 字节与源对应。
+
+`snapshot_check.py` 验证独立 Schema、同一会话和请求 ID、section 与 `omitted`
+一致性；传入确定性小样本时还直接核对原始 Tag 头和 Hex 实际字节。
+它不复跑编解码语义分析，也不用于整段生产媒体扫描。需要仓库已有的
+`tools/requirements-schema.txt` 中的 `jsonschema`。
+
+```powershell
+python -B tools/desktop-native/snapshot_check.py 'C:\work\saved-report.json' --source 'C:\work\trends-mixed.flv'
+python -B -m unittest discover -s tools/desktop-native -p '*_build_test.py' -v
+```
+
+`save_recovery_build.py` 通过 Go overlay 构建独立的保存恢复验收程序，不修改
+`desktop/save.go`，不在产品里加入故障开关。每种模式使用仓库外的绝对、新目录，
+默认复制 20 Tag/497 byte 的 Summary mixed 样本为 `native-save-controlled.flv`。
+可用 `--fixture` 指定不大于 16 MiB 的确定性 FLV。只影响该 run 第一次保存该样本。
+
+| 模式 | 控制点 | 必须实际观察的界面结果 |
+| --- | --- | --- |
+| `lost_reply` | 真实写入和结果保留后，首次 Save 回复延迟 8 秒 | `return-released.json` 出现前，界面经原 ID 查询显示保存成功；没有第二次对话框或写入 |
+| `write_failure` | 保存对话框返回后、目标 I/O 之前注入写入失败 | 显示写入失败，文档与已完成 Summary 保留；新目标不产生文件，若使用已有目标则核对其内容不变 |
+| `close_during_save` | 对话框返回后、写入前等待 release，最多 30 秒 | 先关闭源文档到空状态，保存仍未完成；释放后成功，仍标注原源文件 |
+
+```powershell
+$repo = 'C:\work\MuxRay'
+$run = 'C:\work\snapshot-save-lost-001'
+python -B tools/desktop-native/save_recovery_build.py --repository $repo --output-dir $run --mode lost_reply
+python -B tools/desktop-native/save_recovery_build.py --build-run $run
+# 通过授权的原生操作启动该目录中的 MuxRay-save-acceptance.exe，只运行一次。
+# close_during_save 模式观察关闭后的空状态后，才执行：
+python -B tools/desktop-native/save_recovery_build.py --release-run 'C:\work\snapshot-save-close-001'
+```
+
+准备记录包含源代码、已有前端 assets、overlay、工具和 fixture 的哈希；构建
+强制使用本地缓存，验证输入未变化，另记命令及实际 exe 哈希。准备后改变源码或
+assets 必须新建 run。工具复用已构建的前端，因此应先完成正式前端构建。
+收据带 run ID、PID、进程 token 和 UTC 时间，release 拒绝身份错配或覆盖旧证据。
+若超过 30 秒，应保留失败证据并使用新 run；不能把超时释放称为手动关闭验收。
+收据只证明控制点，不代替 GUI 截图；这些是受控故障实验，不是自然慢盘实测。
+
+合成 host 另提供 `snapshot-success`、`snapshot-cancel`、`snapshot-lost-reply`、
+`snapshot-delayed`、`snapshot-write-failed`、`snapshot-recovery-timeout` 场景。
+`node --test test/browser-save-fixture.test.mjs` 检查合成协议，不操作浏览器或原生对话框。
+本轮实测范围见 [诊断快照验收记录](../../docs/desktop-snapshot-20260929.md)。
 
 ## Summary 生产窗口、分页与数值样本
 

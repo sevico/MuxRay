@@ -23,6 +23,7 @@ function tag(id: string): Tag { const span = { byteOffset: '13', bitOffset: 0, b
 function setup(overrides: Partial<API> = {}, snapshot = session()) {
   const clock = new Clock();
   const api: API = {
+    saveSnapshot: async () => { throw Error('unexpected save'); }, saveResult: async () => { throw Error('unexpected save confirmation'); },
     tagTrends: async () => { throw Error('unexpected trend query'); },
     filteredTags: async () => { throw Error('unexpected filtered tags'); },
     open: async requestId => ({ apiVersion: 1, requestId, pending: false, canceled: false, fileName: 'bytes.flv', session: snapshot, error: null }),

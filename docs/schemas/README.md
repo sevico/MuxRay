@@ -10,6 +10,7 @@ The public Draft 2020-12 contracts are:
 - [`flv-mp3-tag-detail-v1.schema.json`](./flv-mp3-tag-detail-v1.schema.json) for the bounded first MPEG Audio Layer III frame header in one FLV MP3 `muxray detail --tag <id>` result.
 - [`flv-media-summary-v1.schema.json`](./flv-media-summary-v1.schema.json) for bounded cross-tag AAC/AVC `muxray summary` analysis.
 - [`flv-media-summary-v2.schema.json`](./flv-media-summary-v2.schema.json) for opt-in AAC/AVC/MP3 `muxray summary --schema-version 2` analysis.
+- [`desktop-diagnostic-snapshot-v1.schema.json`](./desktop-diagnostic-snapshot-v1.schema.json) for bounded desktop diagnostic snapshots saved through the native file dialog.
 
 Scan and detail use `schemaVersion: 1`; media summary explicitly selects 1 or 2
 and defaults to 1. These are independent contracts. The scan report
@@ -29,14 +30,24 @@ Tags remain unsupported/unclassified even though an independent MP3 detail
 document now exists. V2 adds MP3 classification, header observations, and audio
 codec counts under its own closed Schema. See [v2 semantics](../media-summary-v2.md).
 
-## Deterministic encoding
+Desktop snapshots use `documentType: "desktopDiagnosticSnapshot"` and
+`schemaVersion: 1`. They preserve the selected, already completed bounded desktop
+results, including explicit coverage and omissions, rather than extending a CLI
+report. They include a source basename, creation timestamp and opaque session/
+request identities, so repeated saves are not byte-identical. Source absolute
+paths are absent; uint64 coordinates remain canonical decimal strings. The
+encoded snapshot is at most 2 MiB, with at most 4096 actual Hex bytes, 512 trend
+points and one requested Summary event page of at most 100 entries. Details and
+source-validation limits are defined in [ADR-019](../decisions/019-desktop-diagnostic-snapshot.md).
+
+## Deterministic CLI encoding
 
 Tag pages use `documentType: "flv-tag-page"`, `schemaVersion: 1`; their bounded
 `tags` array retains global IDs and spans. Pages do not extend scan-report v1.
 See [index and cancellation semantics](../tag-index-v1.md). Cancelled CLI work
 exits 130 and may leave incomplete stdout, which callers must discard.
 
-For the same bytes, scanner/detail/summary options, schema version, and MuxRay build, repeated reports must be byte-identical within the same output mode:
+For the same bytes, scanner/detail/summary options, schema version, and MuxRay build, repeated CLI reports must be byte-identical within the same output mode:
 
 - the default is one compact UTF-8 JSON object followed by one LF;
 - `--pretty` uses two-space indentation and one trailing LF;
@@ -58,9 +69,11 @@ JSON numbers used for offsets and sizes are unsigned 64-bit integers. Consumers 
 
 The separate [desktop adapter](../desktop-adapter-v1.md) uses `apiVersion: 1`
 DTOs with decimal strings for 64-bit values. It does not send these CLI report
-documents through a desktop binding or change any of the schemas above. Its
-Go/JSON shape tests are separate from CLI Schema validation; actual GUI binding
-generation is not yet implemented.
+documents through a desktop binding or change the CLI schemas above. Its
+Go/JSON shape tests are separate from CLI Schema validation. The Wails desktop
+module commits generated bindings and checks repeatable generation; see the
+[desktop development guide](../../desktop/README.md). Saved desktop snapshots
+have their own versioned Schema and validation, independent of the IPC API version.
 
 ## Field semantics
 

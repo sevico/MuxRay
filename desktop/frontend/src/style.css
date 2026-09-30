@@ -43,6 +43,11 @@ progress::-webkit-progress-bar { background: #edf1f5; border-radius: 4px; }
 progress::-webkit-progress-value { background: #278499; border-radius: 4px; }
 .progress-line span { width: 47px; text-align: right; font-size: 12px; color: #64758b; font-variant-numeric: tabular-nums; }
 .scan-note { margin: 12px 0 0; color: #7c899a; font-size: 12px; line-height: 1.6; }
+.snapshot-scope { margin: 10px 0 0; color: #617389; font-size: 12px; line-height: 1.7; }
+.snapshot-status { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; border: 1px solid #c9e0e7; border-radius: 7px; padding: 13px 17px; background: #f1f8fa; margin-bottom: 18px; }
+.snapshot-status strong { font-size: 13px; overflow-wrap: anywhere; }
+.snapshot-status p { margin: 6px 0 0; color: #617389; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.snapshot-status.has-error { border-color: #f0d4c9; background: #fff0eb; }
 .results-toolbar { border-bottom: 1px solid #e2e8ef; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; }
 .tabs { display: flex; gap: 24px; }
 .tabs button { padding: 17px 2px 14px; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: none; }

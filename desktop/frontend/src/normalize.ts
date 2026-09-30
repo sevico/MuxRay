@@ -1,5 +1,5 @@
 import type { desktop, main } from '../wailsjs/go/models';
-import type { DetailKind, DetailResponse, DiagnosticPage, HexResponse, PageResponse, PickResponse, Session, SessionResponse, TagPage, SummaryResponse, SummaryPageResponse, FilteredTagPage, TagFilter, TagTrendPage, TagTrendPoint } from './protocol';
+import type { DetailKind, DetailResponse, DiagnosticPage, HexResponse, PageResponse, PickResponse, Session, SessionResponse, TagPage, SummaryResponse, SummaryPageResponse, FilteredTagPage, TagFilter, TagTrendPage, TagTrendPoint, SaveResponse } from './protocol';
 import { validateTagFilter } from './tag-filter.ts';
 import { validateHexWindow } from './hex.ts';
 import { summaryKind, validateSummaryResponse, validateSummaryPage } from './summary.ts';
@@ -15,6 +15,9 @@ export function sessionResponse(value: desktop.SessionResponse): SessionResponse
 }
 export function pickResponse(value: main.PickResponse): PickResponse {
   return { ...sessionResponse(value), requestId: value.requestId, pending: value.pending, canceled: value.canceled, fileName: value.fileName };
+}
+export function saveResponse(value: main.SaveResponse): SaveResponse {
+  return { ...value, error: value.error ?? null };
 }
 export function tagResponse(value: desktop.TagPageResponse): PageResponse<TagPage> {
   return { apiVersion: value.apiVersion, error: value.error ?? null, page: value.page ? {

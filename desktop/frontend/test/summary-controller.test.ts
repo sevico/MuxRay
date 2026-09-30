@@ -18,6 +18,7 @@ function setup(overrides: Partial<API> = {}) {
   const span = { byteOffset: '13', bitOffset: 0, bitLength: 120 };
   const tag = (id: string): Tag => ({ id, typeCode: 8, typeName: 'audio', offset: '13', span, headerSpan: span, payloadSpan: span, rawTypeFlags: 8, filter: false, dataSize: 4, availableDataSize: 4, dts: '0', streamId: 0, payloadComplete: true, previousTagSize: { present: true, span, value: 15, expected: 15, valid: true } });
   const api: API = {
+    saveSnapshot: async () => { throw Error('unexpected save'); }, saveResult: async () => { throw Error('unexpected save confirmation'); },
     tagTrends: async () => { throw Error('unexpected trend query'); },
     filteredTags: async () => { throw Error('unexpected filtered tags'); },
     open: async requestId => ({ apiVersion: 1, requestId, pending: false, canceled: false, fileName: 'summary.flv', session, error: null }),

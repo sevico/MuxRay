@@ -4,4 +4,8 @@ import {main} from '../models';
 
 export function GetOpenResult(arg1:string):Promise<main.PickResponse>;
 
+export function GetSaveResult(arg1:string):Promise<main.SaveResponse>;
+
 export function OpenFLV(arg1:string):Promise<main.PickResponse>;
+
+export function SaveSnapshot(arg1:main.SaveRequest):Promise<main.SaveResponse>;

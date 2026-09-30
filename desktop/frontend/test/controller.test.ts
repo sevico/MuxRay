@@ -36,6 +36,7 @@ function setup(override: Partial<Omit<API, 'open'>> & { open?: (requestId: strin
   const clock = new FakeClock();
   const { open = async () => ({ ...response(snapshot()), fileName: 'sample.flv', canceled: false }), ...rest } = override;
   const api: API = {
+    saveSnapshot: async () => { throw Error('unexpected save'); }, saveResult: async () => { throw Error('unexpected save confirmation'); },
     tagTrends: async () => { throw Error('unexpected trend query'); },
     filteredTags: async () => { throw Error('unexpected filtered tags'); },
     open: async requestId => ({ requestId, pending: false, ...await open(requestId) }),

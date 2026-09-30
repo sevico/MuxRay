@@ -86,6 +86,21 @@ export interface SummaryPageResponse {
   apiVersion: number; sessionId: string; requestId: string; kind: SummaryKind;
   page: SummaryPage | null; error: Fault | null;
 }
+export interface SnapshotTrend {
+  start: string; count: number; type: 'all' | 'audio' | 'video' | 'script' | 'other';
+  metric: 'dts' | 'delta' | 'size'; gapThreshold: string;
+}
+export interface SnapshotRequest {
+  sessionId: string; selectedTagId: string | null; detailRequestId: string | null;
+  hexRequestId: string | null; summaryRequestId: string | null;
+  summaryPage: { kind: SummaryKind; start: string; count: number } | null;
+  trend: SnapshotTrend | null;
+}
+export interface SaveRequest { requestId: string; snapshot: SnapshotRequest }
+export interface SaveResponse {
+  apiVersion: number; requestId: string; pending: boolean; canceled: boolean;
+  fileName: string; bytesWritten: string; error: Fault | null;
+}
 export interface API {
   open(requestId: string): Promise<PickResponse>;
   openResult(requestId: string): Promise<PickResponse>;
@@ -104,4 +119,6 @@ export interface API {
   summaryResult(request: DetailQuery): Promise<SummaryResponse>;
   cancelSummary(request: DetailQuery): Promise<SummaryResponse>;
   summaryEvents(request: SummaryPageRequest): Promise<SummaryPageResponse>;
+  saveSnapshot(request: SaveRequest): Promise<SaveResponse>;
+  saveResult(requestId: string): Promise<SaveResponse>;
 }
