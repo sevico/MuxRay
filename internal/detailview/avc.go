@@ -120,6 +120,9 @@ func (b *builder) avc(ctx context.Context, source io.ReaderAt, tag flv.TagRecord
 
 func (b *builder) avcContext(parent string, r avccontext.Resolution, state string) {
 	id := b.add(parent, "AVC context", "lookup", state, nil)
+	if r.LookupMethod != "" {
+		b.add(id, "lookupMethod", "derived lookup method", r.LookupMethod, nil)
+	}
 	if state == "found" {
 		b.add(id, "sourceTagId", "uint64", decimal(r.SourceTagID), nil)
 		b.encoded(id, "sourceLengthSizeMinusOne", "uint2", decimal(uint64(r.NALLengthSize-1)), r.SourceLengthSpan)

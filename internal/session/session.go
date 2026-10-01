@@ -99,7 +99,16 @@ type ownedSource interface {
 // file for later, independently canceled detail reads. A nil source is reported
 // as a scan failure by Wait, including when size is zero.
 func Start(ctx context.Context, source io.ReaderAt, size uint64, options flv.Options) *Session {
-	return start(ctx, borrowedSource{ReaderAt: source}, size, options)
+	return StartWithTagObserver(ctx, source, size, options, nil)
+}
+
+// StartWithTagObserver borrows source like Start and synchronously observes each
+// committed tag on the scan worker, using the worker's cancelable context. The
+// observer may perform bounded reads from source until Wait finishes. Observer
+// errors retain the committed prefix; Wait and Close include observer completion.
+// Neither this entry point nor Close closes the borrowed source.
+func StartWithTagObserver(ctx context.Context, source io.ReaderAt, size uint64, options flv.Options, observe flv.TagObserver) *Session {
+	return startWithTagObserver(ctx, borrowedSource{ReaderAt: source}, size, options, observe)
 }
 
 type borrowedSource struct{ io.ReaderAt }
@@ -110,6 +119,10 @@ func (borrowedSource) Close() error { return nil }
 // worker. Keeping this seam private permits deterministic I/O lifecycle tests
 // without making caller-supplied source ownership another public API.
 func start(ctx context.Context, source ownedSource, size uint64, options flv.Options) *Session {
+	return startWithTagObserver(ctx, source, size, options, nil)
+}
+
+func startWithTagObserver(ctx context.Context, source ownedSource, size uint64, options flv.Options, observe flv.TagObserver) *Session {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -118,20 +131,20 @@ func start(ctx context.Context, source ownedSource, size uint64, options flv.Opt
 		ctx: ctx, cancel: cancel, done: make(chan struct{}),
 		snapshot: Snapshot{State: StateRunning, Progress: flv.ScanProgress{SourceSize: size}},
 	}
-	go s.run(source, size, options)
+	go s.run(source, size, options, observe)
 	return s
 }
 
-func (s *Session) run(source ownedSource, size uint64, options flv.Options) {
+func (s *Session) run(source ownedSource, size uint64, options flv.Options, observe flv.TagObserver) {
 	reader := io.ReaderAt(source)
 	if borrowed, ok := source.(borrowedSource); ok {
 		reader = borrowed.ReaderAt // preserve the scanner's nil-source validation
 	}
-	result, scanErr := flv.ScanContextWithProgress(s.ctx, reader, size, options, func(progress flv.ScanProgress) {
+	result, scanErr := flv.ScanContextWithObserver(s.ctx, reader, size, options, func(progress flv.ScanProgress) {
 		s.mu.Lock()
 		s.snapshot.Progress = progress
 		s.mu.Unlock()
-	})
+	}, observe)
 	closeErr := closeSource(source)
 	// Classify the scanner's returned outcome, not a late cancellation while
 	// closing the source. Close failures take precedence but retain both errors.

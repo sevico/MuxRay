@@ -40,6 +40,7 @@ type Limits struct {
 
 type Resolution struct {
 	State            string
+	LookupMethod     string
 	NALLengthSize    uint8
 	SourceTagID      uint64
 	SourceLengthSpan cursor.Span
@@ -56,10 +57,28 @@ type Resolution struct {
 // BytesRead counts bytes returned by the source, including repeated reads and
 // the selected prefix. Budget exhaustion is a result state, never "missing".
 func Resolve(ctx context.Context, source io.ReaderAt, selected flv.TagRecord, lookup Lookup, options flv.AVCVideoOptions, limits Limits) (Resolution, error) {
+	return resolve(ctx, source, selected, lookup, nil, options, limits)
+}
+
+// ResolveIndexed visits only earlier sequence-header candidates classified by
+// the same retained source's completed scan. Widths and usable framing are read
+// again under this request's budgets. ScannedTags counts records actually read,
+// not the logical distance skipped by the index. The CLI keeps using Resolve.
+func ResolveIndexed(ctx context.Context, source io.ReaderAt, selected flv.TagRecord, lookup Lookup, index *CandidateIndex, options flv.AVCVideoOptions, limits Limits) (Resolution, error) {
+	if index == nil {
+		return Resolution{}, ErrInvalidInput
+	}
+	return resolve(ctx, source, selected, lookup, index, options, limits)
+}
+
+func resolve(ctx context.Context, source io.ReaderAt, selected flv.TagRecord, lookup Lookup, index *CandidateIndex, options flv.AVCVideoOptions, limits Limits) (Resolution, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	result := Resolution{State: StateNotNeeded}
+	result := Resolution{State: StateNotNeeded, LookupMethod: "backward_tags"}
+	if index != nil {
+		result.LookupMethod = "candidate_index"
+	}
 	reader := workReader{ctx: ctx, source: source, result: &result, limit: limits.MaxBytes}
 	header, packetType, present, err := ReadFramingPrefix(&reader, selected)
 	if err != nil {
@@ -81,7 +100,18 @@ func Resolve(ctx context.Context, source io.ReaderAt, selected flv.TagRecord, lo
 		if lookup == nil {
 			return result, ErrInvalidInput
 		}
-		id--
+		if index != nil {
+			previous, found, err := index.previous(ctx, id)
+			if err != nil {
+				return result, err
+			}
+			if !found {
+				return result, nil
+			}
+			id = previous
+		} else {
+			id--
+		}
 		candidate, err := lookup(id)
 		if err != nil {
 			return result, err
@@ -97,7 +127,7 @@ func Resolve(ctx context.Context, source io.ReaderAt, selected flv.TagRecord, lo
 		if err != nil {
 			return resolutionError(result, err)
 		}
-		if !present || header&0x0f != flv.CodecIDAVC || header>>4 == 5 || kind != uint8(flv.AVCPacketTypeSequenceHeader) {
+		if !present || !isConfiguration(header, kind) {
 			continue
 		}
 		if limits.MaxCandidates != 0 && result.Candidates >= limits.MaxCandidates {

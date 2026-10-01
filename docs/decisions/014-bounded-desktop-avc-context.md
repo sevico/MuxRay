@@ -4,6 +4,12 @@ Status: Accepted
 
 Date: 2026-09-10
 
+Partially superseded by [ADR-020](020-indexed-desktop-avc-context.md) on
+2026-10-01: desktop lookup now uses a bounded scan-time candidate index instead
+of the 8,192-record backward search. The original decision below is retained
+for its historical behavior; its usable-configuration policy, syntax projection,
+source ownership and request protocol remain in force.
+
 Supersedes: ADR-013's deferral of AVC desktop details. Its document ownership,
 request recovery, resource limits and close protocol remain in force. ADR-004's
 CLI selection policy and the existing CLI JSON contracts remain unchanged.

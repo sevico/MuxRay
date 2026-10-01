@@ -17,9 +17,10 @@ Repository-wide architecture and compatibility decisions are recorded here. An a
 | [ADR-011](./011-minimal-wails-shell.md) | Accepted | Isolate the Wails host, native picker, and bounded React UI from the pure-Go core |
 | [ADR-012](./012-recoverable-native-open.md) | Accepted | Supersede ADR-011's Native open surface with bounded request outcomes, fencing and timed confirmation |
 | [ADR-013](./013-retained-document-details.md) | Accepted | Retain a document source independently of scans and expose bounded, recoverable AMF0/AAC desktop details |
-| [ADR-014](./014-bounded-desktop-avc-context.md) | Accepted | Reuse AVC context rules with bounded desktop lookup, provenance and truthful syntax spans |
+| [ADR-014](./014-bounded-desktop-avc-context.md) | Accepted; lookup partly superseded by ADR-020 | Reuse AVC context rules with bounded desktop lookup, provenance and truthful syntax spans |
 | [ADR-015](./015-bounded-desktop-hex.md) | Accepted | Add bounded source byte windows and field navigation through the retained document's shared worker |
 | [ADR-016](./016-retained-desktop-summary.md) | Accepted | Add cancellable media-summary v2 with exact bounded projections, retained event pages and shared source ownership |
 | [ADR-017](./017-bounded-tag-filtering.md) | Accepted | Query committed Tags by container type, inclusive raw DTS and structural state with bounded source cursors |
 | [ADR-018](./018-bounded-tag-trends.md) | Accepted | Show bounded source-ordered container trends with exact per-track DTS deltas and explicit preceding-context limits |
 | [ADR-019](./019-desktop-diagnostic-snapshot.md) | Accepted | Export bounded desktop diagnostic snapshots through a recoverable native save operation |
+| [ADR-020](./020-indexed-desktop-avc-context.md) | Accepted | Index AVC sequence-header candidates during desktop scans for bounded, order-independent long-media context lookup |

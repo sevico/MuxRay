@@ -6,6 +6,7 @@ Wails **v2.14.0** + React **18.3.1** + TypeScript **5.9.3**，构建工具 Vite
 打开响应恢复协议见 [ADR-012](../docs/decisions/012-recoverable-native-open.md)。
 文件所有权和有界详情协议见 [ADR-013](../docs/decisions/013-retained-document-details.md)。
 AVC 上下文查找和准确源位置见 [ADR-014](../docs/decisions/014-bounded-desktop-avc-context.md)。
+长媒体的配置候选索引见 [ADR-020](../docs/decisions/020-indexed-desktop-avc-context.md)。
 
 ## 范围
 
@@ -115,12 +116,19 @@ Hex 与详情共用单一 worker、一个可替换待处理意图和跨类型递
 解析预算与显示预算独立：AMF0 最多 32 层、4,096 节点、每个容器 4,096 项，
 单段及累计保留字符串均不超过 64 KiB；AMF0/AAC 各最多保留 64 条解析诊断。
 
-AVC NALU 使用同一文档的已提交索引反向查找最近可用 sequence header，明确显示
-`found/missing/budget_exhausted/not_needed`、来源 Tag、原始长度声明位置与搜索计数。
-每次最多查找 8,192 个前置记录、32 个候选配置和累计 1 MiB 的源读取（含所选包探测）；
-查找与所选详情共享同一任务和协作截止。缺配置或达到查找预算时保留包头与 opaque
-范围，不猜四字节 NAL 长度，也不提供手动覆盖或跨请求配置缓存。不可用的候选可跳过，
-但更深 SPS 语义不完整本身不会否定已经完整的长度声明。
+AVC NALU 通过同一文档的配置候选索引定位最近可用 sequence header，长媒体尾部
+不再受 8,192 个前置记录的距离限制，也不需要先查看配置或运行媒体概览。桌面扫描
+对完整、未 filtered 且至少两字节的 video payload 仅读取两个前缀字节，记录可能的 AVC sequence
+header；候选位图最多 125,000 字节，不保留 payload 或已解析长度。普通 CLI 扫描
+保持原有结构读取范围。候选不是已验证配置，每次详情仍重新读取并解析原始声明。
+
+详情显示 `found/missing/budget_exhausted/not_needed`、`lookupMethod=candidate_index`、
+来源 Tag、原始长度声明位置与搜索计数。`scannedTags` 是本次实际访问的索引记录数，
+不代表到源配置的 Tag 距离。每次最多解析 32 个候选配置，累计源读取不超过 1 MiB
+（含所选包探测），查找与所选详情共享三秒协作截止。缺配置或达到预算时保留包头
+与 opaque 范围，不猜四字节 NAL 长度。不可用的候选可跳过，但更深 SPS 语义不完整
+本身不会否定已经完整的长度声明。扫描取消后，已提交且上下文覆盖明确的前缀仍可
+独立读取详情；源变化、旧请求隔离与关闭等待继续沿用同一文档生命周期。
 
 AVC 解析预算为 64 条诊断、64 个 avcC 参数集条目、256 个 NAL、每个参数集 EBSP
 正文 64 KiB（不含 NAL 头），以及每次 4,096 个 RBSP 映射项。
@@ -243,6 +251,8 @@ Go 的 `./...` 不跨越嵌套模块。没有 `go.work`，没有根模块 Wails 
 [2026-09-10 超时与工具记录](../docs/desktop-timeouts-tools-20260910.md)。
 AVC 详情、1 GiB 文件尾部读取与阻塞关闭的本次实测见
 [AVC 原生验收报告](../docs/desktop-avc-20260910.md)。
+长媒体 AVC 配置候选定位、尾部首次详情和配置来源 Hex 的验证见
+[2026-10-01 长媒体 AVC 验收记录](../docs/desktop-avc-index-20261001.md)。
 MP3 桌面接入、自动检查及原生验收的当前状态见
 [MP3 验证记录](../docs/desktop-mp3-20260911.md)。
 有界 Hex、四类详情源位置联动、Tag ID 跳转、源变化恢复及阻塞关闭见

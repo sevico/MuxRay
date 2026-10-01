@@ -15,7 +15,7 @@ import (
 // not retain payload bytes and therefore keeps memory use independent of input
 // payload size apart from the bounded tag index.
 func Scan(source io.ReaderAt, size uint64, options Options) (ScanResult, error) {
-	return scan(context.Background(), source, size, options, false, nil)
+	return scan(context.Background(), source, size, options, false, nil, nil)
 }
 
 // ScanContext builds an immutable chunked index without populating Tags. On
@@ -25,10 +25,10 @@ func ScanContext(ctx context.Context, source io.ReaderAt, size uint64, options O
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return scan(ctx, source, size, options, true, nil)
+	return scan(ctx, source, size, options, true, nil, nil)
 }
 
-func scan(ctx context.Context, source io.ReaderAt, size uint64, options Options, chunked bool, progress func(ScanProgress)) (ScanResult, error) {
+func scan(ctx context.Context, source io.ReaderAt, size uint64, options Options, chunked bool, progress func(ScanProgress), observe TagObserver) (ScanResult, error) {
 	if source == nil {
 		return ScanResult{}, errors.New("flv: nil source")
 	}
@@ -72,15 +72,21 @@ func scan(ctx context.Context, source io.ReaderAt, size uint64, options Options,
 			TagCount: count(), DiagnosticCount: uint32(len(diagnostics.items)),
 		})
 	}
-	appendRecord := func(record TagRecord) {
+	appendRecord := func(record TagRecord) error {
 		if chunked {
 			result.index.append(record)
 		} else {
 			result.Tags = append(result.Tags, record)
 		}
+		if observe != nil {
+			if err := observe(ctx, record); err != nil {
+				return fmt.Errorf("flv: observe tag %d at %d: %w", record.ID, record.Offset, err)
+			}
+		}
 		if progress != nil && count()%tagBlockSize == 0 {
 			publishProgress()
 		}
+		return nil
 	}
 
 	if size < HeaderSize {
@@ -268,12 +274,14 @@ func scan(ctx context.Context, source io.ReaderAt, size uint64, options Options,
 			if err := ctx.Err(); err != nil {
 				return finishError(false, err)
 			}
-			appendRecord(record)
 			diagnostics.add(Diagnostic{
 				Code: CodeTagBodyTruncated, Severity: SeverityError, Offset: reader.Offset(),
 				Message:  "FLV tag payload is shorter than DataSize",
 				Expected: number(uint64(dataSize)), Actual: number(availablePayload),
 			})
+			if err := appendRecord(record); err != nil {
+				return finishError(false, err)
+			}
 			return finish(false)
 		}
 
@@ -288,12 +296,14 @@ func scan(ctx context.Context, source io.ReaderAt, size uint64, options Options,
 			if err := ctx.Err(); err != nil {
 				return finishError(false, err)
 			}
-			appendRecord(record)
 			diagnostics.add(Diagnostic{
 				Code: CodePreviousTagSizeTruncated, Severity: SeverityError, Offset: previousTagSizeOffset,
 				Message:  "PreviousTagSize following the tag is truncated",
 				Expected: number(4), Actual: number(reader.Remaining()),
 			})
+			if err := appendRecord(record); err != nil {
+				return finishError(false, err)
+			}
 			if err := reader.Skip(reader.Remaining()); err != nil {
 				return finishError(false, fmt.Errorf("flv: consume trailing previous tag size at %d: %w", previousTagSizeOffset, err))
 			}
@@ -319,7 +329,9 @@ func scan(ctx context.Context, source io.ReaderAt, size uint64, options Options,
 		if err := ctx.Err(); err != nil {
 			return finishError(false, err)
 		}
-		appendRecord(record)
+		if err := appendRecord(record); err != nil {
+			return finishError(false, err)
+		}
 	}
 
 	return finish(true)

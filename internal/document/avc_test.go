@@ -81,13 +81,13 @@ func TestDefaultDocumentAVCResolvesUnderSourceOwner(t *testing.T) {
 	}
 }
 
-func TestDesktopAVCContextBudgetAndMissingDiffer(t *testing.T) {
+func TestDesktopAVCContextIndexCrossesFormerDistanceBudget(t *testing.T) {
 	for _, tc := range []struct {
 		padding int
 		header  bool
 		state   string
 		tagID   uint64
-	}{{0, false, "missing", 0}, {int(AVCContextMaxTags), true, "budget_exhausted", AVCContextMaxTags + 1}, {int(AVCContextMaxTags) - 1, true, "found", AVCContextMaxTags}} {
+	}{{0, false, "missing", 0}, {8192, true, "found", 8193}, {8191, true, "found", 8192}} {
 		s := source(t, avcData(4, tc.padding, tc.header))
 		d := startTest(t, s, nil, DetailTimeout)
 		if err := scanDone(t, d); err != nil {
@@ -102,17 +102,6 @@ func TestDesktopAVCContextBudgetAndMissingDiffer(t *testing.T) {
 		}
 		if got.Detail.Complete != (tc.state == "found") {
 			t.Fatalf("context completeness: %+v", got.Detail)
-		}
-		if tc.state == "budget_exhausted" {
-			found := false
-			for _, diagnostic := range got.Detail.Diagnostics {
-				if diagnostic.Code == "AVC_CONTEXT_LOOKUP_LIMIT_REACHED" {
-					found = true
-				}
-			}
-			if !found {
-				t.Fatal("budget was mislabeled as missing context")
-			}
 		}
 	}
 }

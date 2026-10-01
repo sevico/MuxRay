@@ -21,7 +21,6 @@ import (
 
 const (
 	DetailTimeout                  = 3 * time.Second
-	AVCContextMaxTags       uint64 = 8192
 	AVCContextMaxCandidates uint32 = 32
 	AVCContextMaxBytes      uint64 = 1 << 20
 )
@@ -73,6 +72,7 @@ type Document struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
 	scan           *session.Session
+	avcIndex       *avccontext.CandidateIndex
 	source         sourceFile
 	initial        os.FileInfo
 	parse          parseDetail
@@ -129,7 +129,11 @@ func startWithParser(ctx context.Context, source sourceFile, info os.FileInfo, o
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	d := &Document{ctx: ctx, cancel: cancel, source: source, initial: info, parse: parse, timeout: timeout, summaryTimeout: SummaryTimeout, wake: make(chan struct{}, 1), done: make(chan struct{})}
-	d.scan = session.Start(ctx, source, uint64(info.Size()), options)
+	index := &avccontext.CandidateIndex{}
+	d.avcIndex = index
+	d.scan = session.StartWithTagObserver(ctx, source, uint64(info.Size()), options, func(scanCtx context.Context, tag flv.TagRecord) error {
+		return index.Observe(scanCtx, source, tag)
+	})
 	if d.parse == nil {
 		d.parse = d.parseWithContext
 	}
@@ -151,6 +155,7 @@ func (d *Document) run() {
 			d.mu.Unlock()
 			// This single worker owns closure. No read or parse remains active.
 			_ = d.scan.Close(context.Background())
+			d.avcIndex = nil
 			err := d.source.Close()
 			d.mu.Lock()
 			d.closeErr, d.released = err, true
@@ -272,7 +277,7 @@ func (d *Document) readDetail(ctx context.Context, tag flv.TagRecord) (*detailvi
 // parseWithContext runs lookup and projection within the caller's single task
 // deadline and before/after source checks. Each candidate remains payload-bound.
 func (d *Document) parseWithContext(ctx context.Context, source io.ReaderAt, tag flv.TagRecord) (*detailview.Detail, error) {
-	resolution, err := avccontext.Resolve(ctx, source, tag, d.scan.Tag, detailview.DesktopAVCOptions(), avccontext.Limits{MaxTags: AVCContextMaxTags, MaxCandidates: AVCContextMaxCandidates, MaxBytes: AVCContextMaxBytes})
+	resolution, err := avccontext.ResolveIndexed(ctx, source, tag, d.scan.Tag, d.avcIndex, detailview.DesktopAVCOptions(), avccontext.Limits{MaxCandidates: AVCContextMaxCandidates, MaxBytes: AVCContextMaxBytes})
 	if err != nil {
 		return nil, err
 	}
