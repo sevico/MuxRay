@@ -607,6 +607,21 @@ python -B -m unittest discover -s tools/desktop-native -p 'resource_probe_test.p
 以便固定窗口右边界也有采样。最后标记 `exit-request`，通过原生窗口正常退出，
 等待采样器记录退出和 grace 完成；不要先停止采样器。
 
+若误将尚未完成的 Summary 标成 `cycle-01-summary-ready`，保留原标记及当时
+GUI 证据；实际确认完成后、记录 `cycle-01-hex-ready` 之前，可追加一次
+`cycle-01-summary-verified`（其他轮次使用对应编号）。例如：
+
+```powershell
+# 已保存 Summary 实际完成的 GUI 证据，尚未标记本轮 hex-ready。
+& $python -B $probe mark --run-dir $resourceRun --stage 'cycle-01-summary-verified' --note '原 summary-ready 提前标记；完成态见本轮后续 GUI 证据' --wait-seconds 5
+```
+
+校正只允许 `summary-ready → summary-verified → hex-ready` 的顺序，不删除、
+重写或回填原始时间。分析器在 `operatorStageCorrections` 保留两次确认，
+`summaryReadinessMark` 使用后者；仍需独立 GUI 证据，不能凭校正标签推定
+界面已完成。重复校正、错误轮次或错序仍拒绝。该操作不补齐采样空档、不改变
+关闭后的固定窗口，也不允许从误标阶段计算性能；正常轮次无需追加此标记。
+
 `resource_cycles.py` 离线核对 manifest、原始样本、已确认阶段及最终汇总，
 再统计每个固定 30 秒窗口的最后 10 秒。内存和句柄取样本算术均值，CPU 按
 相邻采样间隔加权；同时列出各轮活动阶段峰值。间隔过大、资源指标缺失、

@@ -183,6 +183,35 @@ class CycleEvidenceTests(unittest.TestCase):
             with self.subTest(kind=kind), self.assertRaises(ValueError):
                 self.analyze(data)
 
+    def test_explicit_summary_correction_preserves_both_marks_and_idle_windows(self):
+        data = fixture()
+        original = data["marks.jsonl"][4]
+        self.assertEqual(original["stage"], "cycle-01-summary-ready")
+        verified = {**original, "requestId": "correction-1", "stage": "cycle-01-summary-verified",
+            "observedElapsedSeconds": 38.5, "appliesFromSample": 77,
+            "observedUTC": "2026-10-01T00:00:38.5+00:00", "requestedUTC": "2026-10-01T00:00:38.5+00:00"}
+        data["marks.jsonl"].insert(5, verified)
+        data["samples.jsonl"][77]["stage"] = verified["stage"]
+        reproject(data)
+        result = self.analyze(data)
+        self.assertTrue(result["resourceEvidenceComplete"])
+        self.assertEqual(result["cycles"][0]["summaryReadinessMark"], verified)
+        self.assertEqual(result["operatorStageCorrections"][0]["originalOperatorMark"], original)
+        self.assertFalse(result["operatorStageCorrections"][0]["guiStateIndependentlyVerifiedByThisTool"])
+        self.assertFalse(result["perPhaseLatencyInferred"])
+
+    def test_summary_correction_before_original_readiness_is_rejected(self):
+        data = fixture()
+        original = data["marks.jsonl"][3]
+        verified = {**original, "requestId": "wrong-correction", "stage": "cycle-01-summary-verified",
+            "observedElapsedSeconds": 37.5, "appliesFromSample": 75,
+            "observedUTC": "2026-10-01T00:00:37.5+00:00", "requestedUTC": "2026-10-01T00:00:37.5+00:00"}
+        data["marks.jsonl"].insert(4, verified)
+        data["samples.jsonl"][75]["stage"] = verified["stage"]
+        reproject(data)
+        with self.assertRaisesRegex(ValueError, "summary correction must follow"):
+            self.analyze(data)
+
     def test_gap_and_incomplete_fixed_window_cannot_be_repaired_by_later_samples(self):
         data = fixture()
         # Keep raw index/mark projections coherent but remove four samples.

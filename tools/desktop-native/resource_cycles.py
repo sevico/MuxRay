@@ -4,6 +4,8 @@ No GUI, process, or source-file access occurs. Raw samples are authoritative;
 stored aggregates, counts, stages, identity inventory and exits are checked
 before reporting fixed 30-second idle windows. This is descriptive evidence,
 not a memory-leak classifier. A process exit never verifies source-file closure.
+An optional cycle-NN-summary-verified acknowledgment between summary-ready and
+hex-ready explicitly supersedes an early operator label; both remain in output.
 """
 
 import argparse
@@ -332,7 +334,20 @@ def analyze(directory, cycle_count=5):
     manifest, samples, marks, summary, observed_errors, interval = audit_raw(values, receipts)
     expected = ["baseline-idle"] + [f"cycle-{cycle:02d}-{phase}" for cycle in range(1, cycle_count + 1) for phase in PHASES]
     cycle_marks = [mark for mark in marks if mark["stage"] == "baseline-idle" or mark["stage"].startswith("cycle-")]
-    require([mark["stage"] for mark in cycle_marks] == expected, "missing, duplicated or out-of-order baseline/cycle phases")
+    canonical, corrections = [], {}
+    for mark in cycle_marks:
+        verified = re.fullmatch(r"cycle-([0-9]{2})-summary-verified", mark["stage"])
+        if verified:
+            cycle = int(verified[1])
+            require(1 <= cycle <= cycle_count and cycle not in corrections, "invalid or duplicate summary correction")
+            require(canonical and canonical[-1]["stage"] == f"cycle-{cycle:02d}-summary-ready",
+                "summary correction must follow its original summary-ready and precede hex-ready")
+            corrections[cycle] = {"cycle": cycle, "originalOperatorMark": canonical[-1], "verifiedOperatorMark": mark,
+                "originalReadinessTimestampSuperseded": True,
+                "guiStateIndependentlyVerifiedByThisTool": False}
+        else:
+            canonical.append(mark)
+    require([mark["stage"] for mark in canonical] == expected, "missing, duplicated or out-of-order baseline/cycle phases")
     require(all(left["appliesFromSample"] < right["appliesFromSample"] for left, right in zip(cycle_marks, cycle_marks[1:])),
         "required phases lack distinct observed samples")
     lookup = {mark["stage"]: mark for mark in cycle_marks}
@@ -348,7 +363,8 @@ def analyze(directory, cycle_count=5):
             add_peaks(peaks, sample["groups"])
         idle = window_stats(samples, closed, prefix + "closed", interval)
         cycles.append({"cycle": cycle, "openObservedSeconds": opened, "closedObservedSeconds": closed,
-            "activeSamples": len(active), "activePeaks": peaks, "closedIdle": idle})
+            "activeSamples": len(active), "activePeaks": peaks, "closedIdle": idle,
+            "summaryReadinessMark": corrections[cycle]["verifiedOperatorMark"] if cycle in corrections else lookup[prefix + "summary-ready"]})
     root = next(row for row in summary["processes"] if row["group"] == "root")
     exit_complete = (summary["targetExitConfirmed"] and summary["allObservedDescendantsExited"]
         and all(row["exit"]["exitCode"] == 0 for row in summary["processes"])
@@ -361,6 +377,7 @@ def analyze(directory, cycle_count=5):
         "target": manifest["target"], "exeSHA256": manifest["exeSHA256"], "samples": len(samples),
         "cycleCount": cycle_count, "fixedIdleSeconds": 30, "tailStatisticsSeconds": 10,
         "rawCrossChecksPassed": True, "continuousSamplingComplete": continuous, "observationErrors": observed_errors,
+        "operatorStageCorrections": list(corrections.values()), "perPhaseLatencyInferred": False,
         "incompleteTreeSamples": summary["incompleteTreeSamples"], "baseline": baseline, "cycles": cycles,
         "gaps": {"maxSeconds": max(global_gaps, default=0),
             "overOneSecond": sum(gap > 1 for gap in global_gaps),
