@@ -1,0 +1,58 @@
+{
+  "manifestVersion": 1,
+  "id": "generated-long-avc-aac-2400s",
+  "description": "Forty-minute encoded synthetic test pattern and sine: H.264 160x90/25fps, two B frames, fixed GOP 50, AAC 48 kHz mono. This is generated media, not a real-world recording.",
+  "format": "flv",
+  "originClass": "generated",
+  "validity": "valid",
+  "storage": "metadata-only",
+  "file": {
+    "name": "generated-long-avc-aac-2400s.flv",
+    "sizeBytes": 41698926,
+    "sha256": "b46e8df2e90eb661f4d830ba99d185fc7aeb3db94bc5f78102d09aaf6ca3e427"
+  },
+  "provenance": {
+    "method": "generated",
+    "sourceReference": "Local FFmpeg lavfi testsrc2 and 997 Hz sine; no captured, downloaded, customer or personal media.",
+    "generator": {
+      "name": "FFmpeg / MuxRay long_media.py",
+      "version": "7.1.1-full_build-www.gyan.dev / generator v1",
+      "recipe": "python -B tools/desktop-native/long_media.py --ffmpeg <local-ffmpeg.exe> --output-dir <new-absolute-directory> --duration-seconds 2400 --timeout-seconds 600. Video: libx264 veryfast, 160x90 25fps, 96k target/128k max/256k buffer, yuv420p, GOP/keyint_min 50, scenecut 0, B frames 2, one codec thread. Audio: AAC 48kHz mono, 32k, one codec thread. No FLV metadata. The run records exact argv, tool/source hashes and bounded process output."
+    }
+  },
+  "rights": {
+    "redistribution": "testing-only",
+    "evidenceReference": "tools/desktop-native/long_media.py"
+  },
+  "privacy": {
+    "reviewStatus": "no-sensitive-data",
+    "evidenceReference": "Local synthetic lavfi video and sine sources; no capture or external media inputs."
+  },
+  "features": [
+    "avc",
+    "aac",
+    "sequence-header",
+    "b-frames",
+    "composition-time",
+    "end-of-sequence",
+    "forty-minute-generated-media",
+    "keyframe-retention-overflow",
+    "hundred-thousand-tags"
+  ],
+  "expected": {
+    "reportSchemaVersion": 1,
+    "scanComplete": true,
+    "header": {
+      "present": true,
+      "version": 1,
+      "typeFlags": 5,
+      "hasAudio": true,
+      "hasVideo": true,
+      "dataOffset": 9,
+      "previousTagSize0": 0
+    },
+    "tagCount": 172504,
+    "diagnostics": []
+  },
+  "notes": "Excluded from corpus.py's 32 MiB/50000 Tag small-corpus budget. Independent framing finds 60000 AVC NALU Tags, 112501 AAC raw Tags, one configuration per codec and one AVC EOS; 1200 declared keyframes, with the 1025th at Tag 147200/DTS 2048000/payload offset 35586515. Last AVC NALU Tag 172497 has DTS 2399960; last AAC Tag 172502 has DTS 2400059; EOS Tag 172503 has DTS 2399960. ffprobe -count_frames decoded 60000 H.264 and 112501 AAC frames with no error output, reporting two B frames. Its FLV format duration is 2399.960s and must not replace the separately recorded maximum raw DTS. Media, per-run command/hashes and process evidence remain local. Same FFmpeg build is required for byte identity; changed bytes require review, never automatic expectation replacement."
+}

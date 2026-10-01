@@ -459,10 +459,13 @@ node --test test/browser-filter-fixture.test.mjs test/browser-trend-fixture.test
 
 `.github/workflows/desktop.yml` 的 Windows 非 GUI job 统一执行 bindings 漂移检查、
 前端单测和构建、合成 host 契约检查、desktop Go test/vet、Python fixture 与保存
-overlay 测试、PowerShell 5.1/7 gate 自测，最后调用 `desktop/build-production.ps1`。
+overlay 测试、资源采样/长媒体工具/快照校验自测、PowerShell 5.1/7 gate 自测，
+最后调用 `desktop/build-production.ps1`。快照自测使用 `tools/requirements-schema.txt`
+中的固定依赖；三种新工具的自测按模块名运行，不重复已有 fixture/overlay 测试。
 有 gcc 时额外运行 desktop race；缺少 gcc 时显式输出跳过通知。根模块多平台、
 Schema 与 fuzz 检查仍在 `ci.yml`。CI 不启动 Wails 窗口、浏览器或文件选择器，
-不能代替每次单独记录的原生验收。
+不生成 FFmpeg 长媒体，也不读取真实语料，不能代替每次单独记录的原生验收。
+资源采样器的 Windows 自测只观察测试自己启动的辅助进程。
 
 ## 诊断快照保存（ADR-019）
 
@@ -472,12 +475,19 @@ Schema 与 fuzz 检查仍在 `ci.yml`。CI 不启动 Wails 窗口、浏览器或
 不能证明保存状态正确，截图也不能证明 JSON 字节与源对应。
 
 `snapshot_check.py` 验证独立 Schema、同一会话和请求 ID、section 与 `omitted`
-一致性；传入确定性小样本时还直接核对原始 Tag 头和 Hex 实际字节。
-它不复跑编解码语义分析，也不用于整段生产媒体扫描。需要仓库已有的
-`tools/requirements-schema.txt` 中的 `jsonschema`。
+一致性；显式传入本地验收源时还直接核对原始 Tag 头、Hex 实际字节及源 SHA-256。
+它不复跑编解码语义分析。需要 `tools/requirements-schema.txt` 中的 `jsonschema`。
+JSON 报告始终限制为 2 MiB；源默认限制为 16 MiB，超过时必须显式指定
+`--max-source-bytes`，可选范围为 16 MiB–1 GiB。长样本示例使用 64 MiB。
+源使用至多 1 MiB 缓冲分块读取，源顺序核对最多访问 100 万个 Tag 头，保留的
+位置仅包括选中 Tag 与趋势点所引用的 Tag；校验还流式读回源哈希并核对前后文件身份。
+它不单独证明报告声明的全部索引数量或完整媒体分析，仍需独立清单和 CLI 核对。
+源校验有 120 秒协作截止，在读取前后检查，不能强制打断已经阻塞的文件 I/O。
 
 ```powershell
 python -B tools/desktop-native/snapshot_check.py 'C:\work\saved-report.json' --source 'C:\work\trends-mixed.flv'
+python -B tools/desktop-native/snapshot_check.py 'C:\work\saved-long-report.json' --source 'C:\work\long-media-001\generated-long-avc-aac-2400s.flv' --max-source-bytes 67108864
+python -B -m unittest discover -s tools/desktop-native -p 'snapshot_check_test.py' -v
 python -B -m unittest discover -s tools/desktop-native -p '*_build_test.py' -v
 ```
 
@@ -513,6 +523,122 @@ assets 必须新建 run。工具复用已构建的前端，因此应先完成正
 `snapshot-delayed`、`snapshot-write-failed`、`snapshot-recovery-timeout` 场景。
 `node --test test/browser-save-fixture.test.mjs` 检查合成协议，不操作浏览器或原生对话框。
 本轮实测范围见 [诊断快照验收记录](../../docs/desktop-snapshot-20260929.md)。
+
+## 生产桌面资源采样
+
+`resource_probe.py` 只观察已启动的 Windows 进程，不启动、终止或操作生产窗口。
+先取得明确 PID 的创建 FILETIME 和 exe 身份，再以同一身份开始采样；PID 复用、
+exe 路径不同或目标已退出都会拒绝附加。记录期间保留进程查询句柄，并用父身份的
+创建/退出区间核对子进程，避免仅凭进程名把其他应用的 WebView2 算入本次结果。
+
+先通过真实桌面启动待测生产 exe，从本次窗口对应进程取得 PID，再在仓库根目录执行。
+以下例子要求 `C:\work\native-evidence` 父目录已存在，`resources-001` 及其同名前缀
+日志尚不存在。`--output-dir` 必须是绝对新目录，工具不会覆盖历史 run。
+
+```powershell
+$repo = 'C:\work\MuxRay'
+$python = (Get-Command python).Source
+$probe = Join-Path $repo 'tools\desktop-native\resource_probe.py'
+$targetExe = Join-Path $repo 'desktop\build\bin\MuxRay.exe'
+$targetPid = 12345 # 替换为本次实际生产窗口的 PID。
+$resourceRun = 'C:\work\native-evidence\resources-001'
+
+$identityJson = & $python -B $probe identity --pid $targetPid --exe $targetExe
+if ($LASTEXITCODE -ne 0) { throw '目标进程身份核验失败' }
+$identity = $identityJson | ConvertFrom-Json
+$recordArgs = @(
+    '-B', ('"{0}"' -f $probe), 'record',
+    '--pid', [string]$identity.pid, '--created', $identity.created,
+    '--exe', ('"{0}"' -f $targetExe),
+    '--output-dir', ('"{0}"' -f $resourceRun),
+    '--duration-seconds', '900', '--interval-ms', '500', '--exit-grace-seconds', '5'
+)
+$samplerProcess = Start-Process -FilePath $python -ArgumentList $recordArgs -WindowStyle Hidden -PassThru `
+    -RedirectStandardOutput "$resourceRun.stdout.log" -RedirectStandardError "$resourceRun.stderr.log"
+```
+
+后台辅助进程使用 `-WindowStyle Hidden`；不要为采样打开额外的可见控制台。
+等待 run 中 `manifest.json`、`status.json` 出现并确认 `running: true`，再标记阶段：
+
+```powershell
+Get-Content -LiteralPath "$resourceRun\status.json"
+& $python -B $probe mark --run-dir $resourceRun --stage 'long-open-request' --note '下一步通过原生选择器打开长媒体' --wait-seconds 5
+# 操作真实窗口；完成后标记实际观察到的状态。
+& $python -B $probe mark --run-dir $resourceRun --stage 'long-summary-ready' --wait-seconds 5
+# 需要提前结束采样时：
+& $python -B $probe stop --run-dir $resourceRun --wait-seconds 5
+```
+
+`mark`/`stop` 只向采样器发布控制请求，不向 MuxRay 发送命令；`stop` 不会关闭目标。
+请求与确认分别记录时间，`confirmation: unconfirmed` 不是阶段已生效的证明。
+标记只是操作者提供的阶段标签，仍应保留 GUI 观察证据。若要记录退出，应通过真实
+窗口关闭 MuxRay，让采样器继续观察：默认在确认根进程退出后等待 5 秒再完成；
+也可等待总时长上限。不要先 `stop` 再声称本 run 观察到了后续退出。
+
+参数范围：`--duration-seconds` 为 `(0,7200]`，`--interval-ms` 为 `[250,5000]`，
+`--exit-grace-seconds` 为 `[0,60]`，控制确认 `--wait-seconds` 为 `[0,15]`。
+进程树每秒刷新；最多保留 4096 个进程身份、同时追踪 128 个活跃进程、处理
+1024 个控制请求，样本日志上限 256 MiB。触及限制或采样失败必须审阅最终结果，
+不能只凭后台进程结束宣告验收通过。
+
+`manifest.json` 记录进程创建身份、exe/工具哈希和预算，`samples.jsonl` 保存原始
+逐进程及分组样本，`marks.jsonl` 保存已确认标记，`summary.json` 是最终收据。
+`status.json` 只是便于观察的投影；读取状态文件导致临时共享冲突时以样本流和
+最终收据为准。宿主、观察到的 WebView2 后代及其他后代分别统计，也提供总和。
+
+- private bytes 是私有已提交内存，不是物理 RAM；工作集求和可能重复计算共享页。
+- CPU 的 `cpuPercent` 以一个逻辑核满载为 100%，`cpuPercentOfMachine` 再除以逻辑核数；首次观察没有区间 CPU 值，缺失指标保留为未知。
+- 最大值来自采样点，可能错过短峰和两次进程树刷新之间的短命进程；未观察到的后代、独立或共享 WebView2 进程不自动归属本次程序。
+- 不测 GPU 分配、系统文件缓存或附加前的资源；跨阶段的 CPU 区间可能包含上一阶段工作。
+- OS 退出及退出码不能证明源文件有序关闭；须结合 GUI 空状态及独立源文件释放检查。若采样因错误、时限或操作者停止而结束，应明确仍存活的已观察进程。
+
+```powershell
+python -B -m unittest discover -s tools/desktop-native -p 'resource_probe_test.py' -v
+```
+
+## 长时间有效编码的生成媒体
+
+`long_media.py` 使用本机已安装 FFmpeg 的 lavfi，不下载媒体。默认生成 40 分钟
+160×90、25 fps 的 H.264 和 48 kHz 单声道 AAC，视频目标 96 kbit/s、音频
+32 kbit/s；固定 GOP 50、B 帧 2、禁用场景切换关键帧，各 codec 使用单线程。
+这是**生成媒体，不是真实录制**，用于有效编码、大量 Tag 和事件保留溢出的桌面
+资源观察；它与只含结构填充的 GiB 压力文件、真实媒体语料分别记录。
+
+```powershell
+python -B tools/desktop-native/long_media.py --ffmpeg 'C:\tools\ffmpeg\bin\ffmpeg.exe' --output-dir 'C:\work\long-media-001' --duration-seconds 2400 --timeout-seconds 600
+python -B -m unittest discover -s tools/desktop-native -p 'long_media_test.py' -v
+```
+
+`--output-dir` 必须为不存在的绝对目录；单次时长允许 2–2400 秒，生成截止允许
+1–600 秒。子进程使用 argv，关闭 stdin，stdout/stderr 各限制 64 KiB；FFmpeg
+设置 256 MiB 输出预算，独立校验再拒绝超限或时长不完整的文件。工具只清理自己
+启动的失败/超时进程，保留计划、失败记录和部分媒体，拒绝覆盖、删除或重置旧 run。
+
+`generation-plan.json` 记录精确配方、工具/脚本哈希及预算；`ffmpeg-version.json`、
+`generation-process.json` 保存有界子进程结果，`generation-result.json` 保存媒体
+SHA-256/大小、独立 framing 计数、各类首末 Tag、DTS 及第 1025 个声明关键帧锚点。
+固定字段遍历最多检查 50 万 Tag，不保留全部 Tag/payload；配方校验要求完整帧数、
+配置/EOS 数量、固定 GOP 数量和 DTS 覆盖，不能把达到文件预算后的短片算成完成。
+独立 framing 不等于解码验证；需要时另用 ffprobe 解码计数并保存其命令和结果。
+
+登记样本见 [长媒体清单](../../testdata/manifests/longmedia/generated-long-avc-aac-2400s.sample.json)：
+FFmpeg `7.1.1-full_build-www.gyan.dev` 生成 41,698,926 byte、172,504 Tag、60,000
+AVC NALU 和 112,501 AAC raw Tag，声明关键帧 1200 个，超过桌面保留的 1024 个。
+第 1025 个关键帧为 Tag 147200，DTS 2048000 ms；末 AAC DTS 为 2400059 ms，
+尾 EOS DTS 为 2399960 ms。不要把文件级 duration、最后源顺序 Tag 的 DTS 和
+所有媒体 Tag 的最大 DTS 混成同一指标。媒体字节不提交到仓库。
+
+相同配方必须在另一个新目录复现，再比较媒体 SHA-256 和独立事实。字节身份依赖
+FFmpeg 及编码器构建，版本字符串相同也不保证跨构建一致；变化必须人工审查，
+生成器不会自动更新清单。此样本不进入 `corpus.py` 的 32 MiB/50,000 Tag 流程。
+需要跨入口比较时，CLI 使用桌面相同的事件预算；正常默认百万 Tag 索引可覆盖它：
+
+```powershell
+.cache\muxray.exe summary --schema-version 2 --max-keyframes 1024 --max-configuration-events 128 --max-configuration-bytes 16777216 --max-analysis-diagnostics 256 --max-mp3-header-events 256 'C:\work\long-media-001\generated-long-avc-aac-2400s.flv'
+```
+
+检查完整扫描和分析、关键帧观测 1200/保留 1024/省略 176，随后通过原生窗口
+验证后段 Tag、详情/Hex 与快照。生成成功、CLI 成功和 GUI 验收是独立结论。
 
 ## Summary 生产窗口、分页与数值样本
 

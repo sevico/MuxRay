@@ -43,6 +43,8 @@ AVC 上下文查找和准确源位置见 [ADR-014](../docs/decisions/014-bounded
 不重复弹窗或写文件。写入失败不替换已有目标，源文件和硬链接别名禁止作为目标。
 详情见 [ADR-019](../docs/decisions/019-desktop-diagnostic-snapshot.md)，实际导出、保存恢复
 及检查范围见 [诊断快照验收记录](../docs/desktop-snapshot-20260929.md)。
+已有真实语料、40 分钟生成 AVC/AAC 及生产进程资源观测见
+[桌面语料回归记录](../docs/desktop-corpus-20260930.md)。
 
 ## Tag 筛选与时间定位
 

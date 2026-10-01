@@ -1,0 +1,48 @@
+{
+  "manifestVersion": 1,
+  "id": "enigma-avc-aac-part",
+  "description": "External H.264/AAC FLV prefix ending inside the final AVC Tag payload.",
+  "format": "flv",
+  "originClass": "real",
+  "validity": "damaged",
+  "storage": "metadata-only",
+  "file": {
+    "name": "Enigma_Principles_of_Lust-part.flv",
+    "sizeBytes": 512000,
+    "sha256": "a0b6d22bd69054d1e7082de11a825e72739e3cdd3409a54349365bffcd3a40fb"
+  },
+  "provenance": {
+    "method": "downloaded",
+    "sourceReference": "https://samples.ffmpeg.org/FLV/Enigma_Principles_of_Lust-part.flv (retrieved 2026-09-30)"
+  },
+  "rights": {
+    "redistribution": "unreviewed",
+    "evidenceReference": "https://samples.ffmpeg.org/00-README permits individual downloads but does not establish redistribution clearance."
+  },
+  "privacy": {
+    "reviewStatus": "not-reviewed",
+    "evidenceReference": "Identity registered for local testing only; no completed privacy review."
+  },
+  "features": ["avc", "aac", "amf0", "truncated-payload", "partial-index", "declared-duration-exceeds-prefix"],
+  "expected": {
+    "reportSchemaVersion": 1,
+    "scanComplete": false,
+    "header": {
+      "present": true,
+      "version": 1,
+      "typeFlags": 5,
+      "hasAudio": true,
+      "hasVideo": true,
+      "dataOffset": 9,
+      "previousTagSize0": 0
+    },
+    "tagCount": 608,
+    "diagnostics": [{
+      "code": "FLV_TAG_BODY_TRUNCATED",
+      "severity": "error",
+      "count": 1,
+      "firstAnchor": {"byteOffset": 512000, "bitOffset": 0, "bitLength": 0}
+    }]
+  },
+  "notes": "Independent framing: final Tag 607 at 510794, DTS 11678 ms, payload at 510805 declares 2780 bytes but only 1195 remain. onMetadata declares about 210.21 s for the original file; that is not this prefix's measured coverage. ffprobe identifies H.264 Main 426x240 and AAC-LC 22050 Hz stereo. This short external prefix is not a long recording or a cleared corpus sample. See docs/desktop-corpus-20260930.md."
+}

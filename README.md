@@ -88,5 +88,7 @@ Go 应用层新增 `internal/session.Open`：一个会话拥有一个后台扫�
 证据，明确标记部分覆盖与省略项，不重跑媒体分析；原生保存支持结果恢复及源文件
 保护。设计见 [`ADR-019`](docs/decisions/019-desktop-diagnostic-snapshot.md)，实际保存与
 恢复结果见 [`诊断快照验收记录`](docs/desktop-snapshot-20260929.md)。
+真实语料、40 分钟生成 AVC/AAC、原生导出与资源观测的范围和证据见
+[`桌面语料回归记录`](docs/desktop-corpus-20260930.md)。
 
 项目许可证尚待确定；在许可证落定前，不应把代码作为已授权的正式发行版分发。

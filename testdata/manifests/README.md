@@ -6,13 +6,15 @@ Small samples may be checked into `testdata/small/` only after rights and privac
 
 The [example manifest](./example-minimal-header-only.sample.json) illustrates the format and is explicitly excluded from corpus registration by its `example-` prefix. `metadata-only` does not by itself prevent registration: locally verified bytes can have a registered identity without being committed or cleared for redistribution.
 
-## Current inventory (2026-09-05)
+## Current inventory (2026-09-30)
 
-The directory contains 8 registered small-sample identities: 3 public external files, 3 generated media files, and 2 controlled damaged derivatives. The `largefile/` subdirectory contains 3 additional materialized container-stress fixtures (1/2/10 GiB, 100,000 tags each), not encoded media. All 11 hashes are distinct and all media remains local, outside version control.
+The root directory contains 8 registered small-sample identities: 3 public external files, 3 generated media files, and 2 controlled damaged derivatives. The `largefile/` subdirectory contains 3 additional materialized container-stress fixtures (1/2/10 GiB, 100,000 tags each), not encoded media. `desktop-20260930/` adds one external truncated AVC/AAC prefix; `longmedia/` adds one generated 40-minute AVC/AAC file (41,698,926 bytes, 172,504 tags). All 13 hashes are distinct and all media remains local, outside version control.
 
-The 3 external files have unreviewed redistribution rights and unreviewed privacy status. They do not count toward a cleared-real-corpus acceptance target. Identity registration, availability, and acceptance clearance are separate states; generated or derived samples never become real samples just because they are playable or damaged.
+The 4 external files have unreviewed redistribution rights and unreviewed privacy status. They do not count toward a cleared-real-corpus acceptance target. Identity registration, availability, and acceptance clearance are separate states; generated or derived samples never become real samples just because they are playable or damaged. The new external file retains only about 11.7 seconds of DTS coverage despite its original-file metadata declaring about 210 seconds. The 40-minute generated file does not fill the real long-recording gap.
 
 [`tools/validate_contracts.py`](../../tools/validate_contracts.py) recursively checks every registered manifest's schema, filename/ID, and hash uniqueness, but does not assert that media is present. [`tools/corpus.py`](../../tools/corpus.py) verifies local small-sample bytes and reports missing items explicitly; it does not recurse into `largefile/`. Use [`tools/largefile`](../../tools/largefile/main.go) for those stress fixtures. See the [validation record](../../docs/corpus-baseline-20260905.md) for provenance, results, limitations, and the unresolved cancellation outlier.
+
+Pass `--manifests testdata/manifests/desktop-20260930` explicitly to check the new short prefix with `corpus.py`. The long encoded file exceeds that tool's small-corpus budgets; generate and check its independent framing with [`long_media.py`](../../tools/desktop-native/long_media.py), then use the current CLI's desktop Summary budgets and the native workflow described in the [desktop corpus record](../../docs/desktop-corpus-20260930.md). Neither subdirectory is silently included in the default 8-sample run.
 
 ## Registration rules
 

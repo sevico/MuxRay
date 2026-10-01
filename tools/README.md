@@ -17,6 +17,16 @@ python -m pip install --disable-pip-version-check -r tools/requirements-schema.t
 
 [`desktop-native`](desktop-native/README.md) 从新 checkout 离线构建独立的 Go overlay 验收程序，自动生成 493 byte / 32 Tag 的结构 FLV，无需私有媒体。真实窗口选择文件后，在十个已提交 Tag 之后阻塞读取，用于重复验证取消保留部分索引与阻塞中有界退出。提供非 GUI race 验证、gate 控制、进程退出观察和收据检查；每次使用新目录并保留身份与哈希，不覆盖旧证据。需要已准备的 Go/npm 依赖缓存，原生按钮操作需由操作者或 computer-use 执行，不自动进入 CI。
 
+同目录还提供三种生产验收辅助工具，完整命令见 [桌面验收工具说明](desktop-native/README.md)：
+
+- `resource_probe.py` 用 PID、创建 FILETIME 和 exe 路径绑定已打开的生产进程，分别记录宿主、观察到的 WebView2 后代和其他后代的资源；`mark` 标记操作阶段，`stop` 只停止采样。输出目录必须是绝对新目录，后台采样应使用隐藏窗口。采样工作集可能重复计入共享页，private bytes 不是物理内存，采样最大值不是完整生命周期峰值；退出观察不代替源文件关闭验收。
+- `long_media.py` 用已安装的 FFmpeg 和本地 lavfi 生成默认 40 分钟 H.264/AAC，要求绝对新目录，600 秒生成截止、256 MiB 文件预算，并保留失败产物。它是有效编码的**生成媒体**，不能计入真实录制样本；精确配方、工具/脚本哈希、独立 Tag 计数及 DTS 锚点随 run 保存。同版本不同 FFmpeg 构建也可能产生不同字节。身份清单位于 `testdata/manifests/longmedia/`，不进入小语料的 32 MiB/50,000 Tag 流程。
+- `snapshot_check.py` 校验不超过 2 MiB 的诊断 JSON 及可选源证据，默认源上限 16 MiB；长样本须显式加 `--max-source-bytes 67108864`（64 MiB）。可设上限最多 1 GiB，使用至多 1 MiB 读取缓冲、最多 100 万 Tag 头及 120 秒协作式源校验预算，不能强制打断已阻塞的文件 I/O。
+
+桌面 CI 从 `tools/requirements-schema.txt` 安装校验依赖，单独执行
+`long_media_test`、`resource_probe_test`、`snapshot_check_test`，不运行 FFmpeg
+长媒体生成、真实语料或 GUI。资源工具的 Windows 自测仅使用测试自己启动的辅助进程。
+
 ## 离线语料验证
 
 `corpus.py` 核对清单身份、独立 FLV framing oracle、重复 JSON、分页、summary v2 和
