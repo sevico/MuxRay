@@ -75,7 +75,7 @@ jobs:
         run: python -m pip install --disable-pip-version-check -r tools/requirements-schema.txt
       - name: Native evidence tool tests (no media generation or GUI)
         working-directory: tools/desktop-native
-        run: python -B -m unittest long_media_test resource_probe_test snapshot_check_test -v
+        run: python -B -m unittest long_media_test resource_probe_test snapshot_check_test scan_compare_test resource_cycles_test -v
       - name: Native gate self-tests (PowerShell 7, no GUI)
         working-directory: .
         shell: pwsh

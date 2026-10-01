@@ -1,0 +1,118 @@
+// Injected only into archived commit snapshots by scan_compare.py.
+package document
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"os"
+	"runtime"
+	"testing"
+	"time"
+
+	"github.com/sevico/muxray/internal/flv"
+)
+
+type comparisonSource struct {
+	*os.File
+	calls, requested, returned uint64
+}
+
+func (s *comparisonSource) ReadAt(p []byte, offset int64) (int, error) {
+	s.calls++
+	s.requested += uint64(len(p))
+	n, err := s.File.ReadAt(p, offset)
+	s.returned += uint64(n)
+	return n, err
+}
+
+func TestScanComparisonProbe(t *testing.T) {
+	path, output := os.Getenv("MUXRAY_SCAN_SOURCE"), os.Getenv("MUXRAY_SCAN_OUTPUT")
+	if path == "" || output == "" {
+		t.Fatal("explicit source and new result path required")
+	}
+	mode := os.Getenv("MUXRAY_SCAN_MODE")
+	if mode != "open" && mode != "counted" {
+		t.Fatal("mode must be open or counted")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	var d *Document
+	var source *comparisonSource
+	started := time.Now()
+	if mode == "open" {
+		var err error
+		d, err = Open(ctx, path, flv.Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+	} else {
+		file, err := os.Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		info, err := file.Stat()
+		if err != nil {
+			file.Close()
+			t.Fatal(err)
+		}
+		source = &comparisonSource{File: file}
+		// This is the same production seam called by Open, without altering
+		// scan options or the observer. Counted timing is never compared.
+		d = start(ctx, source, info, flv.Options{})
+	}
+	defer d.Close(context.Background())
+	if err := d.Wait(ctx); err != nil {
+		t.Fatal(err)
+	}
+	elapsed := time.Since(started)
+	result, err := d.scan.Result()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Check every retained record and its derived flags, outside timing.
+	digest := sha256.New()
+	encoder := json.NewEncoder(digest)
+	for _, tag := range result.Index().All() {
+		if err := encoder.Encode(struct {
+			Record                                          flv.TagRecord
+			PayloadComplete, PreviousPresent, PreviousValid bool
+		}{tag, tag.PayloadComplete(), tag.PreviousTagSizePresent(), tag.PreviousTagSizeValid()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := encoder.Encode(result.Diagnostics); err != nil {
+		t.Fatal(err)
+	}
+	facts := map[string]any{
+		"mode": mode, "scanNanoseconds": elapsed.Nanoseconds(),
+		"tagCount": result.Index().Len(), "sourceSize": result.SourceSize,
+		"bytesScanned": result.BytesScanned, "complete": result.Complete,
+		"hasErrors": result.HasErrors(), "diagnosticCount": len(result.Diagnostics),
+		"recordsAndDiagnosticsSHA256": hex.EncodeToString(digest.Sum(nil)),
+		"goVersion":                   runtime.Version(), "goos": runtime.GOOS,
+		"goarch": runtime.GOARCH, "numCPU": runtime.NumCPU(), "gomaxprocs": runtime.GOMAXPROCS(0),
+	}
+	if source != nil {
+		facts["readCalls"], facts["readRequestedBytes"], facts["readReturnedBytes"] = source.calls, source.requested, source.returned
+	}
+	closed := time.Now()
+	if err := d.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	facts["closeNanoseconds"] = time.Since(closed).Nanoseconds()
+	file, err := os.OpenFile(output, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.NewEncoder(file).Encode(facts); err != nil {
+		file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println("scan comparison result written")
+}

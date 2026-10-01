@@ -596,6 +596,51 @@ Get-Content -LiteralPath "$resourceRun\status.json"
 python -B -m unittest discover -s tools/desktop-native -p 'resource_probe_test.py' -v
 ```
 
+### 连续打开/关闭的固定窗口复核
+
+同一生产进程重复运行 5–10 次打开、尾部详情、媒体概览、Hex 和关闭流程。
+先确认原生窗口的空状态，记录 `baseline-idle`；之后每轮按顺序记录
+`cycle-01-open-request`、`cycle-01-scan-ready`、`cycle-01-detail-ready`、
+`cycle-01-summary-ready`、`cycle-01-hex-ready`、`cycle-01-closed`，后续轮次递增编号。
+`closed` 必须在实际观察到空状态后记录，另存源文件独占只读打开的收据。
+基线和每轮关闭后保持至少 30 秒静置，建议等待 35 秒再开始下一轮或退出，
+以便固定窗口右边界也有采样。最后标记 `exit-request`，通过原生窗口正常退出，
+等待采样器记录退出和 grace 完成；不要先停止采样器。
+
+`resource_cycles.py` 离线核对 manifest、原始样本、已确认阶段及最终汇总，
+再统计每个固定 30 秒窗口的最后 10 秒。内存和句柄取样本算术均值，CPU 按
+相邻采样间隔加权；同时列出各轮活动阶段峰值。间隔过大、资源指标缺失、
+阶段顺序或覆盖不足都不能算完整证据。工具不判断“是否泄漏”，也不把进程
+退出当作源文件释放。截图、操作事实和独占打开检查仍由原生验收单独提供。
+
+```powershell
+python -B tools/desktop-native/resource_cycles.py --run-dir 'C:\work\native-evidence\resources-001' --cycles 5 --output 'C:\work\native-evidence\cycles-analysis.json'
+python -B -m unittest discover -s tools/desktop-native -p 'resource_cycles_test.py' -v
+```
+
+若桌面锁屏、采样中断或操作无法完成，保留该 run 并说明未通过的覆盖，使用
+新 run 重新开始连续流程；不能拼接采样空档来声称完成了连续验收。
+
+### Document 扫描版本对比
+
+`scan_compare.py` 把两个明确 Git 提交归档到新证据目录，为每个归档注入同一
+测试探针并构建独立可执行文件，不切换当前工作区。计时使用生产
+`document.Open` 到 `Wait` 返回及原始 `os.File`，每个样本为新进程。
+先读取源哈希、各执行一次排除的预热，然后执行 5–30 对交替顺序的样本；
+另外两次计数探针记录应用层 ReadAt 次数和字节，其耗时不进入延迟分布。
+扫描完整性、每条 Tag 与诊断摘要必须一致；输入、命令和输出身份均保留。
+
+```powershell
+python -B tools/desktop-native/scan_compare.py prepare --repo 'C:\work\MuxRay' --source 'C:\work\long-media-001\generated-long-avc-aac-2400s.flv' --baseline 45d83b2 --candidate 112df8b --output 'C:\work\scan-compare-prepared'
+python -B tools/desktop-native/scan_compare.py run --prepared 'C:\work\scan-compare-prepared\prepared.json' --output 'C:\work\scan-compare-run' --pairs 10
+python -B -m unittest discover -s tools/desktop-native -p 'scan_compare_test.py' -v
+```
+
+这是操作系统缓存预热后的扫描比较，不是物理盘读取量、冷缓存速度、UI 延迟
+或持续内存基线。计时期间应停止自己启动的下载、编译和其他测试；仍须说明
+未隔离的系统后台负载。准备与运行目录必须是绝对新路径，不覆盖历史证据。
+CI 仅运行这两种工具的小规模单测，不执行真实媒体性能测量或原生交互。
+
 ## 长时间有效编码的生成媒体
 
 `long_media.py` 使用本机已安装 FFmpeg 的 lavfi，不下载媒体。默认生成 40 分钟

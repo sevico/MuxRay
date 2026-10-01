@@ -1,0 +1,60 @@
+{
+  "manifestVersion": 1,
+  "id": "derived-real-ds24-fsfw-2114s",
+  "description": "Complete 35m13.808s Datenspuren 2024 conference recording, remuxed from the public SD MP4 without re-encoding. H.264 High 720x576/25fps with B frames and German AAC-LC 48kHz stereo. This is derived real recorded media, not original live FLV or generated animation.",
+  "format": "flv",
+  "originClass": "derived",
+  "validity": "valid",
+  "storage": "metadata-only",
+  "file": {
+    "name": "derived-real-ds24-fsfw-2114s.flv",
+    "sizeBytes": 81206458,
+    "sha256": "f84dcf05fb0bbed72c8ccdc05b9824ecee53b79b610e4022b9d5d8e70bdd4727"
+  },
+  "provenance": {
+    "method": "derived",
+    "sourceReference": "Marcel & Christian, Die FSFW Schul-, Uni- und Makersticks, Datenspuren 2024, 2024-09-20. Official page: https://media.ccc.de/v/ds24-468-die-fsfw-schul-uni-und-makersticks . SD MP4 downloaded 2026-10-01 via the FAU public CCC mirror: https://ftp.fau.de/cdn.media.ccc.de/events/datenspuren/2024/h264-sd/ds24-468-deu-Die_FSFW_Schul-_Uni-_und_Makersticks_sd.mp4 . Source: 80071948 bytes, SHA256 9cab12ab223a6f7c7b42ba4873b0258fc24e75c0f36708a5b7732a8f50140f4d.",
+    "generator": {
+      "name": "FFmpeg lossless container remux",
+      "version": "7.1.1-full_build-www.gyan.dev",
+      "recipe": "ffmpeg -hide_banner -nostdin -v warning -n -i <source.mp4> -map 0:v:0 -map 0:a:0 -map_metadata -1 -c copy -avoid_negative_ts make_zero -flvflags no_metadata -fs 1073741824 -f flv <new-output.flv>. No cuts, looping, concatenation or re-encoding. Global metadata is omitted and timestamps shifted to make negative DTS nonnegative. Attribution is retained here. Source and FLV packet counts and per-stream SHA256 hashes were independently compared."
+    }
+  },
+  "rights": {
+    "redistribution": "testing-only",
+    "licenseExpression": "CC-BY-4.0",
+    "evidenceReference": "https://media.ccc.de/v/ds24-468-die-fsfw-schul-uni-und-makersticks ; source MP4 copyright metadata confirms https://creativecommons.org/licenses/by/4.0/de/ . Attribution: Marcel & Christian, Datenspuren 2024. Container and metadata changes are documented above. Media bytes are not committed."
+  },
+  "privacy": {
+    "reviewStatus": "not-reviewed",
+    "evidenceReference": "Public conference recording supplied by media.ccc.de; no private user recording or upload. Not represented as a complete visual privacy review. Local testing only."
+  },
+  "features": [
+    "avc",
+    "aac",
+    "sequence-header",
+    "b-frames",
+    "composition-time",
+    "end-of-sequence",
+    "real-conference-recording",
+    "lossless-container-remux",
+    "hundred-thousand-tags",
+    "distant-avc-configuration"
+  ],
+  "expected": {
+    "reportSchemaVersion": 1,
+    "scanComplete": true,
+    "header": {
+      "present": true,
+      "version": 1,
+      "typeFlags": 5,
+      "hasAudio": true,
+      "hasVideo": true,
+      "dataOffset": 9,
+      "previousTagSize0": 0
+    },
+    "tagCount": 151934,
+    "diagnostics": []
+  },
+  "notes": "Outside corpus.py's 32 MiB/50000 Tag small-corpus budget. Independent framing counts 52845 AVC NALU and 99086 AAC raw Tags, one configuration per codec, one AVC EOS and 239 declared keyframes. No configuration change, per-stream DTS regression, invalid NAL boundary or structural damage was found in this derived FLV; those remain separate coverage needs. AVC Tag 2/75966/151926 cover head/midpoint/tail. The last NALU payload is [81206263,81206296), DTS 2113760, CTS 40, PTS 2113800; its four-byte length field at 81206268 describes 24 bytes at [81206272,81206296). Tag 0's 55-byte payload contains the width field at byte 33, bits 6..7 (4-byte NAL lengths). Source/FLV per-stream encoded-payload hashes match with unchanged packet counts, preserving all recorded media; container, metadata and DTS normalization are intentional changes. Source, verified HTTP range receipts, exact process arguments, independent facts and native evidence remain local under the 20261001 stability run."
+}
