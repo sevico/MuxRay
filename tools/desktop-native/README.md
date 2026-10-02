@@ -586,6 +586,12 @@ Get-Content -LiteralPath "$resourceRun\status.json"
 `status.json` 只是便于观察的投影；读取状态文件导致临时共享冲突时以样本流和
 最终收据为准。宿主、观察到的 WebView2 后代及其他后代分别统计，也提供总和。
 
+`timings.jsonl` 按样本序号记录控制请求、进程发现、指标读取、样本写入和状态
+写入的实际耗时，以及迭代起止时间。上一轮诊断日志写入和请求/实际 sleep 时长
+记在下一条，末轮值保留在汇总中。耗时包含线程被调度出去的时间，不能直接当作
+API 本身的执行耗时。连续性仍按原始相邻样本时间检查；`sampleLagSeconds` 很小
+也可能存在长空档，不能用它代替全程间隔。诊断日志独立限额 64 MiB。
+
 - private bytes 是私有已提交内存，不是物理 RAM；工作集求和可能重复计算共享页。
 - CPU 的 `cpuPercent` 以一个逻辑核满载为 100%，`cpuPercentOfMachine` 再除以逻辑核数；首次观察没有区间 CPU 值，缺失指标保留为未知。
 - 最大值来自采样点，可能错过短峰和两次进程树刷新之间的短命进程；未观察到的后代、独立或共享 WebView2 进程不自动归属本次程序。
@@ -635,6 +641,36 @@ python -B -m unittest discover -s tools/desktop-native -p 'resource_cycles_test.
 
 若桌面锁屏、采样中断或操作无法完成，保留该 run 并说明未通过的覆盖，使用
 新 run 重新开始连续流程；不能拼接采样空档来声称完成了连续验收。
+
+### 长时间句柄类型采样
+
+`handle_probe.py` 对明确的 MuxRay PID、创建 FILETIME 和 exe 路径保留同一查询
+句柄，采集宿主的内核句柄类型、线程数、GDI/USER 对象和内存。它不操作 UI、不
+请求 GC、不查询对象名称，也不关闭目标的句柄；每种类型最多尝试四次临时复制，
+复制句柄只在采样器内关闭。WebView2 后代仍由 `resource_probe.py` 单独覆盖。
+
+```powershell
+# 使用前一节核验的 $identity 与 $targetExe；输出路径必须不存在。
+python -B tools/desktop-native/handle_probe.py snapshot --pid $identity.pid --created $identity.created --exe $targetExe --output 'C:\work\native-evidence\handles-before.json'
+python -B tools/desktop-native/handle_probe.py record --pid $identity.pid --created $identity.created --exe $targetExe --run-dir 'C:\work\native-evidence\handles-001' --interval-seconds 10 --duration-seconds 5400
+python -B -m unittest discover -s tools/desktop-native -p 'handle_probe_test.py' -v
+```
+
+需要并行后台记录时沿用上节的隐藏 `Start-Process` 方式。记录到目标自然退出或
+时长上限；不终止目标。间隔至少 1 秒，时长至多 24 小时，样本日志限额 256 MiB。
+`manifest.json` 保存身份、工具哈希和预算，`samples.jsonl` 保存每次真实起止
+时间、查询错误及未知类型，`summary.json` 保存退出、间隔和完整性。某个类型
+无法解析名称时保留其索引与数量，完整性为 false；不能猜测类型或把缺失算零。
+各指标并非原子快照，应报告 API 句柄数与类型枚举合计之间的差异。
+枚举后目标可能复用句柄值，因此趋势优先按原始 `typeIndex` 比较，并检查同一
+索引跨样本的名称是否一致；名称查询本身不消除该竞态。
+
+长时间复核应在采样前固定窗口：基线及每轮关闭后至少静置 180 秒，保留原
+`[0,30]` 覆盖与 `[20,30]` 统计，新增 `[0,180]` 覆盖与 `[170,180]` 统计；
+最后一轮静置 300 秒，另报 `[290,300]`。起点使用资源采样器确认的阶段时间。
+句柄类型按实际采样时间对齐，不能视为精确端点；窗口覆盖、全程连续性、源释放
+及自然退出分别判定。线程数或 Event 的同步变化只是相关证据，不直接证明泄漏
+原因；短期回落也不能证明无限运行不泄漏。
 
 ### Document 扫描版本对比
 

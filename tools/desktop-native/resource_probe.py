@@ -23,6 +23,7 @@ MAX_IDENTITIES = 4096
 MAX_LIVE = 128
 MAX_MARKS = 1024
 MAX_LOG_BYTES = 256 << 20
+MAX_TIMING_LOG_BYTES = 64 << 20
 LIMITATIONS = [
     "Private bytes measure private committed memory, not physical RAM.",
     "Summed working sets can count shared pages more than once.",
@@ -32,6 +33,7 @@ LIMITATIONS = [
     "Stage names are operator labels, not inferred GUI events; requested and observed timestamps include dispatch delay.",
     "CPU intervals ending at a stage transition can include work from the preceding stage.",
     "OS process exit does not establish orderly source-file closure.",
+    "Timing phases measure elapsed wall time, including possible descheduling; they do not prove exclusive OS-call execution time.",
 ]
 
 
@@ -424,7 +426,13 @@ def record(args, api=None):
                     "startedUTC": utc_now(), "exeSHA256": sha256(args.exe), "toolSHA256": sha256(Path(__file__)),
                     "intervalMs": args.interval_ms, "treeRefreshMs": 1000, "durationSeconds": args.duration_seconds,
                     "exitGraceSeconds": args.exit_grace_seconds, "logicalProcessors": tracker.cores,
-                    "limits": {"liveProcesses": MAX_LIVE, "totalIdentities": MAX_IDENTITIES, "controlRequests": MAX_MARKS, "sampleLogBytes": MAX_LOG_BYTES},
+                    "limits": {"liveProcesses": MAX_LIVE, "totalIdentities": MAX_IDENTITIES, "controlRequests": MAX_MARKS,
+                               "sampleLogBytes": MAX_LOG_BYTES, "timingLogBytes": MAX_TIMING_LOG_BYTES},
+                    "timingDiagnostics": {"file": "timings.jsonl", "clock": "time.monotonic seconds",
+                                          "iterationEnd": "After status writing, before diagnostic-log writing and scheduled sleep",
+                                          "sampleLogWriteIncludes": "JSON encoding, write and flush",
+                                          "controlIncludes": "Request scan, acknowledgments and marks log flush",
+                                          "previousIteration": "Diagnostic-log write and scheduled sleep from the preceding iteration; final values are in summary.json"},
                     "limitations": LIMITATIONS}
         write_json(args.output_dir / "manifest.json", manifest)
         started = time.monotonic()
@@ -435,26 +443,43 @@ def record(args, api=None):
         log_bytes, reason, failure = 0, "duration_limit", None
         max_lag, incomplete_discovery_samples = 0.0, 0
         status_failures, last_status_error = 0, None
+        timing_log_bytes, timing_records = 0, 0
+        previous_timing_write, previous_sleep = None, None
+        last_iteration_finished = None
         try:
-            with (args.output_dir / "samples.jsonl").open("xb") as samples, (args.output_dir / "marks.jsonl").open("xb") as marker_log:
+            with (args.output_dir / "samples.jsonl").open("xb") as samples, (args.output_dir / "marks.jsonl").open("xb") as marker_log, (args.output_dir / "timings.jsonl").open("xb") as timing_log:
                 while True:
                     now = time.monotonic()
+                    timing = {"index": index, "iterationStartedUTC": utc_now(),
+                              "iterationStartedMonotonicSeconds": round(now, 6),
+                              "iterationStartedElapsedSeconds": round(now - started, 6),
+                              "scheduledMonotonicSeconds": round(next_sample, 6),
+                              "previousTimingLogWriteSeconds": previous_timing_write,
+                              "previousSleep": previous_sleep}
+                    phase_started = time.monotonic()
                     stage, stop, acknowledgments = consume_controls(args.output_dir, manifest["runId"], stage, index, now - started)
                     for ack in acknowledgments:
                         marker_log.write(json_bytes(ack))
                     if acknowledgments:
                         marker_log.flush()
                         marks.extend(acknowledgments)
-                    if now >= next_discovery:
+                    timing["controlSeconds"] = round(time.monotonic() - phase_started, 6)
+                    timing["discoveryCalled"] = now >= next_discovery
+                    phase_started = time.monotonic()
+                    if timing["discoveryCalled"]:
                         tracker.discover()
                         next_discovery = time.monotonic() + 1
+                    timing["discoverySeconds"] = round(time.monotonic() - phase_started, 6)
+                    phase_started = time.monotonic()
                     rows = tracker.sample(time.monotonic())
+                    timing["metricsSeconds"] = round(time.monotonic() - phase_started, 6)
                     groups = {group: aggregate(rows, None if group == "all" else group) for group in ("root", "webview2", "otherDescendants", "all")}
                     lag = max(0, now - next_sample)
                     max_lag = max(max_lag, lag)
                     sample = {"index": index, "observedUTC": utc_now(), "elapsedSeconds": round(now - started, 6),
                               "stage": stage, "sampleLagSeconds": round(lag, 6), "processes": rows, "groups": groups,
                               "treeCoverageComplete": not tracker.discovery_errors, "discoveryErrors": tracker.discovery_errors}
+                    phase_started = time.monotonic()
                     encoded = json_bytes(sample)
                     if log_bytes + len(encoded) > MAX_LOG_BYTES:
                         reason = "sample_log_limit"
@@ -462,6 +487,7 @@ def record(args, api=None):
                     samples.write(encoded)
                     samples.flush()
                     log_bytes += len(encoded)
+                    timing["sampleLogWriteSeconds"] = round(time.monotonic() - phase_started, 6)
                     update_peaks(peaks, groups)
                     phase = stages.setdefault(stage, {"firstSample": index, "lastSample": index, "firstObservedElapsedSeconds": sample["elapsedSeconds"], "lastObservedElapsedSeconds": sample["elapsedSeconds"], "peaks": {}})
                     phase.update(lastSample=index, lastObservedElapsedSeconds=sample["elapsedSeconds"])
@@ -473,6 +499,8 @@ def record(args, api=None):
                     status = {"runId": manifest["runId"], "running": True, "stage": stage, "samples": index,
                               "observedUTC": sample["observedUTC"], "targetExitConfirmed": tracker.root.handle is None,
                               "latestGroups": groups}
+                    phase_started = time.monotonic()
+                    timing["statusWriteSucceeded"] = True
                     try:
                         write_json(args.output_dir / "status.json", status, replace=True)
                     except OSError as error:
@@ -480,6 +508,24 @@ def record(args, api=None):
                         # must not discard the authoritative sample stream.
                         status_failures += 1
                         last_status_error = str(error)
+                        timing["statusWriteSucceeded"] = False
+                    timing["statusWriteSeconds"] = round(time.monotonic() - phase_started, 6)
+                    finished = time.monotonic()
+                    timing.update(iterationFinishedUTC=utc_now(), iterationFinishedMonotonicSeconds=round(finished, 6),
+                                  iterationFinishedElapsedSeconds=round(finished - started, 6),
+                                  iterationWorkSeconds=round(finished - now, 6))
+                    last_iteration_finished = timing["iterationFinishedElapsedSeconds"]
+                    timing_started = time.monotonic()
+                    encoded_timing = json_bytes(timing)
+                    if timing_log_bytes + len(encoded_timing) > MAX_TIMING_LOG_BYTES:
+                        reason = "timing_log_limit"
+                        break
+                    timing_log.write(encoded_timing)
+                    timing_log.flush()
+                    timing_log_bytes += len(encoded_timing)
+                    timing_records += 1
+                    previous_timing_write = round(time.monotonic() - timing_started, 6)
+                    previous_sleep = None
                     if stop:
                         reason = "operator_stop"
                         break
@@ -496,7 +542,11 @@ def record(args, api=None):
                     if delay <= 0:
                         next_sample = time.monotonic()
                     else:
-                        time.sleep(min(delay, max(0, deadline - time.monotonic())))
+                        requested_sleep = min(delay, max(0, deadline - time.monotonic()))
+                        sleep_started = time.monotonic()
+                        time.sleep(requested_sleep)
+                        previous_sleep = {"requestedSeconds": round(requested_sleep, 6),
+                                          "observedSeconds": round(time.monotonic() - sleep_started, 6)}
         except KeyboardInterrupt:
             reason = "sampler_interrupted"
         except Exception as error:
@@ -509,6 +559,9 @@ def record(args, api=None):
                   "allObservedDescendantsExited": all(item["exitConfirmed"] for item in inventory if item["group"] != "root"),
                   "discoveryFailures": tracker.discovery_failures, "incompleteTreeSamples": incomplete_discovery_samples,
                   "statusWriteFailures": status_failures, "lastStatusError": last_status_error,
+                  "timingRecords": timing_records, "timingLogBytes": timing_log_bytes,
+                  "lastIterationFinishedElapsedSeconds": last_iteration_finished,
+                  "lastTimingLogWriteSeconds": previous_timing_write, "lastSleep": previous_sleep,
                   "processes": inventory, "peaks": peaks, "stages": stages, "marks": marks, "limitations": LIMITATIONS}
         write_json(args.output_dir / "summary.json", result)
         try:

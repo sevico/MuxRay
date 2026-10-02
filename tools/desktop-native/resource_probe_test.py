@@ -57,6 +57,21 @@ class FakeAPI:
         return self.table.copy()
 
 
+class FakeClock:
+    def __init__(self, oversleep=0):
+        self.now = 100.0
+        self.oversleep = oversleep
+
+    def monotonic(self):
+        return self.now
+
+    def advance(self, seconds):
+        self.now += seconds
+
+    def sleep(self, seconds):
+        self.advance(seconds + self.oversleep)
+
+
 class ProbeTests(unittest.TestCase):
     def test_attach_rejects_reused_pid_image_mismatch_and_exit(self):
         api = FakeAPI()
@@ -241,6 +256,99 @@ class ProbeTests(unittest.TestCase):
             self.assertTrue((output / "summary.json").exists())
             self.assertGreater((output / "samples.jsonl").stat().st_size, 0)
             self.assertFalse(result["targetExitConfirmed"])
+            timings = [json.loads(line) for line in (output / "timings.jsonl").read_text().splitlines()]
+            self.assertEqual(len(timings), result["samples"])
+            self.assertTrue(all(not item["statusWriteSucceeded"] for item in timings))
+
+    def test_slow_discovery_and_metrics_remain_visible_when_sample_lag_is_zero(self):
+        clock = FakeClock()
+
+        class SlowAPI(FakeAPI):
+            def processes(self):
+                clock.advance(.9)
+                return super().processes()
+
+            def metrics(self, handle):
+                clock.advance(.3)
+                return super().metrics(handle)
+
+        api = SlowAPI()
+        root = api.add(1, 10)
+        api.add(os.getpid(), 20)
+        image = Path(api.entries[root]["identity"]["exe"])
+        original_controls, original_write, original_encode = probe.consume_controls, probe.write_json, probe.json_bytes
+
+        def slow_controls(*args):
+            clock.advance(.02)
+            return original_controls(*args)
+
+        def slow_status(path, value, replace=False):
+            if path.name == "status.json":
+                clock.advance(.07)
+            return original_write(path, value, replace)
+
+        def slow_sample_encoding(value):
+            if "index" in value and "processes" in value:
+                clock.advance(.04)
+            return original_encode(value)
+
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(probe.time, "monotonic", side_effect=clock.monotonic), \
+                mock.patch.object(probe.time, "sleep", side_effect=clock.sleep), \
+                mock.patch.object(probe, "consume_controls", side_effect=slow_controls), \
+                mock.patch.object(probe, "write_json", side_effect=slow_status), \
+                mock.patch.object(probe, "json_bytes", side_effect=slow_sample_encoding):
+            output = Path(directory) / "run"
+            result = probe.record(argparse.Namespace(pid=1, created="10", exe=image, output_dir=output,
+                                                    duration_seconds=1.4, interval_ms=250, exit_grace_seconds=0), api)
+            samples = [json.loads(line) for line in (output / "samples.jsonl").read_text().splitlines()]
+            timings = [json.loads(line) for line in (output / "timings.jsonl").read_text().splitlines()]
+            self.assertEqual(result["samples"], 2)
+            self.assertEqual(result["timingRecords"], 2)
+            self.assertEqual([item["index"] for item in timings], [0, 1])
+            self.assertEqual(result["maxSampleLagSeconds"], 0)
+            self.assertEqual(samples[1]["elapsedSeconds"] - samples[0]["elapsedSeconds"], 1.33)
+            first, second = timings
+            self.assertTrue(first["discoveryCalled"])
+            self.assertFalse(second["discoveryCalled"])
+            for field, expected in (("controlSeconds", .02), ("discoverySeconds", .9), ("metricsSeconds", .3),
+                                    ("sampleLogWriteSeconds", .04), ("statusWriteSeconds", .07), ("iterationWorkSeconds", 1.33)):
+                self.assertAlmostEqual(first[field], expected, places=6)
+            self.assertAlmostEqual(first["iterationFinishedMonotonicSeconds"] - first["iterationStartedMonotonicSeconds"], 1.33)
+            self.assertIn("iterationStartedUTC", first)
+            self.assertIn("iterationFinishedUTC", first)
+            self.assertIsNone(first["previousTimingLogWriteSeconds"])
+            self.assertEqual(second["previousTimingLogWriteSeconds"], 0)
+            self.assertEqual(result["timingLogBytes"], (output / "timings.jsonl").stat().st_size)
+
+    def test_timing_separates_sleep_overshoot_and_bounds_diagnostic_log(self):
+        for limit in (probe.MAX_TIMING_LOG_BYTES, 1):
+            with self.subTest(limit=limit):
+                clock = FakeClock(oversleep=.8)
+                api = FakeAPI()
+                root = api.add(1, 10)
+                api.add(os.getpid(), 20)
+                image = Path(api.entries[root]["identity"]["exe"])
+                with tempfile.TemporaryDirectory() as directory, \
+                        mock.patch.object(probe.time, "monotonic", side_effect=clock.monotonic), \
+                        mock.patch.object(probe.time, "sleep", side_effect=clock.sleep), \
+                        mock.patch.object(probe, "MAX_TIMING_LOG_BYTES", limit):
+                    output = Path(directory) / "run"
+                    result = probe.record(argparse.Namespace(pid=1, created="10", exe=image, output_dir=output,
+                                                            duration_seconds=.9, interval_ms=250, exit_grace_seconds=0), api)
+                    self.assertIsNone(result["error"])
+                    self.assertLessEqual((output / "timings.jsonl").stat().st_size, limit)
+                    timings = [json.loads(line) for line in (output / "timings.jsonl").read_text().splitlines()]
+                    if limit == 1:
+                        self.assertEqual(result["stopReason"], "timing_log_limit")
+                        self.assertEqual(result["samples"], 1)
+                        self.assertEqual(result["timingRecords"], 0)
+                        self.assertGreater((output / "samples.jsonl").stat().st_size, 0)
+                    else:
+                        self.assertEqual(result["stopReason"], "duration_limit")
+                        self.assertEqual(result["maxSampleLagSeconds"], .8)
+                        self.assertEqual(timings[1]["previousSleep"], {"requestedSeconds": .25, "observedSeconds": 1.05})
+                        self.assertEqual(timings[1]["metricsSeconds"], 0)
 
     def test_process_identity_budget_fails_without_admitting_unbounded_children(self):
         api = FakeAPI()
