@@ -37,6 +37,10 @@ class FakeAPI:
         self.open_failure = False
         self.metrics_duration = 0.0
         self.change_identity_at = None
+        self.image_unavailable_after_exit = False
+        self.identity_failure_at = None
+        self.exit_during_identity = False
+        self.identity_queries_after_exit = 0
         self.closed = []
 
     def open(self, pid):
@@ -48,6 +52,13 @@ class FakeAPI:
         self.closed.append(handle)
 
     def identity(self, handle, pid):
+        if self.image_unavailable_after_exit and self.exit_at is not None and self.clock() >= self.exit_at:
+            self.identity_queries_after_exit += 1
+            raise OSError(31, "QueryFullProcessImageName: A device attached to the system is not functioning")
+        if self.identity_failure_at is not None and self.clock() >= self.identity_failure_at:
+            if self.exit_during_identity:
+                self.exit_at = self.clock()
+            raise OSError(31, "QueryFullProcessImageName failed")
         created = self.created
         if self.change_identity_at is not None and self.clock() >= self.change_identity_at:
             created = "999"
@@ -125,6 +136,37 @@ class HandleProbeTests(unittest.TestCase):
         self.assertEqual(result["liveSamples"], 1)
         self.assertEqual(self.samples()[-1]["status"], "exited_during_snapshot")
         self.assertTrue(result["targetExitConfirmed"])
+
+    def test_exited_retained_handle_does_not_require_image_path(self):
+        self.api.exit_at = 11
+        self.api.image_unavailable_after_exit = True
+        result = self.record()
+        self.assertTrue(result["complete"])
+        self.assertTrue(result["targetExitConfirmed"])
+        self.assertEqual(result["exit"]["exitCode"], 0)
+        self.assertEqual(self.samples()[-1]["status"], "exited")
+        self.assertEqual(self.api.identity_queries_after_exit, 0)
+
+    def test_exit_racing_image_query_records_confirmed_partial_endpoint(self):
+        self.api.identity_failure_at = 10
+        self.api.exit_during_identity = True
+        result = self.record()
+        self.assertTrue(result["complete"])
+        self.assertTrue(result["targetExitConfirmed"])
+        self.assertEqual(result["liveSamples"], 2)
+        final = self.samples()[-1]
+        self.assertEqual(final["status"], "exited_during_snapshot")
+        self.assertIn("QueryFullProcessImageName failed", final["identityQueryError"])
+        self.assertIsNone(final["processMetrics"])
+
+    def test_live_image_query_failure_remains_fatal(self):
+        self.api.identity_failure_at = 10
+        result = self.record()
+        self.assertFalse(result["complete"])
+        self.assertFalse(result["targetExitConfirmed"])
+        self.assertEqual(result["stopReason"], "error")
+        self.assertIn("QueryFullProcessImageName failed", result["error"])
+        self.assertEqual(result["samples"], 2)
 
     def test_already_exited_is_not_a_completed_record(self):
         self.api.exit_at = 0

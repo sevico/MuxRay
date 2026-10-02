@@ -149,11 +149,23 @@ def check_identity(actual, expected):
 def collect(api, handle, expected):
     result = {"status": "failed", "errors": [], "threadCount": None, "guiResources": None,
               "processMetrics": None, "handleTypes": None, "snapshotHandleCount": None}
-    # Identity/lifecycle failures are fatal; never silently sample a reused PID.
-    check_identity(api.identity(handle, expected["pid"]), expected)
+    # This is the retained handle validated at attachment, never a PID reopen.
+    # Windows may stop exposing the image path once that process has exited.
     life = api.lifecycle(handle)
     if life["exited"]:
         return {**result, "status": "exited", "lifecycle": life}
+    try:
+        actual = api.identity(handle, expected["pid"])
+    except OSError as exc:
+        # Exit can race the lifecycle check and image query. Only a confirmed
+        # exit of the retained handle permits this terminal partial sample.
+        life = api.lifecycle(handle)
+        if life["exited"]:
+            return {**result, "status": "exited_during_snapshot", "lifecycle": life,
+                    "identityQueryError": f"{type(exc).__name__}: {exc}"}
+        raise
+    # An observed mismatch is always fatal, even if exit follows the query.
+    check_identity(actual, expected)
     for field, operation in (("processMetrics", lambda: api.metrics(handle)),
                              ("threadCount", lambda: api.threads(expected["pid"])),
                              ("guiResources", lambda: api.gui(handle)),
