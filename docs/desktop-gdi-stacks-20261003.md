@@ -3,6 +3,7 @@
 普通权限的 A 诊断版本连续三次成功选择文件后，固定静置窗内 GDI 为 **260 → 262 → 264 → 266**。每轮各有一个 DC 和一个 Bitmap，在打开选择器时由同一条缩略图图像列表分配路径创建，随后没有观察到该代对象匹配的 Destroy、所有者转移或变换事件。匹配符号及 PE 函数边界已把关键用户栈定位到 `CThumbnailLookupTable` → `CImageList::Initialize`。**分配路径已确认，持有责任尚未确定；另做的 COM 包装修正对照未消除逐轮增长，生产代码未作修复。**
 
 接续 [前轮 ETW 与对象校准](desktop-gdi-etw-20261003.md) 和 [调用边界验证](desktop-gdi-boundaries-20261003.md)。
+后续 [独立 Win32 宿主对照](desktop-gdi-native-host-20261003.md) 已在没有 Go、Wails、WebView2 的宿主中复现同一核心分配路径及每轮 +2；持有责任仍未确定。
 本轮外部证据根为 `C:\Users\swk01\Documents\Codex\2026-09-09\computer-use\outputs\muxray-gdi-stacks-20261003`，以下路径均相对此目录；ETL、解码数据、符号与实验工具不纳入仓库。
 所有时刻均为 2026-10-03 UTC。
 
