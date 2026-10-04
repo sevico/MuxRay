@@ -6,6 +6,8 @@
 
 接续 [同字节 FLV/BIN 文件关联对照](desktop-gdi-association-20261004.md)。前轮既观察到同核心对象被保留，也观察到一对对象在 Show 内销毁后经通知/ResetImages 路径重建；本轮使用这些既有证据区分分配路径，不预设取消一定释放、成功选择一定保留。
 
+后续 [具体图像列表与引用持有者](desktop-gdi-reference-20261004.md) 已把核心图像列表追溯到 manager、lookup 及上层集合的实际元素槽；记录了取消后 manager 2→1 的调用者和集合取得引用的路径，尚未确定上层集合继续存活的原因。
+
 外部证据根为 `C:\Users\swk01\Documents\Codex\2026-09-09\computer-use\outputs\muxray-gdi-cancel-select-20261004`。以下未另注明的路径均相对此目录，时间均为 2026-10-04 UTC。媒体、诊断程序、ETL 和原始收据不纳入仓库。
 
 ## 已登记的条件
