@@ -182,9 +182,13 @@ func (result Result) HasErrors() bool {
 	return !result.Complete || hasError(result.Diagnostics)
 }
 
-// Options configures the bounded diagnostic budget. Zero selects the default.
+// Options configures diagnostic and optional same-tag frame budgets.
+// Zero budget values select defaults; InspectFrames is opt-in.
 type Options struct {
 	MaxDiagnostics uint32
+	// InspectFrames opts FLV detail into bounded same-tag frame inspection.
+	InspectFrames bool
+	MaxFrames     uint32
 }
 
 const (
@@ -192,10 +196,18 @@ const (
 	DefaultMaxDiagnostics uint32 = 32
 	MinDiagnostics        uint32 = 2
 	HardMaxDiagnostics    uint32 = 1_024
+	DefaultMaxFrames      uint32 = 64
+	HardMaxFrames         uint32 = 1_024
+	MaxFrameScanBytes     uint64 = 1 << 20
 )
 
 // Normalized applies defaults and rejects values outside hard limits.
 func (options Options) Normalized() (Options, error) {
+	if options.MaxFrames == 0 {
+		options.MaxFrames = DefaultMaxFrames
+	} else if options.MaxFrames > HardMaxFrames {
+		return Options{}, fmt.Errorf("mp3: max frames %d exceeds hard limit %d", options.MaxFrames, HardMaxFrames)
+	}
 	if options.MaxDiagnostics == 0 {
 		options.MaxDiagnostics = DefaultMaxDiagnostics
 	} else if options.MaxDiagnostics < MinDiagnostics {

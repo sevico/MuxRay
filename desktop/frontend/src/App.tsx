@@ -169,9 +169,9 @@ function DetailPanel({ view, onRetry, onLocate }: { view: ViewState; onRetry: ()
     {view.detailError && <div className="request-error" role="alert"><span>{fault(view.detailError)}</span>{view.detailRetry && <button onClick={onRetry}>{view.detailRetry === 'reload' ? '重新读取详情' : '重试详情查询'}</button>}</div>}
     {detail && <>
       <p className="detail-note">字段位置使用原文件的 byte 偏移和 bit 起点；位长包含字段占用的位数。{detail.kind === 'aacAudio' && ' AAC raw packet 仅显示封装信息与数据范围，不解码音频。'}</p>
-      {detail.kind === 'avcVideo' && <p className="detail-note">AVC NAL 仅显示边界与头信息，不解码 slice 或视频画面。计算得到的字段不标注单一原始位置，以“—”显示。</p>}
+      {detail.kind === 'avcVideo' && <p className="detail-note">AVC 展开 SPS/PPS 基础字段与 SPS VUI。时序和 HRD 是码流声明，不代表实测帧率或码率；不解码 slice 或视频画面。派生值及跨段字段的单一原始位置显示“—”。</p>}
       {detail.kind === 'mp3Audio' && <>
-        <p className="detail-note">MP3 仅解析首个 MPEG Audio Layer III 固定帧头。语法解析完成不保证整帧完整，不校验 CRC，也不分析 VBR 头或解码音频。</p>
+        <p className="detail-note">MP3 在当前 Tag 内检查帧边界、首帧 Xing/Info/VBRI 声明及受保护帧的头部和 side-info CRC。帧完整不代表音频可解码；预算外数据和未知帧长会明确保留为未检查范围。</p>
         <p className="detail-note">free-format 的码率和帧长未知；派生字段不标注单一原始位置，以“—”显示。</p>
       </>}
       {!detail.complete && <p className="detail-note problem">保留可解析的字段；请结合下方详情诊断检查未完成部分。</p>}

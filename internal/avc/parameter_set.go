@@ -52,7 +52,8 @@ func parseParameterSetSummary(source io.ReaderAt, span cursor.Span, options Opti
 	switch header.NALUnitType {
 	case NALUnitTypeSequenceParameterSet:
 		summary, parseErr := parseSequenceParameterSet(source, span, options, budget, diagnostics)
-		return header, &summary, nil, summary.Complete && !header.ForbiddenZeroBit, parseErr
+		complete := summary.Complete && (summary.VUI == nil || summary.VUI.Complete)
+		return header, &summary, nil, complete && !header.ForbiddenZeroBit, parseErr
 	case NALUnitTypePictureParameterSet:
 		summary, parseErr := parsePictureParameterSet(source, span, options, budget, diagnostics)
 		return header, nil, &summary, summary.Complete && !header.ForbiddenZeroBit, parseErr
@@ -310,7 +311,11 @@ func parseSequenceParameterSet(source io.ReaderAt, span cursor.Span, options Opt
 	}
 
 	deriveDimensions(&result, p)
-	return finishSPS(result, p), nil
+	result = finishSPS(result, p)
+	if options.ParseVUI && result.Complete {
+		result.VUI = parseVUI(p, result.VUIParametersPresentFlag, result.MaxNumRefFrames)
+	}
+	return result, nil
 }
 
 func finishSPS(result SequenceParameterSet, p *rbspParser) SequenceParameterSet {

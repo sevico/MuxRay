@@ -24,8 +24,8 @@ var (
 )
 
 // MP3Audio is the bounded, on-demand detail for one complete, unfiltered FLV
-// MP3 audio tag. Only the first MPEG Audio frame header is parsed; all
-// remaining SoundData stays in the source and is represented by spans.
+// MP3 audio tag. By default only the first MPEG Audio frame header is parsed.
+// InspectFrames additionally checks same-tag frame boundaries and bounded metadata.
 type MP3Audio struct {
 	TagID uint64
 	Span  cursor.Span
@@ -35,6 +35,7 @@ type MP3Audio struct {
 
 	DataSpan    cursor.Span
 	FrameHeader mp3.Result
+	Frames      *mp3.FrameSequence
 
 	BitsConsumed uint64
 	Diagnostics  []mp3.Diagnostic
@@ -42,7 +43,8 @@ type MP3Audio struct {
 }
 
 // ParseMP3Audio parses the FLV AudioTagHeader and the first fixed MPEG Audio
-// Layer III frame header. Malformed syntax returns partial detail; selection
+// Layer III frame header, plus same-tag frames when InspectFrames is enabled.
+// Malformed syntax returns partial detail; selection
 // and source failures return Go errors.
 func ParseMP3Audio(source io.ReaderAt, tag TagRecord, options mp3.Options) (MP3Audio, error) {
 	detail := MP3Audio{TagID: tag.ID, Span: tag.PayloadSpan()}
@@ -119,6 +121,15 @@ func ParseMP3Audio(source io.ReaderAt, tag TagRecord, options mp3.Options) (MP3A
 	detail.BitsConsumed += parsed.BitsConsumed
 	detail.Diagnostics = append(detail.Diagnostics, parsed.Diagnostics...)
 	detail.Complete = parsed.Complete
+	if normalized.InspectFrames {
+		frames, err := mp3.ParseFrameSequence(source, detail.DataSpan, normalized)
+		if err != nil {
+			return detail, err
+		}
+		detail.Frames = &frames
+		detail.Diagnostics = frames.Diagnostics
+		detail.Complete = frames.Complete
+	}
 	return detail, nil
 }
 

@@ -386,3 +386,30 @@ func TestAVCOpaqueSlicesAndSelectionValidation(t *testing.T) {
 		t.Fatalf("truncated container AVC: %v", err)
 	}
 }
+
+func TestAVCVUIDetailsKeepSourceMappingBoundaryAndBudgets(t *testing.T) {
+	if DesktopAVCOptions().AVC.ParseVUI {
+		t.Fatal("shared summary/context options enabled VUI")
+	}
+	config := avcHex(t, desktopHighAVCC)
+	d := parseAVCFixture(t, append([]byte{0x17, 0, 0, 0, 0}, config...), avccontext.Resolution{})
+	for name, want := range map[string]string{"vuiComplete": "true", "spsTrailingBitsValid": "true", "numUnitsInTick": "1", "timeScale": "50"} {
+		f := find(t, d, name)
+		if f.Value != want || f.Span != nil {
+			t.Fatalf("VUI field %s fabricated value/span: %+v", name, f)
+		}
+	}
+	sps := config[8:34]
+	partial := parseAVCFixture(t, avcNALPayload(1, sps[:21]), avcResolution(1))
+	if partial.Complete || !partial.Truncated || find(t, partial, "summaryComplete").Value != "true" || find(t, partial, "vuiComplete").Value != "false" {
+		t.Fatalf("partial VUI state: %+v", partial)
+	}
+	units := make([][]byte, 30)
+	for i := range units {
+		units[i] = sps
+	}
+	capped := parseAVCFixture(t, avcNALPayload(1, units...), avcResolution(1))
+	if !capped.Complete || !capped.Truncated || len(capped.Fields) != MaxFields {
+		t.Fatalf("VUI field cap: %d %t %t", len(capped.Fields), capped.Complete, capped.Truncated)
+	}
+}

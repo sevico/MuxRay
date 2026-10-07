@@ -12,6 +12,10 @@ from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parent.parent
 CONTRACTS = (
+    ("docs/schemas/flv-avc-tag-detail-v2.schema.json", "testdata/golden/flv-avc-detail-v2.json"),
+    ("docs/schemas/flv-avc-tag-detail-v2.schema.json", "testdata/golden/flv-avc-detail-truncated-v2.json"),
+    ("docs/schemas/flv-mp3-tag-detail-v2.schema.json", "testdata/golden/flv-mp3-detail-v2.json"),
+    ("docs/schemas/flv-mp3-tag-detail-v2.schema.json", "testdata/golden/flv-mp3-detail-truncated-v2.json"),
     ("docs/schemas/desktop-diagnostic-snapshot-v1.schema.json", "testdata/golden/desktop-diagnostic-snapshot-minimal-v1.json"),
     ("docs/schemas/desktop-diagnostic-snapshot-v1.schema.json", "testdata/golden/desktop-diagnostic-snapshot-full-v1.json"),
     ("docs/schemas/flv-tag-page-v1.schema.json", "testdata/golden/flv-tag-page-v1.json"),
@@ -1386,6 +1390,62 @@ def validate_tag_page_edge_cases(validator: Draft202012Validator) -> None:
         require_invalid(validator, missing, f"tag page missing {key}")
 
 
+def validate_codec_detail_v2_edge_cases() -> None:
+    for codec in ("avc", "mp3"):
+        current = Draft202012Validator(load_json(f"docs/schemas/flv-{codec}-tag-detail-v2.schema.json"))
+        legacy = Draft202012Validator(load_json(f"docs/schemas/flv-{codec}-tag-detail-v1.schema.json"))
+        complete = load_json(f"testdata/golden/flv-{codec}-detail-v2.json")
+        old = load_json(f"testdata/golden/flv-{codec}-detail-v1.json")
+        require_invalid(current, old, f"{codec} v1 cannot enter v2 contract")
+        require_invalid(legacy, complete, f"{codec} v2 cannot enter v1 contract")
+        changed = deepcopy(complete)
+        changed["schemaVersion"] = 1
+        require_invalid(legacy, changed, f"{codec} deep fields cannot masquerade as v1")
+        changed = deepcopy(complete)
+        changed["detail"]["unpromisedField"] = True
+        require_invalid(current, changed, f"{codec} v2 closed detail shape")
+
+    avc = Draft202012Validator(load_json("docs/schemas/flv-avc-tag-detail-v2.schema.json"))
+    sample = load_json("testdata/golden/flv-avc-detail-v2.json")
+    def vui(document):
+        return document["detail"]["avcDecoderConfigurationRecord"]["sequenceParameterSets"][0]["sequenceParameterSet"]["vui"]
+    for field, value in (("trailingBitsValid", False), ("remainingRbspBits", 1), ("present", False)):
+        changed = deepcopy(sample)
+        vui(changed)[field] = value
+        require_invalid(avc, changed, f"complete VUI contradiction: {field}")
+    changed = deepcopy(sample)
+    del vui(changed)["timeScale"]
+    require_invalid(avc, changed, "complete timing VUI missing timeScale")
+    changed = deepcopy(sample)
+    vui(changed)["timingInfoPresentFlag"]["value"] = False
+    require_invalid(avc, changed, "timing data without its presence flag")
+    changed = deepcopy(sample)
+    vui(changed)["numUnitsInTick"]["span"]["sourceSpans"][0]["bitOffset"] = 8
+    require_invalid(avc, changed, "VUI mapped source bit outside byte")
+
+    mp3 = Draft202012Validator(load_json("docs/schemas/flv-mp3-tag-detail-v2.schema.json"))
+    sample = load_json("testdata/golden/flv-mp3-detail-v2.json")
+    for field, value in (("maxFrames", 1025), ("bytesCovered", 1048577), ("stopReason", "guessed")):
+        changed = deepcopy(sample)
+        changed["detail"]["frames"][field] = value
+        require_invalid(mp3, changed, f"MP3 frame inspection invalid {field}")
+    changed = deepcopy(sample)
+    changed["detail"]["frames"]["uninspectedSpan"]["bitLength"] = 8
+    require_invalid(mp3, changed, "complete frames with uninspected remainder")
+    changed = deepcopy(sample)
+    changed["detail"]["frames"]["items"][0]["crc"]["status"] = "match"
+    require_invalid(mp3, changed, "CRC match without stored/computed values")
+    changed = deepcopy(sample)
+    changed["detail"]["frames"]["items"][0]["crc"]["stored"] = 0
+    require_invalid(mp3, changed, "unprotected frame with invented CRC value")
+    changed = deepcopy(sample)
+    changed["detail"]["frames"]["vbr"]["kind"] = "VBRI"
+    require_invalid(mp3, changed, "Xing fields cannot masquerade as VBRI")
+    changed = deepcopy(sample)
+    del changed["detail"]["frames"]["vbr"]["flags"]
+    require_invalid(mp3, changed, "complete Xing missing flags")
+
+
 def main() -> None:
     manifest_schema = load_json("testdata/manifests/sample-manifest-v1.schema.json")
     Draft202012Validator.check_schema(manifest_schema)
@@ -1404,6 +1464,8 @@ def main() -> None:
         seen_ids.add(manifest["id"])
         seen_hashes.add(manifest["file"]["sha256"])
     print(f"validated {len(seen_ids)} corpus manifest identities (media presence checked separately)")
+    validate_codec_detail_v2_edge_cases()
+    print("validated AVC/MP3 detail v2 version isolation, presence, bounds, CRC and VBR shapes")
     tag_page_validator = None
     detail_validator = None
     aac_detail_validator = None

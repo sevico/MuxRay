@@ -185,6 +185,7 @@ type AVCSPSHighProfileDetail struct {
 }
 
 type AVCSequenceParameterSet struct {
+	VUI                            *AVCVUIDetail            `json:"vui,omitempty"`
 	RBSP                           AVCRBSPViewDetail        `json:"rbsp"`
 	ProfileIDC                     *AVCMappedUnsignedField  `json:"profileIdc,omitempty"`
 	ConstraintSetFlags             *AVCMappedUnsignedField  `json:"constraintSetFlags,omitempty"`
@@ -524,3 +525,168 @@ func codecIDName(value uint8) string {
 }
 
 var _ ParsedTagDetailDocument = AVCTagDetailDocument{}
+
+// NewAVCTagDetailV2 publishes the explicitly requested SPS VUI extension.
+// ParseVUI must be enabled for the selected Tag before projection. The default
+// constructor deliberately leaves this extension out of the v1 contract.
+func NewAVCTagDetailV2(sourceSize uint64, tag flv.TagRecord, detail flv.AVCVideo) AVCTagDetailDocument {
+	result := NewAVCTagDetail(sourceSize, tag, detail)
+	result.SchemaVersion = 2
+	attach := func(mapped []AVCNALUnitDetail, parsed []avc.ParameterSet) {
+		for i, item := range parsed {
+			if item.SequenceParameterSet != nil && item.SequenceParameterSet.VUI != nil {
+				mapped[i].SequenceParameterSet.VUI = mapAVCVUI(item.SequenceParameterSet.VUI)
+			}
+		}
+	}
+	if c := result.Detail.AVCDecoderConfigurationRecord; c != nil {
+		attach(c.SequenceParameterSets, detail.Config.SequenceParameterSets)
+		attach(c.PictureParameterSets, detail.Config.PictureParameterSets)
+		if c.HighProfileExtension != nil {
+			attach(c.HighProfileExtension.SequenceParameterSetExts, detail.Config.SequenceParameterSetExts)
+		}
+	}
+	if s := result.Detail.NALUnitSequence; s != nil {
+		for i, item := range detail.NALUnits.NALUnits {
+			if item.SequenceParameterSet != nil && item.SequenceParameterSet.VUI != nil {
+				s.NALUnits[i].SequenceParameterSet.VUI = mapAVCVUI(item.SequenceParameterSet.VUI)
+			}
+		}
+	}
+	return result
+}
+
+type AVCVUIDetail struct {
+	Present                            bool                    `json:"present"`
+	AspectRatioInfoPresentFlag         *AVCMappedBooleanField  `json:"aspectRatioInfoPresentFlag,omitempty"`
+	AspectRatioIDC                     *AVCMappedUnsignedField `json:"aspectRatioIdc,omitempty"`
+	SARWidth                           *AVCMappedUnsignedField `json:"sarWidth,omitempty"`
+	SARHeight                          *AVCMappedUnsignedField `json:"sarHeight,omitempty"`
+	OverscanInfoPresentFlag            *AVCMappedBooleanField  `json:"overscanInfoPresentFlag,omitempty"`
+	OverscanAppropriateFlag            *AVCMappedBooleanField  `json:"overscanAppropriateFlag,omitempty"`
+	VideoSignalTypePresentFlag         *AVCMappedBooleanField  `json:"videoSignalTypePresentFlag,omitempty"`
+	VideoFormat                        *AVCMappedUnsignedField `json:"videoFormat,omitempty"`
+	VideoFullRangeFlag                 *AVCMappedBooleanField  `json:"videoFullRangeFlag,omitempty"`
+	ColourDescriptionPresentFlag       *AVCMappedBooleanField  `json:"colourDescriptionPresentFlag,omitempty"`
+	ColourPrimaries                    *AVCMappedUnsignedField `json:"colourPrimaries,omitempty"`
+	TransferCharacteristics            *AVCMappedUnsignedField `json:"transferCharacteristics,omitempty"`
+	MatrixCoefficients                 *AVCMappedUnsignedField `json:"matrixCoefficients,omitempty"`
+	ChromaLocInfoPresentFlag           *AVCMappedBooleanField  `json:"chromaLocInfoPresentFlag,omitempty"`
+	ChromaSampleLocTypeTopField        *AVCMappedUnsignedField `json:"chromaSampleLocTypeTopField,omitempty"`
+	ChromaSampleLocTypeBottomField     *AVCMappedUnsignedField `json:"chromaSampleLocTypeBottomField,omitempty"`
+	TimingInfoPresentFlag              *AVCMappedBooleanField  `json:"timingInfoPresentFlag,omitempty"`
+	NumUnitsInTick                     *AVCMappedUnsignedField `json:"numUnitsInTick,omitempty"`
+	TimeScale                          *AVCMappedUnsignedField `json:"timeScale,omitempty"`
+	FixedFrameRateFlag                 *AVCMappedBooleanField  `json:"fixedFrameRateFlag,omitempty"`
+	NALHRDParametersPresentFlag        *AVCMappedBooleanField  `json:"nalHrdParametersPresentFlag,omitempty"`
+	VCLHRDParametersPresentFlag        *AVCMappedBooleanField  `json:"vclHrdParametersPresentFlag,omitempty"`
+	LowDelayHRDFlag                    *AVCMappedBooleanField  `json:"lowDelayHrdFlag,omitempty"`
+	PicStructPresentFlag               *AVCMappedBooleanField  `json:"picStructPresentFlag,omitempty"`
+	BitstreamRestrictionFlag           *AVCMappedBooleanField  `json:"bitstreamRestrictionFlag,omitempty"`
+	MotionVectorsOverPicBoundariesFlag *AVCMappedBooleanField  `json:"motionVectorsOverPicBoundariesFlag,omitempty"`
+	MaxBytesPerPicDenom                *AVCMappedUnsignedField `json:"maxBytesPerPicDenom,omitempty"`
+	MaxBitsPerMBDenom                  *AVCMappedUnsignedField `json:"maxBitsPerMbDenom,omitempty"`
+	Log2MaxMVLengthHorizontal          *AVCMappedUnsignedField `json:"log2MaxMvLengthHorizontal,omitempty"`
+	Log2MaxMVLengthVertical            *AVCMappedUnsignedField `json:"log2MaxMvLengthVertical,omitempty"`
+	MaxNumReorderFrames                *AVCMappedUnsignedField `json:"maxNumReorderFrames,omitempty"`
+	MaxDecFrameBuffering               *AVCMappedUnsignedField `json:"maxDecFrameBuffering,omitempty"`
+
+	NALHRD            *AVCHRDDetail `json:"nalHrd,omitempty"`
+	VCLHRD            *AVCHRDDetail `json:"vclHrd,omitempty"`
+	RBSPBitOffset     uint32        `json:"rbspBitOffset"`
+	SyntaxBits        uint32        `json:"syntaxBits"`
+	RemainingRBSPBits uint32        `json:"remainingRbspBits"`
+	TrailingBitsValid bool          `json:"trailingBitsValid"`
+	Complete          bool          `json:"complete"`
+}
+
+type AVCHRDDetail struct {
+	CPBCntMinus1                       *AVCMappedUnsignedField `json:"cpbCntMinus1,omitempty"`
+	BitRateScale                       *AVCMappedUnsignedField `json:"bitRateScale,omitempty"`
+	CPBSizeScale                       *AVCMappedUnsignedField `json:"cpbSizeScale,omitempty"`
+	InitialCPBRemovalDelayLengthMinus1 *AVCMappedUnsignedField `json:"initialCpbRemovalDelayLengthMinus1,omitempty"`
+	CPBRemovalDelayLengthMinus1        *AVCMappedUnsignedField `json:"cpbRemovalDelayLengthMinus1,omitempty"`
+	DPBOutputDelayLengthMinus1         *AVCMappedUnsignedField `json:"dpbOutputDelayLengthMinus1,omitempty"`
+	TimeOffsetLength                   *AVCMappedUnsignedField `json:"timeOffsetLength,omitempty"`
+
+	CPB      []AVCHRDCPBEntry `json:"cpb"`
+	Complete bool             `json:"complete"`
+}
+
+type AVCHRDCPBEntry struct {
+	BitRateValueMinus1 *AVCMappedUnsignedField `json:"bitRateValueMinus1,omitempty"`
+	CPBSizeValueMinus1 *AVCMappedUnsignedField `json:"cpbSizeValueMinus1,omitempty"`
+	CBRFlag            *AVCMappedBooleanField  `json:"cbrFlag,omitempty"`
+}
+
+func mapAVCVUI(v *avc.VUIParameters) *AVCVUIDetail {
+	r := &AVCVUIDetail{Present: v.Present, RBSPBitOffset: v.RBSPBitOffset, SyntaxBits: v.SyntaxBits,
+		RemainingRBSPBits: v.RemainingRBSPBits, TrailingBitsValid: v.TrailingBitsValid, Complete: v.Complete,
+		NALHRD: mapAVCHRD(v.NALHRD), VCLHRD: mapAVCHRD(v.VCLHRD)}
+	r.AspectRatioInfoPresentFlag = mapVUIBool(v.AspectRatioInfoPresentFlag)
+	r.AspectRatioIDC = mapVUIUint(v.AspectRatioIDC)
+	r.SARWidth = mapVUIUint(v.SARWidth)
+	r.SARHeight = mapVUIUint(v.SARHeight)
+	r.OverscanInfoPresentFlag = mapVUIBool(v.OverscanInfoPresentFlag)
+	r.OverscanAppropriateFlag = mapVUIBool(v.OverscanAppropriateFlag)
+	r.VideoSignalTypePresentFlag = mapVUIBool(v.VideoSignalTypePresentFlag)
+	r.VideoFormat = mapVUIUint(v.VideoFormat)
+	r.VideoFullRangeFlag = mapVUIBool(v.VideoFullRangeFlag)
+	r.ColourDescriptionPresentFlag = mapVUIBool(v.ColourDescriptionPresentFlag)
+	r.ColourPrimaries = mapVUIUint(v.ColourPrimaries)
+	r.TransferCharacteristics = mapVUIUint(v.TransferCharacteristics)
+	r.MatrixCoefficients = mapVUIUint(v.MatrixCoefficients)
+	r.ChromaLocInfoPresentFlag = mapVUIBool(v.ChromaLocInfoPresentFlag)
+	r.ChromaSampleLocTypeTopField = mapVUIUint(v.ChromaSampleLocTypeTopField)
+	r.ChromaSampleLocTypeBottomField = mapVUIUint(v.ChromaSampleLocTypeBottomField)
+	r.TimingInfoPresentFlag = mapVUIBool(v.TimingInfoPresentFlag)
+	r.NumUnitsInTick = mapVUIUint(v.NumUnitsInTick)
+	r.TimeScale = mapVUIUint(v.TimeScale)
+	r.FixedFrameRateFlag = mapVUIBool(v.FixedFrameRateFlag)
+	r.NALHRDParametersPresentFlag = mapVUIBool(v.NALHRDParametersPresentFlag)
+	r.VCLHRDParametersPresentFlag = mapVUIBool(v.VCLHRDParametersPresentFlag)
+	r.LowDelayHRDFlag = mapVUIBool(v.LowDelayHRDFlag)
+	r.PicStructPresentFlag = mapVUIBool(v.PicStructPresentFlag)
+	r.BitstreamRestrictionFlag = mapVUIBool(v.BitstreamRestrictionFlag)
+	r.MotionVectorsOverPicBoundariesFlag = mapVUIBool(v.MotionVectorsOverPicBoundariesFlag)
+	r.MaxBytesPerPicDenom = mapVUIUint(v.MaxBytesPerPicDenom)
+	r.MaxBitsPerMBDenom = mapVUIUint(v.MaxBitsPerMBDenom)
+	r.Log2MaxMVLengthHorizontal = mapVUIUint(v.Log2MaxMVLengthHorizontal)
+	r.Log2MaxMVLengthVertical = mapVUIUint(v.Log2MaxMVLengthVertical)
+	r.MaxNumReorderFrames = mapVUIUint(v.MaxNumReorderFrames)
+	r.MaxDecFrameBuffering = mapVUIUint(v.MaxDecFrameBuffering)
+	return r
+}
+
+func mapAVCHRD(h *avc.HRDParameters) *AVCHRDDetail {
+	if h == nil {
+		return nil
+	}
+	r := &AVCHRDDetail{CPB: make([]AVCHRDCPBEntry, 0, len(h.CPB)), Complete: h.Complete}
+	r.CPBCntMinus1 = mapVUIUint(h.CPBCntMinus1)
+	r.BitRateScale = mapVUIUint(h.BitRateScale)
+	r.CPBSizeScale = mapVUIUint(h.CPBSizeScale)
+	r.InitialCPBRemovalDelayLengthMinus1 = mapVUIUint(h.InitialCPBRemovalDelayLengthMinus1)
+	r.CPBRemovalDelayLengthMinus1 = mapVUIUint(h.CPBRemovalDelayLengthMinus1)
+	r.DPBOutputDelayLengthMinus1 = mapVUIUint(h.DPBOutputDelayLengthMinus1)
+	r.TimeOffsetLength = mapVUIUint(h.TimeOffsetLength)
+
+	for _, entry := range h.CPB {
+		r.CPB = append(r.CPB, AVCHRDCPBEntry{mapVUIUint(entry.BitRateValueMinus1), mapVUIUint(entry.CPBSizeValueMinus1), mapVUIBool(entry.CBRFlag)})
+	}
+	return r
+}
+
+func mapVUIUint(field *avc.VUIUnsignedField) *AVCMappedUnsignedField {
+	if field == nil {
+		return nil
+	}
+	return avcMappedUintField(field.Value, field.Span)
+}
+
+func mapVUIBool(field *avc.VUIBooleanField) *AVCMappedBooleanField {
+	if field == nil {
+		return nil
+	}
+	return avcMappedBoolField(field.Value, field.Span)
+}

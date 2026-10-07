@@ -25,8 +25,11 @@ func TestMP3VersionsAndDerivedValues(t *testing.T) {
 		{"mpeg2.5", "0 (mpeg2.5)", "32", "8000", "1", "576", "288", []byte{0xff, 0xe3, 0x48, 0xc4}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			// No frame body exists, even though the header declares a larger frame.
-			d := parseFixture(t, 8, append([]byte{0x2f}, tc.header...))
+			// Bodies are opaque, but declared frame boundaries fit in the tag.
+			length, _ := strconv.Atoi(tc.length)
+			body := make([]byte, length)
+			copy(body, tc.header)
+			d := parseFixture(t, 8, append([]byte{0x2f}, body...))
 			if d.Kind != "mp3Audio" || !d.Complete || d.Truncated || len(d.Diagnostics) != 0 {
 				t.Fatalf("MP3 header result: %+v", d)
 			}
@@ -62,21 +65,24 @@ func TestMP3ExactBitSpansAndCRCDeclaration(t *testing.T) {
 		"padding":                {ByteOffset: "27", BitOffset: 6, BitLength: 1},
 		"channelMode":            {ByteOffset: "28", BitLength: 2},
 		"SoundData":              {ByteOffset: "25", BitLength: 48},
-		"unparsedData":           {ByteOffset: "29", BitLength: 16},
+		"uninspectedFrames":      {ByteOffset: "25", BitLength: 48},
 	} {
 		if f := find(t, d, name); f.Span == nil || *f.Span != want {
 			t.Fatalf("%s span: %+v, want %+v", name, f.Span, want)
 		}
 	}
-	if !d.Complete || find(t, d, "protectionBit").Value != "0" || find(t, d, "crcProtected").Value != "true (header declaration; CRC data is not checked)" {
+	if d.Complete || !d.Truncated || !hasDiagnostic(d, mp3.CodeCRCTruncated) || find(t, d, "protectionBit").Value != "0" || !strings.HasPrefix(find(t, d, "CRC16").Value, "truncated") {
 		t.Fatalf("CRC declaration: %+v", d)
 	}
 }
 
 func TestMP3FreeFormatAndMalformedSyntax(t *testing.T) {
 	d := parseFixture(t, 8, []byte{0x2f, 0xff, 0xfb, 0, 0x64})
-	if !d.Complete || d.Truncated || find(t, d, "bitrateMode").Value != "free" || !hasDiagnostic(d, mp3.CodeFreeFormatUnresolved) {
+	if d.Complete || d.Truncated || find(t, d, "bitrateMode").Value != "free" || !hasDiagnostic(d, mp3.CodeFreeFormatUnresolved) {
 		t.Fatalf("free-format syntax: %+v", d)
+	}
+	if value := find(t, d, "Frame 0").Value; !strings.Contains(value, "declared length=unknown") || !strings.Contains(value, "bitrate=unknown") || strings.Contains(value, "0 kbit/s") {
+		t.Fatalf("free format invented derivations: %s", value)
 	}
 	for _, name := range []string{"bitrateKbps", "frameLengthBytes"} {
 		if f := optionalField(d, name); f != nil {
@@ -97,6 +103,11 @@ func TestMP3FreeFormatAndMalformedSyntax(t *testing.T) {
 		d := parseFixture(t, 8, append([]byte{0x2f}, tc.header...))
 		if d.Complete || !hasDiagnostic(d, tc.code) || d.Truncated != (len(tc.header) < 4) {
 			t.Fatalf("%s: %+v", tc.code, d)
+		}
+		if len(tc.header) == 4 {
+			if value := find(t, d, "Frame 0").Value; !strings.Contains(value, "declared length=unknown") || !strings.Contains(value, "bitrate=unknown") || !strings.Contains(value, "channels=unknown") {
+				t.Fatalf("invalid header invented derivations: %s", value)
+			}
 		}
 		if (optionalField(d, "MPEG frame header") != nil) != (len(tc.header) == 4) {
 			t.Fatal("missing or invented fixed header")
@@ -134,20 +145,45 @@ func (r *mp3PrefixReader) ReadAt(p []byte, off int64) (int, error) {
 	return n, err
 }
 
-func TestMP3LargePayloadUsesOnlyFixedPrefix(t *testing.T) {
+type mp3SparseFrameReader struct {
+	base         int64
+	bytes, reads int
+}
+
+func (r *mp3SparseFrameReader) ReadAt(p []byte, off int64) (int, error) {
+	r.reads++
+	at := off - r.base
+	if at == 0 && len(p) == 1 {
+		p[0] = 0x2f
+		r.bytes++
+		return 1, nil
+	}
+	relative := at - 1
+	if relative >= 0 && relative%417 == 0 && len(p) == 4 {
+		copy(p, []byte{0xff, 0xfb, 0x90, 0x64})
+		r.bytes += 4
+		return 4, nil
+	}
+	if relative == 36 && len(p) == 4 {
+		clear(p)
+		r.bytes += 4
+		return 4, nil
+	}
+	return 0, errors.New("read escaped fixed headers and first-frame metadata signatures")
+}
+func TestMP3LargePayloadUsesBoundedHeaders(t *testing.T) {
 	_, tag := fixture(t, 8, []byte{0x2f, 0xff, 0xfb, 0x90, 0x64})
 	const delta uint64 = 1<<53 + 123
 	tag.Offset += delta
 	tag.ID = math.MaxUint64
 	tag.DataSize, tag.AvailableDataSize = 0xffffff, 0xffffff
-	r := &mp3PrefixReader{prefix: []byte{0x2f, 0xff, 0xfb, 0x90, 0x64}, base: int64(delta + 24)}
+	r := &mp3SparseFrameReader{base: int64(delta + 24)}
 	d, err := Parse(context.Background(), r, tag)
-	// The core bit reader can reread the one-byte FLV header for each field.
-	if err != nil || !d.Complete || r.bytes > 9 || r.reads > 6 {
-		t.Fatalf("fixed-prefix parse: detail=%+v err=%v bytes=%d reads=%d", d, err, r.bytes, r.reads)
+	if err != nil || d.Complete || !hasDiagnostic(d, mp3.CodeFrameLimitReached) || r.bytes > 280 || r.reads > 75 {
+		t.Fatalf("bounded frame parse: err=%v bytes=%d reads=%d detail=%+v", err, r.bytes, r.reads, d)
 	}
-	if find(t, d, "tagId").Value != "18446744073709551615" || find(t, d, "version").Span.ByteOffset != decimal(delta+26) || find(t, d, "unparsedData").Span.BitLength != (0xffffff-5)*8 {
-		t.Fatal("large coordinates or opaque range changed")
+	if find(t, d, "tagId").Value != "18446744073709551615" || find(t, d, "version").Span.ByteOffset != decimal(delta+26) || find(t, d, "bytesCovered").Value != "26688" {
+		t.Fatal("large coordinates or frame coverage changed")
 	}
 	assertBounded(t, d)
 }
@@ -238,7 +274,7 @@ func TestDesktopAudioRetainsProbeAndFullReadErrors(t *testing.T) {
 		}
 		for _, failRead := range []int{1, 6} {
 			r := &transientAudioReader{data: data, failRead: failRead, count: -1, err: io.EOF}
-			if d, err := Parse(context.Background(), r, tag); err != nil || d == nil || !d.Complete {
+			if d, err := Parse(context.Background(), r, tag); err != nil || d == nil {
 				t.Fatalf("full EOF compatibility: detail=%+v err=%v", d, err)
 			}
 		}

@@ -61,6 +61,10 @@ jobs:
         run: go test ./internal/aac -run=^$ -fuzz=FuzzAudioSpecificConfig -fuzztime=30s
       - name: Fuzz MPEG Audio frame header
         run: go test ./internal/mp3 -run=^$ -fuzz=FuzzFrameHeader -fuzztime=30s
+      - name: Fuzz bounded MP3 frames and VBR metadata
+        run: go test ./internal/mp3 -run=^$ -fuzz=FuzzFrameSequence -fuzztime=30s
+      - name: Fuzz SPS VUI
+        run: go test ./internal/avc -run=^$ -fuzz=FuzzSPSVUI -fuzztime=30s
       - name: Fuzz AVCDecoderConfigurationRecord
         run: go test ./internal/avc -run=^$ -fuzz=FuzzDecoderConfigurationRecord -fuzztime=30s
       - name: Fuzz AVC length-prefixed NAL units

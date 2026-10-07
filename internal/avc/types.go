@@ -10,6 +10,9 @@ import (
 
 // Options configures hard resource budgets. Zero values select defaults.
 type Options struct {
+	// ParseVUI expands SPS VUI and validates SPS trailing bits. The default
+	// retains the original phase-one result and diagnostic contract.
+	ParseVUI         bool
 	MaxDiagnostics   uint32
 	MaxParameterSets uint32
 	MaxNALUnits      uint32
@@ -194,6 +197,9 @@ type RBSPView struct {
 // it does not claim that optional VUI syntax was expanded.
 type SequenceParameterSet struct {
 	RBSP RBSPView
+	// VUI is nil unless ParseVUI is enabled and phase-one syntax is complete.
+	// Its independent completeness includes the SPS rbsp_trailing_bits.
+	VUI *VUIParameters
 
 	ProfileIDC                 uint8
 	ProfileIDCSpan             MappedSpan

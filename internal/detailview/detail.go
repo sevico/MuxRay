@@ -124,7 +124,7 @@ func ParseWithAVCContext(ctx context.Context, source io.ReaderAt, tag flv.TagRec
 		audioSource := &checkedAudioReader{source: reader}
 		parsed, err := flv.ParseTagDetail(audioSource, tag, flv.DetailOptions{
 			AAC: aac.Options{MaxDiagnostics: MaxDiagnostics},
-			MP3: mp3.Options{MaxDiagnostics: MaxDiagnostics},
+			MP3: mp3.Options{MaxDiagnostics: MaxDiagnostics, InspectFrames: true},
 		})
 		if audioSource.failure != nil {
 			return nil, audioSource.failure

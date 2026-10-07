@@ -1,0 +1,547 @@
+{
+  "schemaVersion": 2,
+  "documentType": "flv-mp3-tag-detail",
+  "source": {
+    "sizeBytes": 846
+  },
+  "tag": {
+    "id": 0,
+    "typeCode": 8,
+    "typeName": "audio",
+    "offset": 13,
+    "span": {
+      "byteOffset": 13,
+      "bitOffset": 0,
+      "bitLength": 6632
+    },
+    "headerSpan": {
+      "byteOffset": 13,
+      "bitOffset": 0,
+      "bitLength": 88
+    },
+    "payloadSpan": {
+      "byteOffset": 24,
+      "bitOffset": 0,
+      "bitLength": 6544
+    },
+    "rawTypeFlags": 8,
+    "filter": false,
+    "dataSize": 818,
+    "availableDataSize": 818,
+    "dts": 0,
+    "streamId": 0,
+    "payloadComplete": true,
+    "previousTagSize": {
+      "present": true,
+      "span": {
+        "byteOffset": 842,
+        "bitOffset": 0,
+        "bitLength": 32
+      },
+      "value": 829,
+      "expected": 829,
+      "valid": true
+    }
+  },
+  "detail": {
+    "kind": "mp3Audio",
+    "span": {
+      "byteOffset": 24,
+      "bitOffset": 0,
+      "bitLength": 6544
+    },
+    "bitsConsumed": 40,
+    "complete": false,
+    "audioTagHeader": {
+      "raw": 47,
+      "span": {
+        "byteOffset": 24,
+        "bitOffset": 0,
+        "bitLength": 8
+      },
+      "soundFormat": {
+        "value": 2,
+        "name": "MP3",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 0,
+          "bitLength": 4
+        }
+      },
+      "soundRate": {
+        "value": 3,
+        "name": "44kHz",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 4,
+          "bitLength": 2
+        }
+      },
+      "soundSize": {
+        "value": 1,
+        "name": "16-bit",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 6,
+          "bitLength": 1
+        }
+      },
+      "soundType": {
+        "value": 1,
+        "name": "stereo",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 7,
+          "bitLength": 1
+        }
+      }
+    },
+    "audioDataSpan": {
+      "byteOffset": 25,
+      "bitOffset": 0,
+      "bitLength": 6536
+    },
+    "firstFrameHeader": {
+      "raw": 4294676580,
+      "span": {
+        "byteOffset": 25,
+        "bitOffset": 0,
+        "bitLength": 32
+      },
+      "syncWord": {
+        "value": 2047,
+        "span": {
+          "byteOffset": 25,
+          "bitOffset": 0,
+          "bitLength": 11
+        }
+      },
+      "version": {
+        "value": 3,
+        "name": "mpeg1",
+        "span": {
+          "byteOffset": 26,
+          "bitOffset": 3,
+          "bitLength": 2
+        }
+      },
+      "layer": {
+        "value": 1,
+        "name": "layerIII",
+        "span": {
+          "byteOffset": 26,
+          "bitOffset": 5,
+          "bitLength": 2
+        }
+      },
+      "protectionBit": {
+        "value": 1,
+        "name": "none",
+        "span": {
+          "byteOffset": 26,
+          "bitOffset": 7,
+          "bitLength": 1
+        }
+      },
+      "crcProtected": false,
+      "bitrateIndex": {
+        "value": 9,
+        "span": {
+          "byteOffset": 27,
+          "bitOffset": 0,
+          "bitLength": 4
+        }
+      },
+      "bitrateMode": "indexed",
+      "bitrateKbps": 128,
+      "samplingFrequencyIndex": {
+        "value": 0,
+        "span": {
+          "byteOffset": 27,
+          "bitOffset": 4,
+          "bitLength": 2
+        }
+      },
+      "samplingFrequencyHz": 44100,
+      "padding": {
+        "value": false,
+        "span": {
+          "byteOffset": 27,
+          "bitOffset": 6,
+          "bitLength": 1
+        }
+      },
+      "private": {
+        "value": false,
+        "span": {
+          "byteOffset": 27,
+          "bitOffset": 7,
+          "bitLength": 1
+        }
+      },
+      "channelMode": {
+        "value": 1,
+        "name": "jointStereo",
+        "span": {
+          "byteOffset": 28,
+          "bitOffset": 0,
+          "bitLength": 2
+        }
+      },
+      "modeExtension": {
+        "value": 2,
+        "span": {
+          "byteOffset": 28,
+          "bitOffset": 2,
+          "bitLength": 2
+        }
+      },
+      "channels": 2,
+      "copyright": {
+        "value": false,
+        "span": {
+          "byteOffset": 28,
+          "bitOffset": 4,
+          "bitLength": 1
+        }
+      },
+      "original": {
+        "value": true,
+        "span": {
+          "byteOffset": 28,
+          "bitOffset": 5,
+          "bitLength": 1
+        }
+      },
+      "emphasis": {
+        "value": 0,
+        "name": "none",
+        "span": {
+          "byteOffset": 28,
+          "bitOffset": 6,
+          "bitLength": 2
+        }
+      },
+      "samplesPerFrame": 1152,
+      "frameLengthBytes": 417,
+      "complete": true
+    },
+    "frames": {
+      "span": {
+        "byteOffset": 25,
+        "bitOffset": 0,
+        "bitLength": 6536
+      },
+      "maxFrames": 64,
+      "maxBytes": 1048576,
+      "bytesCovered": 417,
+      "bytesRead": 24,
+      "completeFrames": 1,
+      "uninspectedSpan": {
+        "byteOffset": 442,
+        "bitOffset": 0,
+        "bitLength": 3200
+      },
+      "stopReason": "body_truncated",
+      "complete": false,
+      "items": [
+        {
+          "index": 0,
+          "span": {
+            "byteOffset": 25,
+            "bitOffset": 0,
+            "bitLength": 3336
+          },
+          "header": {
+            "raw": 4294676580,
+            "span": {
+              "byteOffset": 25,
+              "bitOffset": 0,
+              "bitLength": 32
+            },
+            "syncWord": {
+              "value": 2047,
+              "span": {
+                "byteOffset": 25,
+                "bitOffset": 0,
+                "bitLength": 11
+              }
+            },
+            "version": {
+              "value": 3,
+              "name": "mpeg1",
+              "span": {
+                "byteOffset": 26,
+                "bitOffset": 3,
+                "bitLength": 2
+              }
+            },
+            "layer": {
+              "value": 1,
+              "name": "layerIII",
+              "span": {
+                "byteOffset": 26,
+                "bitOffset": 5,
+                "bitLength": 2
+              }
+            },
+            "protectionBit": {
+              "value": 1,
+              "name": "none",
+              "span": {
+                "byteOffset": 26,
+                "bitOffset": 7,
+                "bitLength": 1
+              }
+            },
+            "crcProtected": false,
+            "bitrateIndex": {
+              "value": 9,
+              "span": {
+                "byteOffset": 27,
+                "bitOffset": 0,
+                "bitLength": 4
+              }
+            },
+            "bitrateMode": "indexed",
+            "bitrateKbps": 128,
+            "samplingFrequencyIndex": {
+              "value": 0,
+              "span": {
+                "byteOffset": 27,
+                "bitOffset": 4,
+                "bitLength": 2
+              }
+            },
+            "samplingFrequencyHz": 44100,
+            "padding": {
+              "value": false,
+              "span": {
+                "byteOffset": 27,
+                "bitOffset": 6,
+                "bitLength": 1
+              }
+            },
+            "private": {
+              "value": false,
+              "span": {
+                "byteOffset": 27,
+                "bitOffset": 7,
+                "bitLength": 1
+              }
+            },
+            "channelMode": {
+              "value": 1,
+              "name": "jointStereo",
+              "span": {
+                "byteOffset": 28,
+                "bitOffset": 0,
+                "bitLength": 2
+              }
+            },
+            "modeExtension": {
+              "value": 2,
+              "span": {
+                "byteOffset": 28,
+                "bitOffset": 2,
+                "bitLength": 2
+              }
+            },
+            "channels": 2,
+            "copyright": {
+              "value": false,
+              "span": {
+                "byteOffset": 28,
+                "bitOffset": 4,
+                "bitLength": 1
+              }
+            },
+            "original": {
+              "value": true,
+              "span": {
+                "byteOffset": 28,
+                "bitOffset": 5,
+                "bitLength": 1
+              }
+            },
+            "emphasis": {
+              "value": 0,
+              "name": "none",
+              "span": {
+                "byteOffset": 28,
+                "bitOffset": 6,
+                "bitLength": 2
+              }
+            },
+            "samplesPerFrame": 1152,
+            "frameLengthBytes": 417,
+            "complete": true
+          },
+          "boundaryComplete": true,
+          "crc": {
+            "status": "not_protected"
+          }
+        },
+        {
+          "index": 1,
+          "span": {
+            "byteOffset": 442,
+            "bitOffset": 0,
+            "bitLength": 3200
+          },
+          "header": {
+            "raw": 4294676580,
+            "span": {
+              "byteOffset": 442,
+              "bitOffset": 0,
+              "bitLength": 32
+            },
+            "syncWord": {
+              "value": 2047,
+              "span": {
+                "byteOffset": 442,
+                "bitOffset": 0,
+                "bitLength": 11
+              }
+            },
+            "version": {
+              "value": 3,
+              "name": "mpeg1",
+              "span": {
+                "byteOffset": 443,
+                "bitOffset": 3,
+                "bitLength": 2
+              }
+            },
+            "layer": {
+              "value": 1,
+              "name": "layerIII",
+              "span": {
+                "byteOffset": 443,
+                "bitOffset": 5,
+                "bitLength": 2
+              }
+            },
+            "protectionBit": {
+              "value": 1,
+              "name": "none",
+              "span": {
+                "byteOffset": 443,
+                "bitOffset": 7,
+                "bitLength": 1
+              }
+            },
+            "crcProtected": false,
+            "bitrateIndex": {
+              "value": 9,
+              "span": {
+                "byteOffset": 444,
+                "bitOffset": 0,
+                "bitLength": 4
+              }
+            },
+            "bitrateMode": "indexed",
+            "bitrateKbps": 128,
+            "samplingFrequencyIndex": {
+              "value": 0,
+              "span": {
+                "byteOffset": 444,
+                "bitOffset": 4,
+                "bitLength": 2
+              }
+            },
+            "samplingFrequencyHz": 44100,
+            "padding": {
+              "value": false,
+              "span": {
+                "byteOffset": 444,
+                "bitOffset": 6,
+                "bitLength": 1
+              }
+            },
+            "private": {
+              "value": false,
+              "span": {
+                "byteOffset": 444,
+                "bitOffset": 7,
+                "bitLength": 1
+              }
+            },
+            "channelMode": {
+              "value": 1,
+              "name": "jointStereo",
+              "span": {
+                "byteOffset": 445,
+                "bitOffset": 0,
+                "bitLength": 2
+              }
+            },
+            "modeExtension": {
+              "value": 2,
+              "span": {
+                "byteOffset": 445,
+                "bitOffset": 2,
+                "bitLength": 2
+              }
+            },
+            "channels": 2,
+            "copyright": {
+              "value": false,
+              "span": {
+                "byteOffset": 445,
+                "bitOffset": 4,
+                "bitLength": 1
+              }
+            },
+            "original": {
+              "value": true,
+              "span": {
+                "byteOffset": 445,
+                "bitOffset": 5,
+                "bitLength": 1
+              }
+            },
+            "emphasis": {
+              "value": 0,
+              "name": "none",
+              "span": {
+                "byteOffset": 445,
+                "bitOffset": 6,
+                "bitLength": 2
+              }
+            },
+            "samplesPerFrame": 1152,
+            "frameLengthBytes": 417,
+            "complete": true
+          },
+          "boundaryComplete": false,
+          "crc": {
+            "status": "not_protected"
+          }
+        }
+      ],
+      "vbr": {
+        "kind": "Xing",
+        "span": {
+          "byteOffset": 61,
+          "bitOffset": 0,
+          "bitLength": 128
+        },
+        "complete": true,
+        "flags": 3,
+        "declaredFrames": 9,
+        "declaredBytes": 834
+      }
+    }
+  },
+  "diagnostics": [
+    {
+      "code": "MP3_FRAME_BODY_TRUNCATED",
+      "severity": "error",
+      "offset": 442,
+      "bitOffset": 0,
+      "message": "declared MPEG frame extends beyond this FLV tag",
+      "recoveryOffset": 842
+    }
+  ]
+}

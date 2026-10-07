@@ -27,6 +27,7 @@ func DesktopAVCOptions() flv.AVCVideoOptions {
 
 func (b *builder) avc(ctx context.Context, source io.ReaderAt, tag flv.TagRecord, resolution avccontext.Resolution) error {
 	options := DesktopAVCOptions()
+	options.AVC.ParseVUI = true
 	if resolution.State == "found" {
 		if (resolution.NALLengthSize != 1 && resolution.NALLengthSize != 2 && resolution.NALLengthSize != 4) ||
 			resolution.SourceLengthSpan.BitOffset != 6 || resolution.SourceLengthSpan.BitLength != 2 || resolution.SourceLengthSpan.Validate() != nil {
@@ -201,7 +202,7 @@ func (b *builder) avcUnit(parent, name string, length uint32, lengthSpan, dataSp
 	// contiguous source range. The full original EBSP range stays on the NAL;
 	// these phase-one summaries deliberately have no individual source spans.
 	if sps != nil {
-		summary := b.add(id, "SPS summary", "derived from RBSP", "Phase-one summary; VUI and deep RBSP fields are not expanded", nil)
+		summary := b.add(id, "SPS summary", "derived from RBSP", "Base SPS summary; optional VUI completeness is reported separately", nil)
 		b.add(summary, "summaryComplete", "derived boolean", strconv.FormatBool(sps.Complete), nil)
 		if sps.ProfileIDCSpan.BitLength != 0 {
 			b.add(summary, "profileIdc", "derived uint8", decimal(uint64(sps.ProfileIDC)), nil)
@@ -217,6 +218,9 @@ func (b *builder) avcUnit(parent, name string, length uint32, lengthSpan, dataSp
 			b.add(summary, "displayDimensions", "derived pixels", fmt.Sprintf("%d × %d", sps.DisplayWidth, sps.DisplayHeight), nil)
 		}
 		b.rbspSummary(summary, sps.RBSP)
+		if sps.VUI != nil {
+			b.avcVUI(summary, sps.VUI)
+		}
 	}
 	if pps != nil {
 		summary := b.add(id, "PPS summary", "derived from RBSP", "Phase-one identifiers and flags; remaining PPS syntax is not expanded", nil)
@@ -241,4 +245,87 @@ func (b *builder) avcUnit(parent, name string, length uint32, lengthSpan, dataSp
 func (b *builder) rbspSummary(parent string, r avc.RBSPView) {
 	b.add(parent, "emulationPreventionBytes", "derived count", decimal(uint64(len(r.EmulationPreventionBytes))), nil)
 	b.add(parent, "sourceSegments", "derived count", decimal(uint64(len(r.SourceSegments)))+" (not flattened into a contiguous field span)", nil)
+}
+
+// RBSP values remain summaries in the single-Span desktop protocol. The SPS
+// parent retains its exact original range; no field spans are fabricated.
+func (b *builder) avcVUI(parent string, v *avc.VUIParameters) {
+	id := b.add(parent, "VUI", "derived from RBSP", "Signalled display, timing and HRD parameters; no decoded-picture or measured-rate claim", nil)
+	b.add(id, "present", "derived boolean", strconv.FormatBool(v.Present), nil)
+	b.add(id, "vuiComplete", "derived boolean", strconv.FormatBool(v.Complete), nil)
+	b.add(id, "spsTrailingBitsValid", "derived boolean", strconv.FormatBool(v.TrailingBitsValid), nil)
+	b.vuiBool(id, "aspectRatioInfoPresentFlag", v.AspectRatioInfoPresentFlag)
+	b.vuiUint(id, "aspectRatioIdc", v.AspectRatioIDC)
+	b.vuiUint(id, "sarWidth", v.SARWidth)
+	b.vuiUint(id, "sarHeight", v.SARHeight)
+	b.vuiBool(id, "overscanInfoPresentFlag", v.OverscanInfoPresentFlag)
+	b.vuiBool(id, "overscanAppropriateFlag", v.OverscanAppropriateFlag)
+	b.vuiBool(id, "videoSignalTypePresentFlag", v.VideoSignalTypePresentFlag)
+	b.vuiUint(id, "videoFormat", v.VideoFormat)
+	b.vuiBool(id, "videoFullRangeFlag", v.VideoFullRangeFlag)
+	b.vuiBool(id, "colourDescriptionPresentFlag", v.ColourDescriptionPresentFlag)
+	b.vuiUint(id, "colourPrimaries", v.ColourPrimaries)
+	b.vuiUint(id, "transferCharacteristics", v.TransferCharacteristics)
+	b.vuiUint(id, "matrixCoefficients", v.MatrixCoefficients)
+	b.vuiBool(id, "chromaLocInfoPresentFlag", v.ChromaLocInfoPresentFlag)
+	b.vuiUint(id, "chromaSampleLocTypeTopField", v.ChromaSampleLocTypeTopField)
+	b.vuiUint(id, "chromaSampleLocTypeBottomField", v.ChromaSampleLocTypeBottomField)
+	b.vuiBool(id, "timingInfoPresentFlag", v.TimingInfoPresentFlag)
+	b.vuiUint(id, "numUnitsInTick", v.NumUnitsInTick)
+	b.vuiUint(id, "timeScale", v.TimeScale)
+	b.vuiBool(id, "fixedFrameRateFlag", v.FixedFrameRateFlag)
+	b.vuiBool(id, "nalHrdParametersPresentFlag", v.NALHRDParametersPresentFlag)
+	b.vuiBool(id, "vclHrdParametersPresentFlag", v.VCLHRDParametersPresentFlag)
+	b.vuiBool(id, "lowDelayHrdFlag", v.LowDelayHRDFlag)
+	b.vuiBool(id, "picStructPresentFlag", v.PicStructPresentFlag)
+	b.vuiBool(id, "bitstreamRestrictionFlag", v.BitstreamRestrictionFlag)
+	b.vuiBool(id, "motionVectorsOverPicBoundariesFlag", v.MotionVectorsOverPicBoundariesFlag)
+	b.vuiUint(id, "maxBytesPerPicDenom", v.MaxBytesPerPicDenom)
+	b.vuiUint(id, "maxBitsPerMbDenom", v.MaxBitsPerMBDenom)
+	b.vuiUint(id, "log2MaxMvLengthHorizontal", v.Log2MaxMVLengthHorizontal)
+	b.vuiUint(id, "log2MaxMvLengthVertical", v.Log2MaxMVLengthVertical)
+	b.vuiUint(id, "maxNumReorderFrames", v.MaxNumReorderFrames)
+	b.vuiUint(id, "maxDecFrameBuffering", v.MaxDecFrameBuffering)
+
+	b.avcHRD(id, "NAL HRD", v.NALHRD)
+	b.avcHRD(id, "VCL HRD", v.VCLHRD)
+	b.add(id, "vuiSyntaxBits", "derived bits", decimal(uint64(v.SyntaxBits)), nil)
+	b.add(id, "remainingRbspBits", "derived bits", decimal(uint64(v.RemainingRBSPBits)), nil)
+}
+
+func (b *builder) avcHRD(parent, name string, h *avc.HRDParameters) {
+	if h == nil {
+		return
+	}
+	id := b.add(parent, name, "derived HRD declarations", "Declared CPB model; cbrFlag does not measure bitrate variation", nil)
+	b.add(id, "hrdComplete", "derived boolean", strconv.FormatBool(h.Complete), nil)
+	b.vuiUint(id, "cpbCntMinus1", h.CPBCntMinus1)
+	b.vuiUint(id, "bitRateScale", h.BitRateScale)
+	b.vuiUint(id, "cpbSizeScale", h.CPBSizeScale)
+	b.vuiUint(id, "initialCpbRemovalDelayLengthMinus1", h.InitialCPBRemovalDelayLengthMinus1)
+	b.vuiUint(id, "cpbRemovalDelayLengthMinus1", h.CPBRemovalDelayLengthMinus1)
+	b.vuiUint(id, "dpbOutputDelayLengthMinus1", h.DPBOutputDelayLengthMinus1)
+	b.vuiUint(id, "timeOffsetLength", h.TimeOffsetLength)
+
+	for i, cpb := range h.CPB {
+		entry := b.add(id, "CPB["+strconv.Itoa(i)+"]", "derived HRD entry", "", nil)
+		if entry == "" {
+			break
+		}
+		b.vuiUint(entry, "bitRateValueMinus1", cpb.BitRateValueMinus1)
+		b.vuiUint(entry, "cpbSizeValueMinus1", cpb.CPBSizeValueMinus1)
+		b.vuiBool(entry, "cbrFlag", cpb.CBRFlag)
+	}
+}
+
+func (b *builder) vuiUint(parent, name string, f *avc.VUIUnsignedField) {
+	if f != nil {
+		b.add(parent, name, "derived uint32", decimal(uint64(f.Value)), nil)
+	}
+}
+
+func (b *builder) vuiBool(parent, name string, f *avc.VUIBooleanField) {
+	if f != nil {
+		b.add(parent, name, "derived boolean", strconv.FormatBool(f.Value), nil)
+	}
 }

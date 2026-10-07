@@ -85,6 +85,7 @@ func runDetail(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	flags := flag.NewFlagSet("muxray detail", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	pretty := flags.Bool("pretty", false, "indent JSON output")
+	schemaVersion := flags.Uint("schema-version", 1, "detail schema version (1: original syntax; 2: AVC VUI or MP3 frame inspection)")
 	tagID := flags.Uint64("tag", ^uint64(0), "zero-based tag ID to parse (required)")
 	maxTags := flags.Uint64("max-tags", 0, fmt.Sprintf("maximum tags to index (0 uses %d; hard maximum %d)", flv.DefaultMaxTags, flv.HardMaxTags))
 	maxDiagnostics := flags.Uint64("max-diagnostics", 0, fmt.Sprintf("maximum scan diagnostics to retain (0 uses %d; range %d-%d)", flv.DefaultMaxDiagnostics, flv.MinDiagnostics, flv.HardMaxDiagnostics))
@@ -115,6 +116,10 @@ func runDetail(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	}
 	if flags.NArg() != 1 || *tagID == ^uint64(0) {
 		flags.Usage()
+		return exitUsage
+	}
+	if *schemaVersion != 1 && *schemaVersion != 2 {
+		_, _ = fmt.Fprintln(stderr, "muxray: --schema-version must be 1 or 2")
 		return exitUsage
 	}
 	if *tagID >= flv.HardMaxTags {
@@ -206,6 +211,10 @@ func runDetail(ctx context.Context, args []string, stdout, stderr io.Writer) int
 		}
 		avcOptions.NALLengthSize = resolved
 	}
+	// Deeper syntax belongs only to the selected detail. Context lookup above
+	// keeps its existing framing/length semantics and source-read budgets.
+	avcOptions.AVC.ParseVUI = *schemaVersion == 2
+	mp3Options.InspectFrames = *schemaVersion == 2
 	detail, err := flv.ParseTagDetail(source, tag, flv.DetailOptions{AMF0: amfOptions, AAC: aacOptions, MP3: mp3Options, AVC: avcOptions})
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "muxray: parse tag %d detail: %v\n", *tagID, err)
@@ -214,9 +223,17 @@ func runDetail(ctx context.Context, args []string, stdout, stderr io.Writer) int
 		}
 		return exitFailure
 	}
-	document, err := report.NewTagDetail(uint64(info.Size()), tag, detail)
+	var document report.ParsedTagDetailDocument
+	if *schemaVersion == 2 {
+		document, err = report.NewTagDetailV2(uint64(info.Size()), tag, detail)
+	} else {
+		document, err = report.NewTagDetail(uint64(info.Size()), tag, detail)
+	}
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "muxray: map tag %d detail report: %v\n", *tagID, err)
+		if errors.Is(err, report.ErrDetailV2Unsupported) {
+			return exitUsage
+		}
 		return exitFailure
 	}
 	if err := report.WriteParsedTagDetailJSON(stdout, document, *pretty); err != nil {

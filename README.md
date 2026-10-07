@@ -1,6 +1,6 @@
 # MuxRay（码流透镜）
 
-MuxRay 是一个面向 FLV 和音视频码流的跨平台诊断工具。项目已完成 P0/P1 技术基线，并开始实现 P2 基础分析；当前提供可复用、可测试的纯 Go FLV、AMF0、AAC、AVC/H.264 与 MP3 第一阶段解析核心和 CLI。
+MuxRay 是一个面向 FLV 和音视频码流的跨平台诊断工具。项目已完成 P0/P1 技术基线，并开始实现 P2 分析；当前提供可复用、可测试的纯 Go FLV、AMF0、AAC、AVC/H.264 与 MP3 解析核心和 CLI。
 
 ## 当前范围
 
@@ -28,7 +28,7 @@ MuxRay 是一个面向 FLV 和音视频码流的跨平台诊断工具。项目�
 - 正常、边界、损坏样本的 unit、Golden 与 fuzz 测试；
 - 离线语料身份/差分校验与实际落盘大文件的扫描测量工具。
 
-完整 VUI/PPS/slice 等深层 H.264 语义、MP3 多帧/VBR/CRC 深层分析、分页帧级曲线和实时 RTMP/HTTP-FLV 将在后续阶段加入。
+AVC/MP3 详情 v2 和桌面详情增加了 SPS VUI、Tag 内 MP3 多帧边界、Xing/Info/VBRI 声明及头部/side-info CRC 检查。完整 PPS/slice 语义、MP3 主数据/bit-reservoir 分析、分页帧级曲线和实时 RTMP/HTTP-FLV 将在后续阶段加入。
 
 当前媒体曲线采用源 Tag 窗口，不是解码帧或固定时间桶。完成媒体概览后，每页按需
 读取 64 点；未知时长不补零，最后未闭合区间不猜时长。口径与边界见
@@ -47,6 +47,7 @@ go run ./cmd/muxray inspect sample.flv
 go run ./cmd/muxray tags --start 1024 --count 256 --pretty sample.flv
 go run ./cmd/muxray summary --pretty sample.flv
 go run ./cmd/muxray summary --schema-version 2 --pretty sample.flv
+go run ./cmd/muxray detail --schema-version 2 --tag 1 --pretty sample.flv
 go run ./cmd/muxray detail --tag 0 --pretty sample.flv
 ```
 
@@ -60,6 +61,10 @@ go run ./cmd/muxray detail --tag 0 --pretty sample.flv
 
 `detail --tag <id>` 在容器索引完整时，按 Tag 类型分发到对应的有界解析器，不改变默认扫描结果，也不会把所有 payload 或递归对象树保留在内存。ScriptData、AAC Audio、AVC Video 与 MP3 Audio 分别使用 [`flv-tag-detail-v1.schema.json`](docs/schemas/flv-tag-detail-v1.schema.json)、[`flv-aac-tag-detail-v1.schema.json`](docs/schemas/flv-aac-tag-detail-v1.schema.json)、[`flv-avc-tag-detail-v1.schema.json`](docs/schemas/flv-avc-tag-detail-v1.schema.json) 和 [`flv-mp3-tag-detail-v1.schema.json`](docs/schemas/flv-mp3-tag-detail-v1.schema.json)，由 `documentType` 区分，现有 AMF0/AAC/AVC v1 输出保持不变。AAC sequence header 会解析 AudioSpecificConfig，raw AAC 只报告源 Span。AVC sequence header 会解析 avcC 与 SPS/PPS 基础摘要；raw NALU 的长度字段宽度由 `--avc-nal-length-size 1|2|4` 明确指定，或在默认值 0 时从最近的有效 sequence header 自动取得，不会猜测四字节宽度。MP3 第一阶段仅解析 `SoundFormat=2` 的首个固定帧头，余下数据只报告源 Span；free-format 会保留完整详情但不虚构码率或帧长。
 
+`detail --schema-version 2` 显式启用 AVC/MP3 深层详情，使用独立的 [AVC v2 schema](docs/schemas/flv-avc-tag-detail-v2.schema.json) 和 [MP3 v2 schema](docs/schemas/flv-mp3-tag-detail-v2.schema.json)。AVC 展开 SPS VUI 的宽高比、色彩、时序、HRD 和缓冲限制并检查尾位；MP3 在当前 Tag 内检查至多 64 帧及 1 MiB 覆盖范围，识别首帧 Xing/Info/VBRI 并校验受保护帧的头部/side-info CRC。未知、截断和预算外范围保持显式，不解码图像或音频，不将声明值当作实测结果。其他 codec 不支持详情 v2；默认详情 v1 和 Summary v1/v2 不变。语义与预算见 [ADR-023](docs/decisions/023-deeper-codec-details.md)。
+
+本轮生成编码样本、独立字段比对和 Linux 原生六轮结果见 [深层详情验收](docs/desktop-codec-details-20261007.md)。
+
 损坏或超限的 AMF0/AAC/AVC/MP3 语法仍会输出部分结果、精确到 bit 的诊断和 Tag payload 末端恢复位置，并以状态码 2 退出。非 AAC/MP3 Audio、非 AVC Video、尚未支持的编解码器以及不完整的容器索引不会伪装成详情文档。稳定诊断码见 [`docs/amf0-diagnostics-v1.md`](docs/amf0-diagnostics-v1.md)、[`docs/aac-diagnostics-v1.md`](docs/aac-diagnostics-v1.md)、[`docs/avc-diagnostics-v1.md`](docs/avc-diagnostics-v1.md) 和 [`docs/mp3-diagnostics-v1.md`](docs/mp3-diagnostics-v1.md)。
 
 `tags --start <id> --count <n>` 扫描后输出一个有界 Tag 页，使用独立的 [`flv-tag-page-v1.schema.json`](docs/schemas/flv-tag-page-v1.schema.json) 合同。默认从 0 开始、每页 256 条，允许 1–4,096 条；ID 和 Span 不会按页重新编号。页尾 `next` 可作为下一页的 `start`；`start == total` 返回空页，超出则退出 64。当前每次 CLI 调用都会重新扫描，尚未接入 Go 后台会话，也不提供边扫描边查询。详细接口与退出码见 [`tag-index-v1.md`](docs/tag-index-v1.md)。
@@ -70,7 +75,7 @@ Go 应用层新增 `internal/session.Open`：一个会话拥有一个后台扫�
 
 `internal/desktop` 提供异步打开、状态查询、取消、关闭、Tag/诊断分页及详情和 Hex 启动/查询 DTO。`internal/document` 保留同一只读文件至关闭，扫描和后续读取使用独立取消上下文；详情与 Hex 共用单一读取 worker 和递增请求 ID。应用一次只拥有一个槽位；旧 ID 不能操作新文件，64 位数值通过十进制字符串传输。宿主退出有独立的清理入口，仍保持纯 Go 构建。初始适配层见 [`桌面适配层说明`](docs/desktop-adapter-v1.md)，源生命周期及读取协议见 [`ADR-013`](docs/decisions/013-retained-document-details.md) 和 [`ADR-015`](docs/decisions/015-bounded-desktop-hex.md)。
 
-`desktop/` 是独立 Go 模块，接入 Wails v2.14.0 与 React/TypeScript。界面提供原生文件选择、进度、取消/关闭，以及扫描结束后的 Tag/诊断分页（每页 100 条）和 AMF0/AAC/AVC/MP3 按需详情。Hex 默认读取 512 字节、单次上限 4 KiB，支持字段/诊断源位置和 Tag ID 跳转；截断或未支持编码的原始字节也可独立查看。AVC NAL 长度通过有界候选索引定位最近可用 sequence header，长媒体尾部不再受 8,192 条距离上限影响；每次仍验证原始配置并限制解析与读取预算，缺失或超限时保留包头并明确诊断，不猜测长度。此定位不依赖先前选择或媒体概览；SPS/PPS 摘要和其他派生值不伪造连续源位置。MP3 只解析首个 MPEG 固定帧头，free-format 不虚构码率或帧长，CRC 标志不代表校验通过。根模块不引入 GUI 依赖；Windows 与 Linux 构建、测试和功能边界见 [`桌面开发说明`](desktop/README.md)、[`ADR-011`](docs/decisions/011-minimal-wails-shell.md)、[`ADR-014`](docs/decisions/014-bounded-desktop-avc-context.md) 与 [`ADR-020`](docs/decisions/020-indexed-desktop-avc-context.md)。四类详情联动、大文件、源变化恢复及阻塞关闭的既有实测见 [`Hex 原生验收记录`](docs/desktop-hex-20260913.md)。
+`desktop/` 是独立 Go 模块，接入 Wails v2.14.0 与 React/TypeScript。界面提供原生文件选择、进度、取消/关闭，以及扫描结束后的 Tag/诊断分页（每页 100 条）和 AMF0/AAC/AVC/MP3 按需详情。Hex 默认读取 512 字节、单次上限 4 KiB，支持字段/诊断源位置和 Tag ID 跳转；截断或未支持编码的原始字节也可独立查看。AVC NAL 长度通过有界候选索引定位最近可用 sequence header，长媒体尾部不再受 8,192 条距离上限影响；每次仍验证原始配置并限制解析与读取预算，缺失或超限时保留包头并明确诊断，不猜测长度。此定位不依赖先前选择或媒体概览；SPS/PPS 摘要和其他派生值不伪造连续源位置。桌面所选详情启用 SPS VUI 与 MP3 多帧/VBR/头部 CRC 检查；free-format 不虚构码率或帧长，CRC 结果不代表完整音频有效。根模块不引入 GUI 依赖；Windows 与 Linux 构建、测试和功能边界见 [`桌面开发说明`](desktop/README.md)、[`ADR-011`](docs/decisions/011-minimal-wails-shell.md)、[`ADR-014`](docs/decisions/014-bounded-desktop-avc-context.md) 与 [`ADR-020`](docs/decisions/020-indexed-desktop-avc-context.md)。四类详情联动、大文件、源变化恢复及阻塞关闭的既有实测见 [`Hex 原生验收记录`](docs/desktop-hex-20260913.md)。
 
 扫描、详情、汇总和输出共用 Ctrl+C 取消上下文，取消退出码为 `130`，不会伪造文件损坏诊断。取消时 stdout 可能不完整，调用方应丢弃；核心返回的部分索引仍可分页读取。取消是协作式的，不能强制中断已阻塞的底层读取或写入。设计依据见 [`ADR-008`](docs/decisions/008-cancellable-chunked-index.md)。
 

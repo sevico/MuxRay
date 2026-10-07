@@ -23,8 +23,15 @@ func mp3Data(payloads ...[]byte) []byte {
 
 func mp3Payload() []byte { return []byte{0x2f, 0xff, 0xfb, 0x90, 0x64} }
 
+func mp3CompletePayload() []byte {
+	// One complete 417-byte declared MPEG frame; its body remains opaque.
+	payload := make([]byte, 1+417)
+	copy(payload, []byte{0x2f, 0xff, 0xfb, 0x90, 0x64})
+	return payload
+}
+
 func TestDefaultMP3DetailRetainsSourceAndDamagedPrefix(t *testing.T) {
-	data := mp3Data(mp3Payload(), mp3Payload())
+	data := mp3Data(mp3CompletePayload(), mp3CompletePayload())
 	// The second payload is incomplete; the first is still eligible for details.
 	data = data[:len(data)-7]
 	s := source(t, data)
@@ -55,9 +62,9 @@ func TestDefaultMP3DetailRetainsSourceAndDamagedPrefix(t *testing.T) {
 }
 
 func TestMP3CanceledScanPrefixRemainsInspectable(t *testing.T) {
-	data := mp3Data(mp3Payload(), mp3Payload())
+	data := mp3Data(mp3CompletePayload(), mp3CompletePayload())
 	s := source(t, data)
-	s.blockOffset = 33 // second Tag header, after the first complete MP3 payload
+	s.blockOffset = 13 + 15 + int64(len(mp3CompletePayload())) // second Tag header, after the first complete MP3 payload
 	s.armed.Store(true)
 	d := startTest(t, s, nil, DetailTimeout)
 	receive(t, s.entered)

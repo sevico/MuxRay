@@ -60,7 +60,7 @@ func ParseFrameHeader(source io.ReaderAt, payload cursor.Span, options Options) 
 
 	var raw [frameHeaderBytes]byte
 	n, readErr := source.ReadAt(raw[:], int64(start))
-	if n != len(raw) {
+	if n != len(raw) || normalized.InspectFrames && readErr != nil && readErr != io.EOF {
 		if readErr == nil {
 			readErr = io.ErrUnexpectedEOF
 		}

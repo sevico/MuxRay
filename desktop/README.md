@@ -37,7 +37,7 @@ AVC 上下文查找和准确源位置见 [ADR-014](../docs/decisions/014-bounded
 - 通过原生保存对话框导出有界诊断快照 JSON，包含当前已载入证据及明确的覆盖/省略信息。
 - 选择完整的 Tag 查看 AMF0 字段树、AAC 音频头、AudioSpecificConfig 或 raw 包范围，保留原始 byte/bit 位置和语法诊断。
 - AVC Video 包头、有符号 CTS 与派生 PTS、avcC/SPS/PPS 基础摘要、NAL 长度及头字段，并说明所用前置配置的来源。
-- MP3 FLV 音频头、首个 MPEG Audio Layer III 固定帧头、可推导参数与原始数据范围。
+- MP3 FLV 音频头、Tag 内 MPEG Audio Layer III 帧边界、首帧 VBR 声明、头部/side-info CRC 与未检查范围。
 - 按需媒体概览 v2：时间轴、区间码率、配置变化及保留事件分页，事件可定位到 Tag 详情与 Hex。
 - 分页媒体码率与 GOP 曲线：覆盖全部已索引源 Tag 窗口，每页 64 点，可定位闭合 Tag 与实际 Hex。
 - 偏移、DTS、Tag ID 和总数保留十进制字符串；分页和比例计算使用 BigInt。
@@ -174,16 +174,25 @@ AVC 解析预算为 64 条诊断、64 个 avcC 参数集条目、256 个 NAL、�
 包内 SPS/PPS 数量受 NAL 上限约束，全部结果仍独立受字段/JSON 展示预算限制。
 FLV/avcC/NAL 的连续原始范围保留精确位置；DTS/PTS、尺寸和 SPS/PPS 摘要等派生字段
 显示“—”，不会把去除防竞争字节后跨段的 RBSP 字段伪装成连续原始 Span。
-NAL 只展开边界与头信息，不解码 slice 或视频画面；FLV keyframe 声明也不证明 IDR。
+SPS 详情进一步展开 VUI 的宽高比、色彩、时序、NAL/VCL HRD 和 bitstream restrictions，
+并检查 SPS 尾位；每个 HRD 最多 32 个 CPB 条目。时序与 HRD 是声明值，不代表实测结果。
+VUI 字段沿用 SPS 摘要的无单一 Span 展示，可从整个 SPS 定位 Hex；逐字段分段源映射
+由 CLI 详情 v2 提供，不将跨防竞争字节的范围伪装为连续 Span。NAL 不解码 slice 或视频画面；
+FLV keyframe 声明也不证明 IDR。配置查找和媒体概览仍使用原解析深度。
 
-MP3 沿用 [ADR-006](../docs/decisions/006-bounded-mp3-detail.md) 的首帧头范围，仅支持
-`SoundFormat=2`；保留的 `SoundFormat=14` 仍不支持。解析只触及一字节 FLV 音频头
-及随后四字节 MPEG 固定帧头，正文只显示原始范围，不因 payload 大而读取全部音频。
+MP3 深层详情仅支持 `SoundFormat=2`；保留的 `SoundFormat=14` 仍不支持。
+在当前 Tag 内按帧头推导的长度检查至多 64 帧、1 MiB 覆盖范围，仅读取帧头与必要的
+元数据/保护字节，跳过压缩正文。解析首帧 Xing/Info/VBRI 声明，受保护的 Layer III 帧
+检查头部末 16 位和 side-info 的 CRC。声明流总帧数与当前 Tag 观察帧数分别显示；
+Xing/Info 元数据帧可能不计入声明总数。CRC 不校验主数据、bit-reservoir 或解码音频。
 原始位字段保留 Span；采样率、声道数、码率、推导帧长等值没有单一原始位置。
-free-format 可完成首帧头语法解析，但码率和帧长未知。完整性仅描述首个固定帧头，
-不证明整帧存在或可解码，不验证 CRC、后续帧或 VBR 头。FLV 音频声明与 MPEG 帧头
-参数分开展示，损坏头保留可解析字段及诊断。MP3 无需跨 Tag 配置回溯，继续使用同一
-详情 worker、源检查、展示预算和请求恢复机制。
+free-format 的码率和帧长保持未知，不搜索下一个同步字、不跨 Tag 拼接。
+损坏、截断和超预算保留已解析前缀及未检查范围，帧边界完整不保证可解码。
+继续使用同一详情 worker、源检查、展示预算和请求恢复机制。CLI 默认首帧头合同
+保持兼容，深层 CLI 使用 `detail --schema-version 2`；参见
+[ADR-023](../docs/decisions/023-deeper-codec-details.md)。
+生成编码样本、CRC 结构样本及六轮 Linux 原生结果见
+[深层详情验收](../docs/desktop-codec-details-20261007.md)。
 
 详情读取前后检查原句柄的文件身份、大小和修改时间，发现改变后要求关闭重开。
 这不是不可变快照，不能识别所有同大小、同时间戳的原位修改。快速切换仅保留
