@@ -134,6 +134,47 @@ func TestCloseDuringPickerAndConcurrentAdmission(t *testing.T) {
 	}
 }
 
+func TestShutdownCancelsPickerAndWaitsForCleanup(t *testing.T) {
+	entered, canceled, cleanup := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	h := newHost(func(ctx context.Context) (string, error) {
+		close(entered)
+		<-ctx.Done()
+		close(canceled)
+		<-cleanup
+		return filepath.Join(t.TempDir(), "late.flv"), nil
+	})
+	h.startup(context.Background())
+	result := make(chan PickResponse, 1)
+	go func() { result <- h.native.OpenFLV("1") }()
+	<-entered
+	h.beforeClose(context.Background())
+	select {
+	case <-canceled:
+	case <-time.After(time.Second):
+		t.Fatal("window close did not cancel the picker context")
+	}
+	stopped := make(chan struct{})
+	go func() { h.shutdown(context.Background()); close(stopped) }()
+	select {
+	case <-stopped:
+		t.Fatal("shutdown returned before picker cleanup")
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(cleanup)
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("shutdown did not finish after picker cleanup")
+	}
+	r := <-result
+	if r.Session != nil || r.Error == nil || r.Error.Code != "shutting_down" {
+		t.Fatalf("late selection published after shutdown: %+v", r)
+	}
+	if recovered := h.native.GetOpenResult("1"); recovered.Error == nil || recovered.Error.Code != "shutting_down" {
+		t.Fatalf("recovery lost shutdown result: %+v", recovered)
+	}
+}
+
 func TestNativeRealScanAndBoundedPages(t *testing.T) {
 	for _, name := range []string{"complete", "mismatch-warning", "truncated-error"} {
 		t.Run(name, func(t *testing.T) {

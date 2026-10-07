@@ -13,6 +13,9 @@ import (
 )
 
 func main() {
+	if handled, code := runPickerChild(); handled {
+		os.Exit(code)
+	}
 	if err := runDesktop(); err != nil {
 		// Avoid leaking host-specific paths in UI/binding errors.
 		log.Print("MuxRay desktop could not start; check the WebView2 runtime and desktop build.")
@@ -21,12 +24,7 @@ func main() {
 }
 
 func runDesktop() error {
-	host := newHost(func(ctx context.Context) (string, error) {
-		return runtime.OpenFileDialog(ctx, runtime.OpenDialogOptions{
-			Title:   "选择 FLV 文件",
-			Filters: []runtime.FileFilter{{DisplayName: "FLV 文件 (*.flv)", Pattern: "*.flv"}},
-		})
-	})
+	host := newHost(openFileDialog)
 	host.native.saveDialog = func(ctx context.Context, name string) (string, error) {
 		return runtime.SaveFileDialog(ctx, runtime.SaveDialogOptions{
 			Title: "导出诊断快照 JSON", DefaultFilename: name,

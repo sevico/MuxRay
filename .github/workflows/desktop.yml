@@ -64,6 +64,11 @@ jobs:
           } else {
             Write-Output '::notice::Desktop race check skipped because gcc is unavailable on this runner.'
           }
+      - name: Windows picker process prototype tests (no GUI)
+        run: |
+          go test -tags pickerprocess -count=1 ./...
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go vet -tags pickerprocess ./...
       - name: Deterministic native fixture tests
         working-directory: .
         run: python -B -m unittest discover -s tools/desktop-native -p '*fixtures_test.py' -v

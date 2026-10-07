@@ -24,3 +24,4 @@ Repository-wide architecture and compatibility decisions are recorded here. An a
 | [ADR-018](./018-bounded-tag-trends.md) | Accepted | Show bounded source-ordered container trends with exact per-track DTS deltas and explicit preceding-context limits |
 | [ADR-019](./019-desktop-diagnostic-snapshot.md) | Accepted | Export bounded desktop diagnostic snapshots through a recoverable native save operation |
 | [ADR-020](./020-indexed-desktop-avc-context.md) | Accepted | Index AVC sequence-header candidates during desktop scans for bounded, order-independent long-media context lookup |
+| [ADR-021](./021-isolated-file-picker-prototype.md) | Accepted for opt-in prototype | Isolate Windows FLV file selection in a bounded child process and validate actual exit before publishing its result |

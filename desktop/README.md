@@ -8,6 +8,25 @@ Wails **v2.14.0** + React **18.3.1** + TypeScript **5.9.3**，构建工具 Vite
 AVC 上下文查找和准确源位置见 [ADR-014](../docs/decisions/014-bounded-desktop-avc-context.md)。
 长媒体的配置候选索引见 [ADR-020](../docs/decisions/020-indexed-desktop-avc-context.md)。
 
+## Windows 文件选择辅助进程原型
+
+`./build-picker-prototype.ps1` 通过 `pickerprocess` 构建标记生成独立命名的
+`build/bin/MuxRay-picker-prototype.exe`。每次 FLV 打开由一个子进程显示原生对话框，
+主进程等它实际退出并核对回复后才加载媒体；取消分支不创建会话。已实现超时、
+子进程崩溃和协议错误的清理及窗口恢复逻辑，既有请求恢复不会重复启动文件选择器。
+原生窗口恢复尚未通过验收，已知问题见下方验证记录。
+
+这是 [ADR-021](../docs/decisions/021-isolated-file-picker-prototype.md) 定义的可选原型。
+默认生产构建、JSON 保存对话框及非 Windows 路径保持原实现。子进程仍包含同一 EXE
+的 Go 依赖初始化，但不进入 Wails 主循环、不创建 WebView、不扫描媒体。它提供进程
+资源隔离，不是安全沙箱，也没有修复尚未归属的 Shell 内部引用。
+
+非界面验证命令为 `go test -tags pickerprocess -count=1 ./...`、
+`go vet -tags pickerprocess ./...`，具备 gcc 时再运行
+`go test -race -tags pickerprocess -count=1 ./...`。测试子进程不会弹出文件对话框。
+
+[原型验证记录](../docs/desktop-picker-process-20261007.md)：自动测试通过，首次原生取消出现主进程退出码 1，正在诊断。六轮资源回收验收尚未通过，暂不用于默认发布。
+
 ## 范围
 
 - 原生 FLV 文件选择；取消选择不创建会话。

@@ -26,6 +26,8 @@ type host struct {
 type Native struct {
 	mu            sync.Mutex
 	ctx           context.Context
+	dialogCancel  context.CancelFunc
+	openDone      chan struct{}
 	closing       bool
 	picking       bool
 	dialog        fileDialog
@@ -58,13 +60,19 @@ func (h *host) startup(ctx context.Context) {
 	h.native.mu.Lock()
 	defer h.native.mu.Unlock()
 	if !h.native.closing {
-		h.native.ctx = ctx
+		if h.native.dialogCancel != nil {
+			h.native.dialogCancel()
+		}
+		h.native.ctx, h.native.dialogCancel = context.WithCancel(ctx)
 	}
 }
 
 func (h *host) beforeClose(context.Context) bool {
 	h.native.mu.Lock()
 	h.native.closing = true
+	if h.native.dialogCancel != nil {
+		h.native.dialogCancel()
+	}
 	h.native.mu.Unlock()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -77,6 +85,16 @@ func (h *host) shutdown(context.Context) {
 		h.beforeClose(context.Background())
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
+		h.native.mu.Lock()
+		openDone := h.native.openDone
+		h.native.mu.Unlock()
+		if openDone != nil {
+			select {
+			case <-openDone:
+			case <-ctx.Done():
+				log.Print("MuxRay file picker cleanup timed out.")
+			}
+		}
 		if message := shutdownMessage(h.app.Shutdown(ctx)); message != "" {
 			log.Print(message)
 		}
@@ -196,8 +214,11 @@ func (n *Native) OpenFLV(requestID string) PickResponse {
 	n.openID = id
 	n.opened = PickResponse{APIVersion: desktop.APIVersion, RequestID: requestID, Pending: true}
 	n.picking = true
+	done := make(chan struct{})
+	n.openDone = done
 	ctx := n.ctx
 	n.mu.Unlock()
+	defer close(done)
 
 	path, err := n.dialog(ctx)
 	n.mu.Lock()
