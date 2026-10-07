@@ -332,6 +332,7 @@ func ParseLengthPrefixedNALUnits(source io.ReaderAt, payload cursor.Span, length
 	}
 	diagnostics := newDiagnosticCollector(normalized.MaxDiagnostics, end)
 	budget := newParseBudget(normalized)
+	parameterContext := normalized.ParameterSets.Clone()
 	position := start
 	framingComplete := true
 	maximumPossible := (end - start) / uint64(lengthSize+1)
@@ -406,6 +407,11 @@ func ParseLengthPrefixedNALUnits(source io.ReaderAt, payload cursor.Span, length
 			unit.Header, unit.HeaderPresent = header, header.Complete
 			unit.SequenceParameterSet, unit.PictureParameterSet = sps, pps
 			unit.SummaryComplete = summaryComplete
+			if normalized.ParseSliceHeaders && parseErr == nil && header.Complete &&
+				(header.NALUnitType == NALUnitTypeNonIDRSlice || header.NALUnitType == NALUnitTypeIDRSlice) {
+				unit.SliceHeader, parseErr = parseSliceHeader(source, span, header, parameterContext, budget, diagnostics)
+				unit.SummaryComplete = unit.SliceHeader != nil && unit.SliceHeader.PrefixComplete
+			}
 			if parseErr != nil {
 				result.NALUnits = append(result.NALUnits, unit)
 				position += uint64(length)
@@ -415,6 +421,9 @@ func ParseLengthPrefixedNALUnits(source io.ReaderAt, payload cursor.Span, length
 				result.Diagnostics = diagnostics.items
 				return result, fmt.Errorf("avc: parse NAL unit %d: %w", unit.Index, parseErr)
 			}
+		}
+		if normalized.ParseSliceHeaders {
+			parameterContext.AddNALUnit(unit)
 		}
 		result.NALUnits = append(result.NALUnits, unit)
 		position += uint64(length)

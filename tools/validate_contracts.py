@@ -12,6 +12,9 @@ from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parent.parent
 CONTRACTS = (
+    ("docs/schemas/flv-avc-tag-detail-v3.schema.json", "testdata/golden/flv-avc-detail-v3.json"),
+    ("docs/schemas/flv-avc-tag-detail-v3.schema.json", "testdata/golden/flv-avc-detail-nalu-v3.json"),
+    ("docs/schemas/flv-avc-tag-detail-v3.schema.json", "testdata/golden/flv-avc-detail-missing-v3.json"),
     ("docs/schemas/flv-avc-tag-detail-v2.schema.json", "testdata/golden/flv-avc-detail-v2.json"),
     ("docs/schemas/flv-avc-tag-detail-v2.schema.json", "testdata/golden/flv-avc-detail-truncated-v2.json"),
     ("docs/schemas/flv-mp3-tag-detail-v2.schema.json", "testdata/golden/flv-mp3-detail-v2.json"),
@@ -1446,6 +1449,44 @@ def validate_codec_detail_v2_edge_cases() -> None:
     require_invalid(mp3, changed, "complete Xing missing flags")
 
 
+def validate_avc_v3_edge_cases() -> None:
+    validator = Draft202012Validator(load_json("docs/schemas/flv-avc-tag-detail-v3.schema.json"))
+    config = load_json("testdata/golden/flv-avc-detail-v3.json")
+    nalu = load_json("testdata/golden/flv-avc-detail-nalu-v3.json")
+    for version in (1, 2):
+        old = Draft202012Validator(load_json(f"docs/schemas/flv-avc-tag-detail-v{version}.schema.json"))
+        changed = deepcopy(nalu)
+        changed['schemaVersion'] = version
+        require_invalid(old, changed, f"AVC v3 fields cannot enter v{version}")
+    for field in ('sliceHeaderPrefix',):
+        changed = deepcopy(nalu)
+        del changed['detail']['nalUnitSequence']['nalUnits'][0][field]
+        require_invalid(validator, changed, 'complete slice without prefix')
+    for field in ('frameNum', 'referencedPpsSpan', 'idrPicId'):
+        changed = deepcopy(nalu)
+        del changed['detail']['nalUnitSequence']['nalUnits'][0]['sliceHeaderPrefix'][field]
+        require_invalid(validator, changed, 'complete slice without ' + field)
+    for field in ('prefix',):
+        changed = deepcopy(config)
+        del changed['detail']['avcDecoderConfigurationRecord']['pictureParameterSets'][0]['pictureParameterSet'][field]
+        require_invalid(validator, changed, 'complete PPS without prefix')
+    changed = deepcopy(config)
+    del changed['detail']['avcDecoderConfigurationRecord']['pictureParameterSets'][0]['pictureParameterSet']['prefix']['weightedBipredIdc']
+    require_invalid(validator, changed, 'complete PPS prefix without prediction flag')
+    for path, value in (
+        (['detail', 'parameterContext', 'state'], 'guessed'),
+        (['detail', 'parameterContext', 'ppsCount'], 257),
+        (['detail', 'nalUnitSequence', 'nalUnits', 0, 'sliceHeaderPrefix', 'bytesRead'], 257),
+        (['detail', 'nalUnitSequence', 'nalUnits', 0, 'sliceHeaderPrefix', 'unexpected'], True),
+    ):
+        changed = deepcopy(nalu)
+        target = changed
+        for part in path[:-1]:
+            target = target[part]
+        target[path[-1]] = value
+        require_invalid(validator, changed, 'v3 bounds/closed shape: ' + str(path))
+
+
 def main() -> None:
     manifest_schema = load_json("testdata/manifests/sample-manifest-v1.schema.json")
     Draft202012Validator.check_schema(manifest_schema)
@@ -1465,6 +1506,8 @@ def main() -> None:
         seen_hashes.add(manifest["file"]["sha256"])
     print(f"validated {len(seen_ids)} corpus manifest identities (media presence checked separately)")
     validate_codec_detail_v2_edge_cases()
+    validate_avc_v3_edge_cases()
+    print("validated AVC v3 prefix presence, version isolation, closed fields and budgets")
     print("validated AVC/MP3 detail v2 version isolation, presence, bounds, CRC and VBR shapes")
     tag_page_validator = None
     detail_validator = None

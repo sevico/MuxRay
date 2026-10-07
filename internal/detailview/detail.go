@@ -82,6 +82,16 @@ func Parse(ctx context.Context, source io.ReaderAt, tag flv.TagRecord) (*Detail,
 // It does not search or read that context source: all reads stay in the selected
 // payload, while context provenance spans describe the earlier configuration.
 func ParseWithAVCContext(ctx context.Context, source io.ReaderAt, tag flv.TagRecord, resolution avccontext.Resolution) (*Detail, error) {
+	return parseWithParameters(ctx, source, tag, resolution, nil)
+}
+
+// ParseWithAVCParameters expands PPS and slice prefixes using a separately
+// bounded replay result. It reads only the selected Tag, not previous payloads.
+func ParseWithAVCParameters(ctx context.Context, source io.ReaderAt, tag flv.TagRecord, resolution avccontext.Resolution, parameters avccontext.ParameterResolution) (*Detail, error) {
+	return parseWithParameters(ctx, source, tag, resolution, &parameters)
+}
+
+func parseWithParameters(ctx context.Context, source io.ReaderAt, tag flv.TagRecord, resolution avccontext.Resolution, parameters *avccontext.ParameterResolution) (*Detail, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -152,7 +162,7 @@ func ParseWithAVCContext(ctx context.Context, source io.ReaderAt, tag flv.TagRec
 			return nil, ErrUnsupported
 		}
 	} else {
-		if err := b.avc(ctx, reader, tag, resolution); err != nil {
+		if err := b.avc(ctx, reader, tag, resolution, parameters); err != nil {
 			return nil, err
 		}
 	}

@@ -65,6 +65,8 @@ jobs:
         run: go test ./internal/mp3 -run=^$ -fuzz=FuzzFrameSequence -fuzztime=30s
       - name: Fuzz SPS VUI
         run: go test ./internal/avc -run=^$ -fuzz=FuzzSPSVUI -fuzztime=30s
+      - name: Fuzz bounded PPS and slice prefixes
+        run: go test ./internal/avc -run=^$ -fuzz=FuzzSlicePrefixes -fuzztime=30s
       - name: Fuzz AVCDecoderConfigurationRecord
         run: go test ./internal/avc -run=^$ -fuzz=FuzzDecoderConfigurationRecord -fuzztime=30s
       - name: Fuzz AVC length-prefixed NAL units

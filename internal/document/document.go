@@ -281,7 +281,11 @@ func (d *Document) parseWithContext(ctx context.Context, source io.ReaderAt, tag
 	if err != nil {
 		return nil, err
 	}
-	return detailview.ParseWithAVCContext(ctx, source, tag, resolution)
+	parameters, err := avccontext.ResolveParameters(ctx, source, tag, d.scan.Tag, resolution, detailview.DesktopAVCOptions(), avccontext.ParameterLimits{})
+	if err != nil {
+		return nil, err
+	}
+	return detailview.ParseWithAVCParameters(ctx, source, tag, resolution, parameters)
 }
 
 // StartDetail shares request generations with StartHex. There is one active

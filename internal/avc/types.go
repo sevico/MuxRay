@@ -12,7 +12,14 @@ import (
 type Options struct {
 	// ParseVUI expands SPS VUI and validates SPS trailing bits. The default
 	// retains the original phase-one result and diagnostic contract.
-	ParseVUI         bool
+	ParseVUI bool
+	// ParsePPS expands the necessary PPS prefix; ParseSliceHeaders reads only
+	// the slice header prefix through redundant_pic_cnt and also enables
+	// ParsePPS for in-band parameter replacements. Both default off.
+	ParsePPS          bool
+	ParseSliceHeaders bool
+	// ParameterSets is cloned for each parse; in-band updates never mutate it.
+	ParameterSets    *ParameterSetContext
 	MaxDiagnostics   uint32
 	MaxParameterSets uint32
 	MaxNALUnits      uint32
@@ -46,6 +53,9 @@ const (
 
 // Normalized applies defaults and rejects values outside package hard limits.
 func (o Options) Normalized() (Options, error) {
+	if o.ParseSliceHeaders {
+		o.ParsePPS = true
+	}
 	if o.MaxDiagnostics == 0 {
 		o.MaxDiagnostics = DefaultMaxDiagnostics
 	} else if o.MaxDiagnostics < MinDiagnostics {
@@ -289,6 +299,7 @@ type SequenceParameterSet struct {
 // syntax stays in RemainingRBSPBits.
 type PictureParameterSet struct {
 	RBSP RBSPView
+	Deep *PPSDetails
 
 	PictureParameterSetID                     uint32
 	PictureParameterSetIDSpan                 MappedSpan
@@ -389,6 +400,7 @@ type NALUnit struct {
 	HeaderPresent        bool
 	SequenceParameterSet *SequenceParameterSet
 	PictureParameterSet  *PictureParameterSet
+	SliceHeader          *SliceHeader
 	SummaryComplete      bool
 }
 

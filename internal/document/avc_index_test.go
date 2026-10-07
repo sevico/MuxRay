@@ -11,13 +11,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sevico/muxray/internal/avccontext"
 	"github.com/sevico/muxray/internal/detailview"
 	"github.com/sevico/muxray/internal/flv"
 	"github.com/sevico/muxray/internal/session"
 )
 
-// These fixtures contain video throughout, so a resolver that still probes
-// every preceding video record cannot accidentally pass a script-only gap.
+// These fixtures contain video throughout: the length candidate search stays
+// independent of the separately bounded forward parameter replay.
 func indexedAVCData(payloads ...[]byte) ([]byte, []int64) {
 	data := []byte{'F', 'L', 'V', 1, 1, 0, 0, 0, 9, 0, 0, 0, 0}
 	offsets := make([]int64, 0, len(payloads))
@@ -51,9 +52,10 @@ func indexedAVCBadConfig() []byte { return []byte{0x17, 0, 0, 0, 0, 1} }
 
 func requireIndexedAVCContext(t *testing.T, got DetailResult, sourceID uint64, width byte, candidates uint32) {
 	t.Helper()
-	if got.Err != nil || got.State != "ready" || got.Detail == nil || !got.Detail.Complete || got.Detail.Kind != "avcVideo" {
+	if got.Err != nil || got.State != "ready" || got.Detail == nil || got.Detail.Kind != "avcVideo" {
 		t.Fatalf("indexed AVC detail: %+v", got)
 	}
+	requireTruncatedAVCSlice(t, got.Detail)
 	want := map[string]string{
 		"AVC context": "found", "lookupMethod": "candidate_index",
 		"sourceTagId":   strconv.FormatUint(sourceID, 10),
@@ -84,14 +86,18 @@ func TestAVCIndexFirstDetailSkipsLongVideoDistance(t *testing.T) {
 	if err := scanDone(t, d); err != nil {
 		t.Fatal(err)
 	}
-	reads := s.reads.Load()
 	// No earlier detail request has parsed or cached the distant configuration.
 	if _, err := d.StartDetail(1, nalCount); err != nil {
 		t.Fatal(err)
 	}
-	requireIndexedAVCContext(t, result(t, d, 1), 0, 4, 1)
-	if actual := s.reads.Load() - reads; actual >= 100 {
-		t.Fatalf("tail detail made %d reads; traversed intervening video payloads", actual)
+	got := result(t, d, 1)
+	requireIndexedAVCContext(t, got, 0, 4, 1)
+	if field(t, got.Detail, "Parameter context").Value != "budget_exhausted" || field(t, got.Detail, "replayedTags").Value != strconv.FormatUint(avccontext.DefaultParameterMaxTags, 10) {
+		t.Fatalf("parameter replay exceeded its independent tag budget: %+v", got.Detail)
+	}
+	readBytes, err := strconv.ParseUint(field(t, got.Detail, "contextBytesRead").Value, 10, 64)
+	if err != nil || readBytes > avccontext.DefaultParameterMaxBytes {
+		t.Fatalf("parameter read budget: bytes=%d err=%v", readBytes, err)
 	}
 }
 
@@ -118,6 +124,13 @@ func TestAVCIndexConfigurationChangesIgnoreRequestOrder(t *testing.T) {
 		}
 		got := result(t, d, requestID)
 		requireIndexedAVCContext(t, got, tc.config, tc.width, tc.candidates)
+		parameterState := "missing" // Empty parameter arrays in these configurations.
+		if tc.tag == 5 {
+			parameterState = "invalidated"
+		}
+		if field(t, got.Detail, "Parameter context").Value != parameterState {
+			t.Fatalf("selected %d: parameter generation %+v", tc.tag, got.Detail)
+		}
 		origin := field(t, got.Detail, "sourceLengthSizeMinusOne")
 		if origin.Span == nil || origin.Span.ByteOffset != strconv.FormatInt(offsets[tc.config]+9, 10) || origin.Span.BitOffset != 6 || origin.Span.BitLength != 2 {
 			t.Fatalf("request %d selected %d: wrong configuration origin %+v", requestID, tc.tag, origin)
@@ -145,12 +158,15 @@ func TestAVCIndexKeepsCandidateBudget(t *testing.T) {
 			got := result(t, d, 1)
 			if badCount == 31 {
 				requireIndexedAVCContext(t, got, 0, 4, 32)
+				if field(t, got.Detail, "Parameter context").Value != "invalidated" {
+					t.Fatalf("broken newer configurations activated old parameters: %+v", got.Detail)
+				}
 				return
 			}
 			if got.Err != nil || got.Detail == nil || got.Detail.Complete {
 				t.Fatalf("candidate budget did not retain partial detail: %+v", got)
 			}
-			for name, want := range map[string]string{"AVC context": "budget_exhausted", "lookupMethod": "candidate_index", "candidates": "32"} {
+			for name, want := range map[string]string{"AVC context": "budget_exhausted", "Parameter context": "budget_exhausted", "lookupMethod": "candidate_index", "candidates": "32"} {
 				if actual := field(t, got.Detail, name).Value; actual != want {
 					t.Errorf("%s = %q, want %q", name, actual, want)
 				}

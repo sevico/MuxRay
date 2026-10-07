@@ -25,7 +25,7 @@ def arguments(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary', type=Path, default=ROOT / 'desktop/build/bin/MuxRay')
     parser.add_argument('--output-dir', type=Path, required=True, help='new absolute evidence directory')
-    parser.add_argument('--source', type=Path, help='read-only local FLV; otherwise generate a 4776-byte structural fixture')
+    parser.add_argument('--source', type=Path, help='read-only local FLV; otherwise generate a small structural fixture')
     parser.add_argument('--tag', type=int, help='supported detail Tag; default generated=4, supplied source=0')
     parser.add_argument('--max-source-bytes', type=int, default=MIN_SOURCE_LIMIT, help='16 MiB default; at most 1 GiB')
     parser.add_argument('--timeout-seconds', type=int, default=180, help='whole session deadline, 30–600 seconds; cleanup gets up to 10 more')
@@ -63,6 +63,18 @@ def digest(path):
         for block in iter(lambda: stream.read(1 << 20), b''):
             value.update(block)
     return value.hexdigest()
+
+
+def generated_fixture():
+    from hex_fixtures import fixtures, tag
+    data, records = fixtures()['hex-details.flv']
+    selected = records[4]
+    end = selected['offset'] + 15 + selected['payloadBytes']
+    # The historical Hex fixture's 65 88 NAL predates slice-prefix parsing.
+    # Keep its other Tags but supply the minimum valid prefix for its PPS/SPS:
+    # first_mb=0, I slice=2, PPS=0, frame_num=0 (4 bits), idr_pic_id=0.
+    payload = bytes.fromhex('17010000000000000365b840')
+    return data[:selected['offset']] + tag(9, payload) + data[end:]
 
 
 def parse_stat(raw):
@@ -352,9 +364,8 @@ def launch(args):
         env[name] = str(path)
     generated = args.source is None
     if generated:
-        from hex_fixtures import fixtures
         args.source = out / 'generated-details.flv'
-        args.source.write_bytes(fixtures()['hex-details.flv'][0])
+        args.source.write_bytes(generated_fixture())
     # Start the bus inside Xvfb so D-Bus-activated AT-SPI/GTK helpers inherit
     # the private DISPLAY too, rather than the user's physical desktop.
     command = ['xvfb-run', '-a', '-s', '-screen 0 1600x1200x24 -nolisten tcp', 'dbus-run-session', '--',

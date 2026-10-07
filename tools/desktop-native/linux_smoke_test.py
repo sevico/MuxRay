@@ -50,6 +50,20 @@ class LinuxSmokeTest(unittest.TestCase):
             smoke.arguments(self.argv + ['--source', str(source)])
         self.assertEqual(smoke.arguments(self.argv + ['--source', str(source), '--max-source-bytes', str(32 << 20)]).source, source)
 
+    def test_generated_fixture_has_valid_slice_prefix_without_changing_other_tags(self):
+        from hex_fixtures import fixtures
+        old, records = fixtures()['hex-details.flv']
+        data = smoke.generated_fixture()
+        target = records[4]
+        begin, old_end = target['offset'], target['offset'] + 15 + target['payloadBytes']
+        self.assertEqual(data[:begin], old[:begin])
+        self.assertEqual(data[old_end + 1:], old[old_end:])
+        self.assertEqual(int.from_bytes(data[begin + 1:begin + 4], 'big'), 12)
+        self.assertEqual(data[begin + 11:begin + 23], bytes.fromhex('17010000000000000365b840'))
+        self.assertEqual(int.from_bytes(data[begin + 23:begin + 27], 'big'), 23)
+        # Ten encoded syntax bits: ue(0), ue(2), ue(0), u(4)=0, ue(0).
+        self.assertEqual(''.join(f'{b:08b}' for b in data[begin + 21:begin + 23])[:10], '1011100001')
+
     def test_proc_stat_comm_and_pid_reuse(self):
         fields = ['S', '123'] + ['0'] * 17 + ['456']
         self.assertEqual(smoke.parse_stat('42 (name with ) spaces) ' + ' '.join(fields)),

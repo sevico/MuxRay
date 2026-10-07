@@ -27,3 +27,4 @@ Repository-wide architecture and compatibility decisions are recorded here. An a
 | [ADR-021](./021-isolated-file-picker-prototype.md) | Accepted for opt-in prototype | Isolate Windows FLV file selection in a bounded child process and validate actual exit before publishing its result |
 | [ADR-022](./022-bounded-media-curves.md) | Accepted | Collect bounded source-window bitrate and declared GOP curves during Summary analysis and page them without source I/O |
 | [ADR-023](./023-deeper-codec-details.md) | Accepted | Add opt-in CLI v2 and bounded desktop H.264 VUI / MP3 frame, VBR and protected-header inspection |
+| [ADR-024](./024-bounded-pps-slice-prefix.md) | Accepted | Add AVC detail v3 PPS/slice prefixes with bounded parameter replay and reproducible codec regression |

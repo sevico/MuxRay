@@ -14,7 +14,7 @@ libglib2.0-bin at-spi2-core python3-pyatspi python3-xlib python3-jsonschema`。
 工具在运行前检查依赖，不安装软件或改变系统配置。
 
 ```bash
-# 默认：4776 byte 的 generated 结构样本，106 Tag；读取 AVC NALU Tag 4。
+# 默认：4777 byte 的 generated 结构样本，106 Tag；Tag 4 带有效 slice 前缀（不含完整图像）。
 /usr/bin/python3 -B tools/desktop-native/linux_smoke.py \
   --output-dir "$PWD/.cache/linux-smoke-001"
 

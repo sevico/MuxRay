@@ -25,9 +25,13 @@ func DesktopAVCOptions() flv.AVCVideoOptions {
 	}}
 }
 
-func (b *builder) avc(ctx context.Context, source io.ReaderAt, tag flv.TagRecord, resolution avccontext.Resolution) error {
+func (b *builder) avc(ctx context.Context, source io.ReaderAt, tag flv.TagRecord, resolution avccontext.Resolution, parameters *avccontext.ParameterResolution) error {
 	options := DesktopAVCOptions()
 	options.AVC.ParseVUI = true
+	if parameters != nil {
+		options.AVC.ParsePPS, options.AVC.ParseSliceHeaders = true, true
+		options.AVC.ParameterSets = parameters.Context
+	}
 	if resolution.State == "found" {
 		if (resolution.NALLengthSize != 1 && resolution.NALLengthSize != 2 && resolution.NALLengthSize != 4) ||
 			resolution.SourceLengthSpan.BitOffset != 6 || resolution.SourceLengthSpan.BitLength != 2 || resolution.SourceLengthSpan.Validate() != nil {
@@ -90,6 +94,9 @@ func (b *builder) avc(ctx context.Context, source io.ReaderAt, tag flv.TagRecord
 		}
 	}
 	b.avcContext(root, resolution, state)
+	if parameters != nil {
+		b.avcParameterContext(root, *parameters)
+	}
 	if p.ConfigPresent {
 		if err := b.avcConfig(ctx, root, p.Config); err != nil {
 			return err
@@ -104,6 +111,9 @@ func (b *builder) avc(ctx context.Context, source io.ReaderAt, tag flv.TagRecord
 			}
 			if !b.avcUnit(id, "NAL["+decimal(uint64(n.Index))+"]", n.Length, n.LengthSpan, n.Span, n.Header, n.HeaderPresent, n.SequenceParameterSet, n.PictureParameterSet, n.SummaryComplete) {
 				break
+			}
+			if n.SliceHeader != nil {
+				b.avcSlicePrefix(id, n.Index, n.SliceHeader)
 			}
 		}
 		b.encoded(id, "unparsedNALData", "opaque", "NAL data not interpreted; see diagnostics", s.TrailingSpan)
@@ -238,6 +248,9 @@ func (b *builder) avcUnit(parent, name string, length uint32, lengthSpan, dataSp
 			b.add(summary, "bottomFieldPicOrderInFramePresentFlag", "derived boolean", strconv.FormatBool(pps.BottomFieldPicOrderInFramePresentFlag), nil)
 		}
 		b.rbspSummary(summary, pps.RBSP)
+		if pps.Deep != nil {
+			b.avcPPSPrefix(summary, pps.Deep)
+		}
 	}
 	return !b.fieldsFull
 }

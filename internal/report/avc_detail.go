@@ -29,6 +29,7 @@ type AVCTagDetailDocument struct {
 func (AVCTagDetailDocument) parsedTagDetailDocument() {}
 
 type AVCVideoDetail struct {
+	ParameterContext              *AVCParameterContextDetail    `json:"parameterContext,omitempty"`
 	Kind                          string                        `json:"kind"`
 	Span                          Span                          `json:"span"`
 	BitsConsumed                  uint64                        `json:"bitsConsumed"`
@@ -121,6 +122,7 @@ type AVCNALHeaderDetail struct {
 }
 
 type AVCNALUnitDetail struct {
+	SliceHeaderPrefix    *AVCSlicePrefixDetail    `json:"sliceHeaderPrefix,omitempty"`
 	Index                uint32                   `json:"index"`
 	Length               uint32                   `json:"length"`
 	LengthSpan           Span                     `json:"lengthSpan"`
@@ -226,6 +228,7 @@ type AVCSequenceParameterSet struct {
 }
 
 type AVCPictureParameterSet struct {
+	Prefix                                *AVCPPSPrefixDetail     `json:"prefix,omitempty"`
 	RBSP                                  AVCRBSPViewDetail       `json:"rbsp"`
 	PictureParameterSetID                 *AVCMappedUnsignedField `json:"pictureParameterSetId,omitempty"`
 	SequenceParameterSetID                *AVCMappedUnsignedField `json:"sequenceParameterSetId,omitempty"`

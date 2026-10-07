@@ -126,3 +126,10 @@ python -B tools/ctrlc_windows.py --muxray .cache/muxray-cancel.exe --file testda
 不联网、不打开可见交互窗口。测量包含事件分发、退出和管道排空，不代表纯核心取消时间。
 JSON 即使完整，exit=130 时也必须丢弃。阶段判定、权限边界、原始数据和历史未定位异常见
 [`取消专项报告`](../docs/cancellation-investigation-20260905.md)。
+
+## Codec depth regression
+
+[`codec-regression/README.md`](codec-regression/README.md) documents local sample
+generation, independent FFmpeg/source-bit comparison for AVC v2/v3 and MP3 v2,
+and six baseline plus two PPS/slice Linux native acceptance rounds. All runs
+require fresh evidence directories and record commands, hashes and failures.

@@ -12,7 +12,8 @@ The public Draft 2020-12 contracts are:
 - [`flv-media-summary-v2.schema.json`](./flv-media-summary-v2.schema.json) for opt-in AAC/AVC/MP3 `muxray summary --schema-version 2` analysis.
 - [`desktop-diagnostic-snapshot-v1.schema.json`](./desktop-diagnostic-snapshot-v1.schema.json) for bounded desktop diagnostic snapshots saved through the native file dialog.
 
-Scan and detail use `schemaVersion: 1`; media summary explicitly selects 1 or 2
+Scan and default detail use `schemaVersion: 1`; AVC/MP3 detail may select 2,
+AVC alone may select 3; media summary explicitly selects 1 or 2
 and defaults to 1. These are independent contracts. The scan report
 is selected by the `inspect` command. Detail consumers must select the validator
 using both `documentType` and `schemaVersion`: AMF0 uses
@@ -39,6 +40,19 @@ paths are absent; uint64 coordinates remain canonical decimal strings. The
 encoded snapshot is at most 2 MiB, with at most 4096 actual Hex bytes, 512 trend
 points and one requested Summary event page of at most 100 entries. Details and
 source-validation limits are defined in [ADR-019](../decisions/019-desktop-diagnostic-snapshot.md).
+
+## Opt-in AVC prefix detail v3
+
+[`flv-avc-tag-detail-v3.schema.json`](./flv-avc-tag-detail-v3.schema.json) adds
+`parameterContext`, PPS `prefix` and NAL `sliceHeaderPrefix` to the explicit AVC
+v3 document only. V1/v2 stay frozen. PPS base completeness is unchanged; the
+separate `prefixComplete` covers only the supported prefix, never full header or
+picture decoding. Missing fields remain absent. The context records bounded
+source-order replay and may be missing, invalidated or budget-exhausted while
+NAL framing remains available. A referenced SPS/PPS span can point into an
+earlier Tag. Slice RBSP mappings describe inspected bytes, not the opaque
+compressed body. Limits, unsupported FMO and error semantics are defined in
+[ADR-024](../decisions/024-bounded-pps-slice-prefix.md).
 
 ## Deterministic CLI encoding
 

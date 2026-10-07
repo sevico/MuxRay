@@ -177,8 +177,18 @@ FLV/avcC/NAL 的连续原始范围保留精确位置；DTS/PTS、尺寸和 SPS/P
 SPS 详情进一步展开 VUI 的宽高比、色彩、时序、NAL/VCL HRD 和 bitstream restrictions，
 并检查 SPS 尾位；每个 HRD 最多 32 个 CPB 条目。时序与 HRD 是声明值，不代表实测结果。
 VUI 字段沿用 SPS 摘要的无单一 Span 展示，可从整个 SPS 定位 Hex；逐字段分段源映射
-由 CLI 详情 v2 提供，不将跨防竞争字节的范围伪装为连续 Span。NAL 不解码 slice 或视频画面；
-FLV keyframe 声明也不证明 IDR。配置查找和媒体概览仍使用原解析深度。
+由 CLI 详情 v2/v3 提供，不将跨防竞争字节的范围伪装为连续 Span。
+
+PPS 必要字段及 NAL 类型 1/5 的 slice 头前缀进一步显示预测标记、QP 声明、
+I/P/B 类型、帧号、条件 POC 字段及所引用 SPS/PPS 的原始位置。单段原始字段可定位 Hex，
+跨段字段保持无单一 Span。`prefixComplete` 仅表示解析到了 `redundant_pic_cnt`
+（PPS 到对应 present flag），不检查后续头部、PPS 扩展或图像正文；FMO 明确不支持。
+每个 slice 最多读 256 字节、每包累计 64 KiB。参数上下文与 NAL 长度查找独立，
+从来源配置顺序回放至所选 Tag 前，最多 8,192 个 Tag / 1 MiB 实际读取；
+显示覆盖计数及 missing/invalidated/budget_exhausted，遇坏配置、EOS、编码切换
+或不可检查视频范围不沿用旧参数。长距离参数预算不否定已找到的 NAL 长度。
+CLI 对应 `detail --schema-version 3`，见 [ADR-024](../docs/decisions/024-bounded-pps-slice-prefix.md)。
+FLV keyframe 声明也不证明 IDR，媒体概览仍使用原解析深度。
 
 MP3 深层详情仅支持 `SoundFormat=2`；保留的 `SoundFormat=14` 仍不支持。
 在当前 Tag 内按帧头推导的长度检查至多 64 帧、1 MiB 覆盖范围，仅读取帧头与必要的
@@ -193,6 +203,8 @@ free-format 的码率和帧长保持未知，不搜索下一个同步字、不�
 [ADR-023](../docs/decisions/023-deeper-codec-details.md)。
 生成编码样本、CRC 结构样本及六轮 Linux 原生结果见
 [深层详情验收](../docs/desktop-codec-details-20261007.md)。
+PPS/slice 前缀、回归固化和最新八轮结果见
+[PPS/slice 验收记录](../docs/desktop-pps-slice-20261007.md)。
 
 详情读取前后检查原句柄的文件身份、大小和修改时间，发现改变后要求关闭重开。
 这不是不可变快照，不能识别所有同大小、同时间戳的原位修改。快速切换仅保留

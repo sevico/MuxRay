@@ -18,6 +18,7 @@ type rbspData struct {
 
 type parseBudget struct {
 	mappingEntriesRemaining uint32
+	sliceBytesRead          uint32
 }
 
 func newParseBudget(options Options) *parseBudget {
@@ -152,6 +153,9 @@ type rbspParser struct {
 	diagnostics *diagnosticCollector
 	fatal       bool
 	invalid     bool
+	// ensure is set only for on-demand slice prefixes. It makes at least
+	// width bits available without inspecting bytes after the requested field.
+	ensure func(width uint32) bool
 }
 
 func newRBSPParser(data rbspData, diagnostics *diagnosticCollector) *rbspParser {
@@ -169,6 +173,9 @@ func (p *rbspParser) remainingBits() uint32 {
 func (p *rbspParser) readBits(width uint8) (uint64, MappedSpan, bool) {
 	start := p.bitPosition
 	if p.fatal {
+		return 0, MappedSpan{RBSPBitOffset: start}, false
+	}
+	if p.ensure != nil && !p.ensure(uint32(width)) {
 		return 0, MappedSpan{RBSPBitOffset: start}, false
 	}
 	available := p.remainingBits()
@@ -195,6 +202,9 @@ func (p *rbspParser) readUE() (uint32, MappedSpan, bool) {
 	}
 	var leading uint32
 	for {
+		if p.ensure != nil && !p.ensure(1) {
+			return 0, MappedSpan{RBSPBitOffset: start}, false
+		}
 		if p.remainingBits() == 0 {
 			p.fail(CodeRBSPSyntaxTruncated, "unsigned Exp-Golomb code is truncated", 1, 0)
 			return 0, MappedSpan{RBSPBitOffset: start}, false
@@ -319,7 +329,7 @@ func readExactAt(source io.ReaderAt, offset uint64, destination []byte) error {
 		return fmt.Errorf("ReaderAt range at %d with length %d exceeds int64 offsets", offset, len(destination))
 	}
 	read, err := source.ReadAt(destination, int64(offset))
-	if read == len(destination) {
+	if read == len(destination) && (err == nil || err == io.EOF) {
 		return nil
 	}
 	if err == nil {

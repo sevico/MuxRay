@@ -85,7 +85,7 @@ func runDetail(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	flags := flag.NewFlagSet("muxray detail", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	pretty := flags.Bool("pretty", false, "indent JSON output")
-	schemaVersion := flags.Uint("schema-version", 1, "detail schema version (1: original syntax; 2: AVC VUI or MP3 frame inspection)")
+	schemaVersion := flags.Uint("schema-version", 1, "detail schema version (1: original; 2: AVC VUI/MP3 frames; 3: AVC PPS/slice prefixes)")
 	tagID := flags.Uint64("tag", ^uint64(0), "zero-based tag ID to parse (required)")
 	maxTags := flags.Uint64("max-tags", 0, fmt.Sprintf("maximum tags to index (0 uses %d; hard maximum %d)", flv.DefaultMaxTags, flv.HardMaxTags))
 	maxDiagnostics := flags.Uint64("max-diagnostics", 0, fmt.Sprintf("maximum scan diagnostics to retain (0 uses %d; range %d-%d)", flv.DefaultMaxDiagnostics, flv.MinDiagnostics, flv.HardMaxDiagnostics))
@@ -118,8 +118,8 @@ func runDetail(ctx context.Context, args []string, stdout, stderr io.Writer) int
 		flags.Usage()
 		return exitUsage
 	}
-	if *schemaVersion != 1 && *schemaVersion != 2 {
-		_, _ = fmt.Fprintln(stderr, "muxray: --schema-version must be 1 or 2")
+	if *schemaVersion != 1 && *schemaVersion != 2 && *schemaVersion != 3 {
+		_, _ = fmt.Fprintln(stderr, "muxray: --schema-version must be 1, 2 or 3")
 		return exitUsage
 	}
 	if *tagID >= flv.HardMaxTags {
@@ -203,7 +203,27 @@ func runDetail(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	}
 
 	source := cursor.WithContext(ctx, file)
-	if tag.Type() == flv.TagTypeVideo && avcOptions.NALLengthSize == 0 {
+	parameters := avccontext.ParameterResolution{State: avccontext.StateNotNeeded, SelectedTagID: tag.ID}
+	if *schemaVersion == 3 && tag.Type() == flv.TagTypeVideo {
+		lookup := func(id uint64) (flv.TagRecord, error) {
+			candidate, ok := result.Index().Get(id)
+			if !ok {
+				return flv.TagRecord{}, avccontext.ErrInvalidInput
+			}
+			return candidate, nil
+		}
+		framing, resolveErr := avccontext.Resolve(ctx, source, tag, lookup, avcOptions, avccontext.Limits{})
+		if resolveErr == nil {
+			parameters, resolveErr = avccontext.ResolveParameters(ctx, source, tag, lookup, framing, avcOptions, avccontext.ParameterLimits{})
+		}
+		if resolveErr != nil {
+			_, _ = fmt.Fprintf(stderr, "muxray: resolve AVC parameter context: %v\n", resolveErr)
+			return exitFailure
+		}
+		if avcOptions.NALLengthSize == 0 {
+			avcOptions.NALLengthSize = framing.NALLengthSize
+		}
+	} else if tag.Type() == flv.TagTypeVideo && avcOptions.NALLengthSize == 0 {
 		resolved, resolveErr := resolveAVCNALLengthSize(ctx, source, result.Index(), *tagID, avcOptions)
 		if resolveErr != nil {
 			_, _ = fmt.Fprintf(stderr, "muxray: resolve AVC NAL length size: %v\n", resolveErr)
@@ -213,7 +233,10 @@ func runDetail(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	}
 	// Deeper syntax belongs only to the selected detail. Context lookup above
 	// keeps its existing framing/length semantics and source-read budgets.
-	avcOptions.AVC.ParseVUI = *schemaVersion == 2
+	avcOptions.AVC.ParseVUI = *schemaVersion >= 2
+	avcOptions.AVC.ParsePPS = *schemaVersion == 3
+	avcOptions.AVC.ParseSliceHeaders = *schemaVersion == 3
+	avcOptions.AVC.ParameterSets = parameters.Context
 	mp3Options.InspectFrames = *schemaVersion == 2
 	detail, err := flv.ParseTagDetail(source, tag, flv.DetailOptions{AMF0: amfOptions, AAC: aacOptions, MP3: mp3Options, AVC: avcOptions})
 	if err != nil {
@@ -224,14 +247,16 @@ func runDetail(ctx context.Context, args []string, stdout, stderr io.Writer) int
 		return exitFailure
 	}
 	var document report.ParsedTagDetailDocument
-	if *schemaVersion == 2 {
+	if *schemaVersion == 3 {
+		document, err = report.NewTagDetailV3(uint64(info.Size()), tag, detail, parameters)
+	} else if *schemaVersion == 2 {
 		document, err = report.NewTagDetailV2(uint64(info.Size()), tag, detail)
 	} else {
 		document, err = report.NewTagDetail(uint64(info.Size()), tag, detail)
 	}
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "muxray: map tag %d detail report: %v\n", *tagID, err)
-		if errors.Is(err, report.ErrDetailV2Unsupported) {
+		if errors.Is(err, report.ErrDetailV2Unsupported) || errors.Is(err, report.ErrDetailV3Unsupported) {
 			return exitUsage
 		}
 		return exitFailure

@@ -54,6 +54,22 @@ func field(t *testing.T, detail *detailview.Detail, name string) detailview.Fiel
 	return detailview.Field{}
 }
 
+// These framing fixtures deliberately contain only an IDR NAL header. Deep
+// parsing must retain valid container/NAL framing without calling its absent
+// slice prefix complete.
+func requireTruncatedAVCSlice(t *testing.T, detail *detailview.Detail) {
+	t.Helper()
+	if detail.Complete || field(t, detail, "prefixComplete").Value != "false" {
+		t.Fatalf("header-only IDR marked complete: %+v", detail)
+	}
+	for _, diagnostic := range detail.Diagnostics {
+		if diagnostic.Code == "AVC_RBSP_SYNTAX_TRUNCATED" {
+			return
+		}
+	}
+	t.Fatal("missing slice prefix was not diagnosed")
+}
+
 func TestDefaultDocumentAVCResolvesUnderSourceOwner(t *testing.T) {
 	for _, width := range []byte{1, 2, 4} {
 		s := source(t, avcData(width, 0, true))
@@ -65,9 +81,10 @@ func TestDefaultDocumentAVCResolvesUnderSourceOwner(t *testing.T) {
 			t.Fatal(err)
 		}
 		got := result(t, d, 1)
-		if got.Err != nil || got.Detail == nil || got.Detail.Kind != "avcVideo" || !got.Detail.Complete {
+		if got.Err != nil || got.Detail == nil || got.Detail.Kind != "avcVideo" {
 			t.Fatalf("width %d: %+v", width, got)
 		}
+		requireTruncatedAVCSlice(t, got.Detail)
 		if field(t, got.Detail, "AVC context").Value != "found" || field(t, got.Detail, "sourceTagId").Value != "0" {
 			t.Fatalf("context: %+v", got.Detail.Fields)
 		}
@@ -83,11 +100,12 @@ func TestDefaultDocumentAVCResolvesUnderSourceOwner(t *testing.T) {
 
 func TestDesktopAVCContextIndexCrossesFormerDistanceBudget(t *testing.T) {
 	for _, tc := range []struct {
-		padding int
-		header  bool
-		state   string
-		tagID   uint64
-	}{{0, false, "missing", 0}, {8192, true, "found", 8193}, {8191, true, "found", 8192}} {
+		padding        int
+		header         bool
+		state          string
+		tagID          uint64
+		parameterState string
+	}{{0, false, "missing", 0, "missing"}, {8192, true, "found", 8193, "budget_exhausted"}, {8191, true, "found", 8192, "missing"}} {
 		s := source(t, avcData(4, tc.padding, tc.header))
 		d := startTest(t, s, nil, DetailTimeout)
 		if err := scanDone(t, d); err != nil {
@@ -100,8 +118,11 @@ func TestDesktopAVCContextIndexCrossesFormerDistanceBudget(t *testing.T) {
 		if got.Err != nil || got.Detail == nil || field(t, got.Detail, "AVC context").Value != tc.state {
 			t.Fatalf("%s: %+v", tc.state, got)
 		}
-		if got.Detail.Complete != (tc.state == "found") {
-			t.Fatalf("context completeness: %+v", got.Detail)
+		if got.Detail.Complete || field(t, got.Detail, "Parameter context").Value != tc.parameterState {
+			t.Fatalf("independent parameter context: %+v", got.Detail)
+		}
+		if tc.state == "found" {
+			requireTruncatedAVCSlice(t, got.Detail)
 		}
 	}
 }
@@ -178,9 +199,11 @@ func TestAVCCanceledScanPrefixRetainsContext(t *testing.T) {
 	if _, err := d.StartDetail(1, 1); err != nil {
 		t.Fatal(err)
 	}
-	if got := result(t, d, 1); got.Err != nil || !got.Detail.Complete || field(t, got.Detail, "AVC context").Value != "found" {
+	got := result(t, d, 1)
+	if got.Err != nil || got.Detail == nil || field(t, got.Detail, "AVC context").Value != "found" {
 		t.Fatalf("partial context: %+v", got)
 	}
+	requireTruncatedAVCSlice(t, got.Detail)
 	if d.Snapshot().State != session.StateCanceled {
 		t.Fatal("detail altered scan outcome")
 	}
