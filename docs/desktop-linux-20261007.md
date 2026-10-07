@@ -5,6 +5,9 @@ GTK/WebKit 功能流程。测试使用独立 Xvfb 显示器和 D-Bus 会话中�
 通过 AT-SPI 操作实际界面与原生文件对话框，没有注入合成 JS host 或替换 Go 文件读取。
 这不是物理显示器、Wayland、长期资源稳定性或 Windows 原型的验收。
 
+后续有效编码媒体、容量边界、取消/恢复与五轮资源观察见
+[Linux 扩展验收](desktop-linux-extended-20261007.md)。下文保留首轮原始范围。
+
 ## 本次改动与环境
 
 - 新增 `desktop/build-production.sh`，固定 Wails v2.14.0，以 `webkit2_41` 构建。
