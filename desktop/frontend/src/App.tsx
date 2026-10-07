@@ -8,6 +8,7 @@ import { byteSize, previousStart, progressPercent, unsigned } from './numbers';
 import { selectionFromSpan } from './hex';
 import type { HexSelection } from './hex';
 import { HexPanel } from './HexPanel';
+import { MediaCurvePanel } from './MediaCurvePanel';
 import { SummaryPanel } from './SummaryPanel';
 import { FilterPagination, TagFilterPanel } from './TagFilterPanel';
 import { SnapshotStatus } from './SnapshotStatus';
@@ -105,6 +106,8 @@ export function App({ controller }: { controller: Controller }) {
         </section>
 
         <SummaryPanel view={view} controller={controller} disabled={!scanReady || !!isClosing} message={fault} />
+
+        <MediaCurvePanel view={view} controller={controller} disabled={!scanReady || !!operation} message={fault} />
 
         <TagTrendPanel key={session.sessionId} view={view} controller={controller} disabled={!scanReady || !!operation} readDisabled={!canPage || !!operation} message={fault} />
 

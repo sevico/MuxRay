@@ -16,6 +16,8 @@ export function GetFilteredTags(arg1:desktop.FilteredTagRequest):Promise<desktop
 
 export function GetHex(arg1:desktop.HexQuery):Promise<desktop.HexResponse>;
 
+export function GetMediaCurves(arg1:desktop.MediaCurveRequest):Promise<desktop.MediaCurveResponse>;
+
 export function GetSession(arg1:string):Promise<desktop.SessionResponse>;
 
 export function GetSummary(arg1:desktop.SummaryQuery):Promise<desktop.SummaryResponse>;

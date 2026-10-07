@@ -123,6 +123,7 @@ type summaryV2State struct {
 	previousMP3Header   MP3HeaderEvent
 	haveMP3Header       bool
 	mp3Bitrate          bitrateAccumulator
+	curves              *mediaCurveCollector
 }
 
 func (a *analyzer) unknownAudioV2() {

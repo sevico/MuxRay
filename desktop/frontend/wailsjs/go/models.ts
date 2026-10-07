@@ -540,6 +540,190 @@ export namespace desktop {
 		}
 	}
 	
+	export class MediaCurveGOP {
+	    declaredCount: string;
+	    closedCount: string;
+	    totalDurationMs: string;
+	    minDurationMs?: string;
+	    maxDurationMs?: string;
+	    averageDurationMs?: string;
+	    tagId?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MediaCurveGOP(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.declaredCount = source["declaredCount"];
+	        this.closedCount = source["closedCount"];
+	        this.totalDurationMs = source["totalDurationMs"];
+	        this.minDurationMs = source["minDurationMs"];
+	        this.maxDurationMs = source["maxDurationMs"];
+	        this.averageDurationMs = source["averageDurationMs"];
+	        this.tagId = source["tagId"];
+	    }
+	}
+	export class MediaCurveRate {
+	    coveredBytes: string;
+	    coveredIntervalMs: string;
+	    bitsPerSecond?: string;
+	    tagId?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MediaCurveRate(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.coveredBytes = source["coveredBytes"];
+	        this.coveredIntervalMs = source["coveredIntervalMs"];
+	        this.bitsPerSecond = source["bitsPerSecond"];
+	        this.tagId = source["tagId"];
+	    }
+	}
+	export class MediaCurvePoint {
+	    index: string;
+	    startTag: string;
+	    nextTag: string;
+	    audio: MediaCurveRate;
+	    video: MediaCurveRate;
+	    mp3: MediaCurveRate;
+	    gop: MediaCurveGOP;
+	    unclassifiedTags: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MediaCurvePoint(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.index = source["index"];
+	        this.startTag = source["startTag"];
+	        this.nextTag = source["nextTag"];
+	        this.audio = this.convertValues(source["audio"], MediaCurveRate);
+	        this.video = this.convertValues(source["video"], MediaCurveRate);
+	        this.mp3 = this.convertValues(source["mp3"], MediaCurveRate);
+	        this.gop = this.convertValues(source["gop"], MediaCurveGOP);
+	        this.unclassifiedTags = source["unclassifiedTags"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class MediaCurvePage {
+	    bounds: PageBounds;
+	    windowTags: number;
+	    indexedTags: string;
+	    scanComplete: boolean;
+	    complete: boolean;
+	    points: MediaCurvePoint[];
+	
+	    static createFrom(source: any = {}) {
+	        return new MediaCurvePage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.bounds = this.convertValues(source["bounds"], PageBounds);
+	        this.windowTags = source["windowTags"];
+	        this.indexedTags = source["indexedTags"];
+	        this.scanComplete = source["scanComplete"];
+	        this.complete = source["complete"];
+	        this.points = this.convertValues(source["points"], MediaCurvePoint);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
+	export class MediaCurveRequest {
+	    sessionId: string;
+	    requestId: string;
+	    start: string;
+	    count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new MediaCurveRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.requestId = source["requestId"];
+	        this.start = source["start"];
+	        this.count = source["count"];
+	    }
+	}
+	export class MediaCurveResponse {
+	    apiVersion: number;
+	    sessionId: string;
+	    requestId: string;
+	    page?: MediaCurvePage;
+	    error?: Fault;
+	
+	    static createFrom(source: any = {}) {
+	        return new MediaCurveResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.apiVersion = source["apiVersion"];
+	        this.sessionId = source["sessionId"];
+	        this.requestId = source["requestId"];
+	        this.page = this.convertValues(source["page"], MediaCurvePage);
+	        this.error = this.convertValues(source["error"], Fault);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class OpenRequest {
 	    path: string;
 	    maxTags: number;

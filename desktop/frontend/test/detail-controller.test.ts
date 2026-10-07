@@ -28,6 +28,7 @@ function tag(id: string): Tag {
 function setup(overrides: Partial<API> = {}) {
   const clock = new Clock();
   const api: API = {
+    mediaCurves: async () => { throw Error('unexpected media curves'); },
     saveSnapshot: async () => { throw Error('unexpected save'); }, saveResult: async () => { throw Error('unexpected save confirmation'); },
     tagTrends: async () => { throw Error('unexpected trend query'); },
     filteredTags: async () => { throw Error('unexpected filtered tags'); },

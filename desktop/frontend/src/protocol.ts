@@ -86,6 +86,22 @@ export interface SummaryPageResponse {
   apiVersion: number; sessionId: string; requestId: string; kind: SummaryKind;
   page: SummaryPage | null; error: Fault | null;
 }
+export interface MediaCurveRate {
+  coveredBytes: string; coveredIntervalMs: string; bitsPerSecond: string | null; tagId: string | null;
+}
+export interface MediaCurveGOP {
+  declaredCount: string; closedCount: string; totalDurationMs: string;
+  minDurationMs: string | null; maxDurationMs: string | null; averageDurationMs: string | null; tagId: string | null;
+}
+export interface MediaCurvePoint {
+  index: string; startTag: string; nextTag: string;
+  audio: MediaCurveRate; video: MediaCurveRate; mp3: MediaCurveRate; gop: MediaCurveGOP; unclassifiedTags: string;
+}
+export interface MediaCurveRequest extends DetailQuery { start: string; count: number }
+export interface MediaCurvePage {
+  bounds: Bounds; windowTags: number; indexedTags: string; scanComplete: boolean; complete: boolean; points: MediaCurvePoint[];
+}
+export interface MediaCurveResponse extends DetailQuery { apiVersion: number; page: MediaCurvePage | null; error: Fault | null }
 export interface SnapshotTrend {
   start: string; count: number; type: 'all' | 'audio' | 'video' | 'script' | 'other';
   metric: 'dts' | 'delta' | 'size'; gapThreshold: string;
@@ -119,6 +135,7 @@ export interface API {
   summaryResult(request: DetailQuery): Promise<SummaryResponse>;
   cancelSummary(request: DetailQuery): Promise<SummaryResponse>;
   summaryEvents(request: SummaryPageRequest): Promise<SummaryPageResponse>;
+  mediaCurves(request: MediaCurveRequest): Promise<MediaCurveResponse>;
   saveSnapshot(request: SaveRequest): Promise<SaveResponse>;
   saveResult(requestId: string): Promise<SaveResponse>;
 }

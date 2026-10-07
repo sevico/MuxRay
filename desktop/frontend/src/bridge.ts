@@ -1,8 +1,8 @@
-import { CancelScan, CloseFile, GetDetail, GetDiagnostics, GetHex, GetSession, GetTags, GetFilteredTags, GetTagTrends, StartDetail, StartHex, StartSummary, GetSummary, CancelSummary, GetSummaryEvents } from '../wailsjs/go/desktop/Bindings';
+import { CancelScan, CloseFile, GetDetail, GetDiagnostics, GetHex, GetSession, GetTags, GetFilteredTags, GetTagTrends, StartDetail, StartHex, StartSummary, GetSummary, CancelSummary, GetSummaryEvents, GetMediaCurves } from '../wailsjs/go/desktop/Bindings';
 import { OpenFLV, GetOpenResult, SaveSnapshot, GetSaveResult } from '../wailsjs/go/main/Native';
 import { desktop, main } from '../wailsjs/go/models';
 import type { API } from './protocol';
-import { detailResponse, diagnosticResponse, hexResponse, pickResponse, sessionResponse, tagResponse, filteredTagResponse, tagTrendResponse, summaryResponse, summaryPageResponse, saveResponse } from './normalize';
+import { detailResponse, diagnosticResponse, hexResponse, pickResponse, sessionResponse, tagResponse, filteredTagResponse, tagTrendResponse, summaryResponse, summaryPageResponse, mediaCurveResponse, saveResponse } from './normalize';
 
 // Actual generated bindings, not a mock HTTP API. No arbitrary URL, filesystem,
 // runtime lifecycle, or full-index endpoint is added to the UI.
@@ -37,5 +37,6 @@ export const api: API = {
   startSummary: async request => summaryResponse(await StartSummary(request)),
   summaryResult: async request => summaryResponse(await GetSummary(request)),
   cancelSummary: async request => summaryResponse(await CancelSummary(request)),
+  mediaCurves: async request => mediaCurveResponse(await GetMediaCurves(request)),
   summaryEvents: async request => summaryPageResponse(await GetSummaryEvents(request)),
 };

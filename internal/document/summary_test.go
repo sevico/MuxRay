@@ -362,6 +362,9 @@ func TestSummarySourceChangeInvalidatesReadyAndActiveResults(t *testing.T) {
 			if _, err := d.SummaryEvents(1, "mp3", 0, 1); !errors.Is(err, ErrSourceChanged) {
 				t.Fatal(err)
 			}
+			if _, err := d.MediaCurves(1, 0, 64); !errors.Is(err, ErrSourceChanged) {
+				t.Fatalf("source change left curves available: %v", err)
+			}
 			if err := os.Chtimes(s.Name(), info.ModTime(), info.ModTime()); err != nil {
 				t.Fatal(err)
 			}

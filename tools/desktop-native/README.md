@@ -1,4 +1,66 @@
-# Windows 受控原生验收
+# 原生桌面验收
+
+## Linux 生产程序 smoke
+
+`linux_smoke.py` 用真实 GTK 文件选择器、WebKit 和 Wails IPC，执行打开 → 跳转
+Tag → 详情 → Hex → 原生保存诊断 JSON → 关闭文件 → 正常退出。它不构建程序，
+不使用 overlay 或 mock。先用 `desktop/build-production.sh` 构建当前生产二进制。
+Desktop workflow 的 Linux job 会执行默认 smoke，并上传 JSON/日志证据；
+本机可用相同命令复现。Xvfb 运行本身不依赖登录到物理桌面。
+
+依赖 Linux `/proc`、GTK 3 / WebKitGTK 4.1 运行库，以及系统 Python 的
+`pyatspi`、`Xlib`、`jsonschema`。Ubuntu 24.04 对应辅助包为 `dbus-x11 xvfb xauth
+libglib2.0-bin at-spi2-core python3-pyatspi python3-xlib python3-jsonschema`。
+工具在运行前检查依赖，不安装软件或改变系统配置。
+
+```bash
+# 默认：4776 byte 的 generated 结构样本，106 Tag；读取 AVC NALU Tag 4。
+/usr/bin/python3 -B tools/desktop-native/linux_smoke.py \
+  --output-dir "$PWD/.cache/linux-smoke-001"
+
+# 可选：显式给出已有生产二进制和用户本地文件，只读打开，不复制或上传媒体。
+/usr/bin/python3 -B tools/desktop-native/linux_smoke.py \
+  --binary "$PWD/desktop/build/bin/MuxRay" \
+  --source /absolute/path/recording.flv --tag 0 \
+  --max-source-bytes 268435456 --timeout-seconds 300 \
+  --output-dir "$PWD/.cache/linux-smoke-recording-001"
+
+# 无 GUI 的参数、进程身份、FD 与导出边界检查。
+/usr/bin/python3 -B -m unittest discover -s tools/desktop-native -p linux_smoke_test.py -v
+```
+
+每轮必须使用不存在的绝对证据目录；失败后换新目录重跑，不覆盖旧证据。
+源大小默认上限 16 MiB，可显式增至 1 GiB，沿用 `snapshot_check.py` 的上限。
+全会话默认时限 180 秒，可设为 30–600 秒；超时后另留最多 10 秒清理本轮进程。
+单步 UI 等待通常 35 秒，完整扫描最多 90 秒，底层核验另有现有的协作式读取预算；
+即使 AT-SPI 调用阻塞，外层会话时限仍生效。`--tag` 为 0–999999，用户源默认选 0，
+应选择产品支持详情的 AMF0/AAC/AVC/MP3 Tag；不支持的类型会使 smoke 失败。
+
+本入口要求**容器索引完整**。用户文件的详情可含部分解析或语法诊断，原始结果
+保留在导出中；默认 generated 样本还要求详情完整。样本只是确定性结构数据，
+不是可播放录制媒体。此 smoke 不请求媒体概览或趋势，也不覆盖 partial 索引、
+受控取消、长期资源稳定性或真实录制媒体的解码质量。
+
+每轮自动启动独立 D-Bus 和 Xvfb，固定 `GSETTINGS_BACKEND=memory`，隔离 XDG
+config/data/cache/state/runtime 和临时目录，启用的辅助功能只影响本轮私有会话。
+先启动 Xvfb，再在其中启动 D-Bus，保证被总线激活的 AT-SPI 服务也继承虚拟显示器；
+同时清除继承的 `AT_SPI_BUS_ADDRESS` 与 `AT_SPI_DISPLAY`。
+用 AT-SPI 操作真实控件，用 X11 输入定位 GTK 路径和 Tag ID；不注入 WebView JS。
+原生 GTK3 选择器控件层级和标题变化可能导致 harness 失败，不能直接归类为产品故障。
+
+`run.json` 记录命令、环境、二进制/源 SHA-256、来源类别与预算；
+`app-process.json` 还将运行中的 `/proc/PID/exe` 哈希绑定到 PID/startTicks。
+`snapshot.json` 经过现有 Schema 和源字节检查器校验，额外断言选中 Tag、详情、Hex
+均存在且 Hex 起点等于该 Tag 偏移。`native-result.json` 记录核验、关闭前后的源 FD、
+源哈希和父进程正常退出码 0；关闭源通过 device/inode 检查。已观察 WebKit 后代须
+消失，但工具不声称获得其退出码，也不保证捕获极短命进程。
+
+父进程 stdout/stderr、驱动日志与 UI 树保存在证据目录；失败时保留已有产物。
+外层回收本轮孤儿后代，以 PID/startTicks 核对身份后才执行有界 TERM/KILL，
+不会按程序名清理其他会话。最终 `result.json` 记录强制清理和剩余进程，只有原生
+检查通过且无剩余本轮进程才成功。Xvfb 验收不等同于物理显示器、Wayland 或 GPU 验收。
+
+## Windows 受控原生验收
 
 这组工具从新 checkout 生成独立的验收程序和结构样本，用真实 Windows 文件选择器、Wails IPC 和文档生命周期复现取消及阻塞退出。正常产品代码不含 gate；工具只通过 Go `-overlay` 替换本次构建读到的 `document.go`，不会修改仓库 Go 源文件。ADR-013 之后扫描终态仍保留源，只有关闭文档才释放句柄。
 

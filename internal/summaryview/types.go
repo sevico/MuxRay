@@ -60,6 +60,9 @@ type Event struct {
 type Report struct {
 	Overview Overview
 	Events   map[string][]Event
+	// Curves are optional, compact desktop analysis data. They are paged
+	// separately and never added to existing summary or snapshot JSON.
+	Curves *analysis.MediaCurves `json:"-"`
 }
 
 func DesktopOptions() analysis.OptionsV2 {

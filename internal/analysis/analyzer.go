@@ -77,6 +77,9 @@ func analyze(ctx context.Context, source io.ReaderAt, scan flv.ScanResult, optio
 			a.result.Complete = false
 			return a.finish(), err
 		}
+		if v2 != nil && v2.curves != nil {
+			v2.curves.observe(&a, id, tag.ID)
+		}
 		completed.Processed++
 		if progress != nil && completed.Processed&1023 == 0 {
 			progress(completed)

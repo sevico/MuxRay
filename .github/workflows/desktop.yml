@@ -97,7 +97,7 @@ jobs:
         run: ./build-production.ps1
 
   linux-shell:
-    name: Desktop Linux tests and production build (non-GUI)
+    name: Desktop Linux tests, production build and native smoke
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
@@ -120,7 +120,7 @@ jobs:
       - name: Install Linux desktop build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev
+          sudo apt-get install --no-install-recommends -y build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev dbus-x11 xvfb xauth libglib2.0-bin at-spi2-core python3-pyatspi python3-xlib python3-jsonschema
       - name: Production Linux build (no package)
         run: ./build-production.sh
       - name: Verify production bindings and module files
@@ -132,3 +132,19 @@ jobs:
         run: |
           go test -race -tags webkit2_41 -count=1 ./...
           go vet -tags webkit2_41 ./...
+      - name: Linux smoke helper tests
+        working-directory: .
+        run: /usr/bin/python3 -B -m unittest discover -s tools/desktop-native -p linux_smoke_test.py -v
+      - name: Native GTK and WebKit smoke in private Xvfb
+        working-directory: .
+        run: /usr/bin/python3 -B tools/desktop-native/linux_smoke.py --output-dir "$PWD/.cache/linux-ci-smoke"
+      - name: Preserve native smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-native-smoke
+          path: |
+            .cache/linux-ci-smoke/*.json
+            .cache/linux-ci-smoke/*.log
+          include-hidden-files: true
+          if-no-files-found: ignore

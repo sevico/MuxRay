@@ -1,3 +1,5 @@
+import type { GetMediaCurves } from '../wailsjs/go/desktop/Bindings';
+import type { MediaCurveResponse } from './protocol';
 import type { desktop, main } from '../wailsjs/go/models';
 import type { DetailKind, DetailResponse, DiagnosticPage, HexResponse, PageResponse, PickResponse, Session, SessionResponse, TagPage, SummaryResponse, SummaryPageResponse, FilteredTagPage, TagFilter, TagTrendPage, TagTrendPoint, SaveResponse } from './protocol';
 import { validateTagFilter } from './tag-filter.ts';
@@ -99,4 +101,16 @@ export function summaryPageResponse(value: desktop.SummaryPageResponse): Summary
   } : null };
   if (result.page) validateSummaryPage(result.page, result.page.bounds.start, result.page.bounds.limit);
   return result;
+}
+
+export function mediaCurveResponse(value: Awaited<ReturnType<typeof GetMediaCurves>>): MediaCurveResponse {
+  return { ...value, error: value.error ?? null, page: value.page ? {
+    ...value.page, points: value.page.points.map(point => ({ ...point,
+      audio: { ...point.audio, bitsPerSecond: point.audio.bitsPerSecond ?? null, tagId: point.audio.tagId ?? null },
+      video: { ...point.video, bitsPerSecond: point.video.bitsPerSecond ?? null, tagId: point.video.tagId ?? null },
+      mp3: { ...point.mp3, bitsPerSecond: point.mp3.bitsPerSecond ?? null, tagId: point.mp3.tagId ?? null },
+      gop: { ...point.gop, minDurationMs: point.gop.minDurationMs ?? null, maxDurationMs: point.gop.maxDurationMs ?? null,
+        averageDurationMs: point.gop.averageDurationMs ?? null, tagId: point.gop.tagId ?? null },
+    })),
+  } : null };
 }

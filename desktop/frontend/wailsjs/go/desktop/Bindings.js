@@ -30,6 +30,10 @@ export function GetHex(arg1) {
   return window['go']['desktop']['Bindings']['GetHex'](arg1);
 }
 
+export function GetMediaCurves(arg1) {
+  return window['go']['desktop']['Bindings']['GetMediaCurves'](arg1);
+}
+
 export function GetSession(arg1) {
   return window['go']['desktop']['Bindings']['GetSession'](arg1);
 }

@@ -1,3 +1,6 @@
+import type { MediaCurvePage, MediaCurveRequest } from './protocol.ts';
+import { CURVE_PAGE_SIZE, curveTag, validateMediaCurveResponse } from './media-curves.ts';
+import type { CurveMetric } from './media-curves.ts';
 import type { API, Detail, DetailRequest, DetailResponse, DiagnosticPage, HexRequest, HexResponse, HexWindow, PageResponse, PickResponse, Session, SessionResponse, Tag, TagPage } from './protocol.ts';
 import { unsigned } from './numbers.ts';
 import { HEX_WINDOW_BYTES, validateHexWindow, validateSelection } from './hex.ts';
@@ -74,6 +77,12 @@ export interface ViewState {
   summaryPageLoading: boolean;
   summaryPageError: string | null;
   summaryPrevious: string | null;
+  curvePage: MediaCurvePage | null;
+  curveLoading: boolean;
+  curveError: string | null;
+  curveStart: string;
+  curveSelectedIndex: string | null;
+  curveMetric: CurveMetric;
 }
 export interface Scheduler { after(fn: () => void, ms: number): () => void }
 const scheduler: Scheduler = {
@@ -82,7 +91,7 @@ const scheduler: Scheduler = {
 
 class RequestError extends Error {}
 class ReplyUnconfirmed extends Error {}
-type ReplySlot = 'open' | 'command' | 'status' | 'page' | 'detail' | 'hex' | 'summary' | 'summaryPage' | 'trend' | 'save';
+type ReplySlot = 'open' | 'command' | 'status' | 'page' | 'detail' | 'hex' | 'summary' | 'summaryPage' | 'trend' | 'curve' | 'save';
 function check(response: { apiVersion: number; error: { code: string } | null }): void {
   if (response.apiVersion !== 1) throw new RequestError('incompatible_api');
   if (response.error) throw new RequestError(response.error.code);
@@ -149,7 +158,7 @@ export class Controller {
   private api: API;
   private clock: Scheduler;
   private listeners = new Set<() => void>();
-  private state: ViewState = { fileName: '', session: null, operation: '', error: null, tab: 'tags', start: '0', page: null, loading: false, tagFilter: null, filteredPage: null, filterError: null, filterPrevious: null, filterHistoryLimited: false, trendPage: null, trendLoading: false, trendError: null, trendStart: '0', trendSelectedId: null, trendMetric: 'dts', trendType: 'all', trendGapThreshold: '1000', saveState: '', savePending: false, saveError: null, saveRetry: false, saveSourceName: '', saveSessionId: null, saveFileName: '', saveBytesWritten: '0', selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '', hex: null, hexSelection: null, hexState: '', hexError: null, hexRetry: '', tagJumpError: null, sourceChanged: false, summary: null, summaryState: '', summaryRunning: false, summaryCancelRequested: false, summaryProcessed: '0', summaryTotal: '0', summaryError: null, summaryRetry: '', summaryKind: 'keyframes', summaryStart: '0', summaryPage: null, summaryPageLoading: false, summaryPageError: null, summaryPrevious: null };
+  private state: ViewState = { fileName: '', session: null, operation: '', error: null, tab: 'tags', start: '0', page: null, loading: false, tagFilter: null, filteredPage: null, filterError: null, filterPrevious: null, filterHistoryLimited: false, trendPage: null, trendLoading: false, trendError: null, trendStart: '0', trendSelectedId: null, trendMetric: 'dts', trendType: 'all', trendGapThreshold: '1000', saveState: '', savePending: false, saveError: null, saveRetry: false, saveSourceName: '', saveSessionId: null, saveFileName: '', saveBytesWritten: '0', selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '', hex: null, hexSelection: null, hexState: '', hexError: null, hexRetry: '', tagJumpError: null, sourceChanged: false, summary: null, summaryState: '', summaryRunning: false, summaryCancelRequested: false, summaryProcessed: '0', summaryTotal: '0', summaryError: null, summaryRetry: '', summaryKind: 'keyframes', summaryStart: '0', summaryPage: null, summaryPageLoading: false, summaryPageError: null, summaryPrevious: null, curvePage: null, curveLoading: false, curveError: null, curveStart: '0', curveSelectedIndex: null, curveMetric: 'audio' };
   private disposed = false;
   private statusVersion = 0;
   private pageVersion = 0;
@@ -190,6 +199,8 @@ export class Controller {
   private trendVersion = 0;
   private trendBusy = false;
   private trendWanted = false;
+  private curveVersion = 0;
+  private curveBusy = false;
   private nextSaveID = 0n;
   private saveRequest: SaveRequest | null = null;
   private saveBusy = false;
@@ -871,6 +882,7 @@ export class Controller {
     this.ensureSummary();
   }
   private clearSummary(): void {
+    this.clearCurves();
     this.summaryRequest = null; this.summaryPaused = false; this.summaryPolls = 0;
     this.stopSummaryTimer?.(); this.stopSummaryTimer = null;
     this.replyStops.get('summary')?.(); this.replyStops.get('summaryPage')?.();
@@ -995,6 +1007,78 @@ export class Controller {
     if (target === 'tag') { if (event.tagId !== null) this.jumpTag(event.tagId); }
     else this.showHex({ offset: event.offset, bitOffset: event.bitOffset, bitLength: null, label: `媒体概览 · ${event.title}` });
   }
+  private clearCurves(): void {
+    this.curveVersion++;
+    this.replyStops.get('curve')?.();
+    this.update({ curvePage: null, curveLoading: false, curveError: null, curveStart: '0', curveSelectedIndex: null, curveMetric: 'audio' });
+  }
+  loadMediaCurves(start = '0'): void {
+    if (this.disposed || !this.ready() || this.refreshStatus || this.pollFailed || this.state.summaryState !== 'ready' || !this.state.summary) return;
+    try { if (unsigned(start) > (unsigned(this.state.summary.indexedTags) + 255n) / 256n) throw Error('Out of curve range.'); }
+    catch { this.update({ curveError: 'invalid_argument' }); return; }
+    this.curveVersion++;
+    this.replyStops.get('curve')?.();
+    this.update({ curveStart: start, curvePage: null, curveLoading: true, curveError: null, curveSelectedIndex: null });
+    this.ensureCurves();
+  }
+  pageMediaCurves(direction: 'first' | 'previous' | 'next'): void {
+    const page = this.state.curvePage;
+    if (!page || this.state.curveLoading) return;
+    const start = unsigned(page.bounds.start);
+    if (direction === 'next') {
+      if (unsigned(page.bounds.next) >= unsigned(page.bounds.total)) return;
+      this.loadMediaCurves(page.bounds.next);
+    } else this.loadMediaCurves(direction === 'first' ? '0' : (start > BigInt(CURVE_PAGE_SIZE) ? start - BigInt(CURVE_PAGE_SIZE) : 0n).toString());
+  }
+  retryMediaCurves(): void {
+    if (!this.state.curveError || this.curveBusy) return;
+    this.loadMediaCurves(this.state.curveStart);
+  }
+  private ensureCurves(): void {
+    if (this.disposed || this.curveBusy || !this.state.curveLoading || !this.summaryRequest || this.state.summaryState !== 'ready' || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    void this.readCurves();
+  }
+  private async readCurves(): Promise<void> {
+    const identity = this.summaryRequest!, version = this.curveVersion;
+    const request: MediaCurveRequest = { ...identity, start: this.state.curveStart, count: CURVE_PAGE_SIZE };
+    this.curveBusy = true;
+    try {
+      const response = await this.awaitReply('curve', () => this.api.mediaCurves(request));
+      if (!this.currentSummary(identity) || version !== this.curveVersion || this.state.summaryState !== 'ready') return;
+      if (response.apiVersion !== 1) throw new RequestError('incompatible_api');
+      try { validateMediaCurveResponse(response, request, this.state.summary!); } catch { throw new RequestError('invalid_response'); }
+      check(response);
+      this.update({ curvePage: response.page });
+    } catch (error) {
+      if (!this.currentSummary(identity) || version !== this.curveVersion || this.state.summaryState !== 'ready') return;
+      const code = errorCode(error);
+      if (code === 'source_changed') this.invalidateSource();
+      else this.update({ curveError: code });
+    } finally {
+      this.curveBusy = false;
+      if (version === this.curveVersion) this.update({ curveLoading: false });
+      else this.ensureCurves();
+    }
+  }
+  setCurveMetric(metric: CurveMetric): void {
+    if (!['audio', 'video', 'mp3', 'gopAverage', 'gopMax'].includes(metric) || this.disposed) return;
+    this.update({ curveMetric: metric });
+  }
+  selectCurvePoint(index: string): void {
+    if (this.disposed || this.state.summaryState !== 'ready' || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    const point = this.state.curvePage?.points.find(item => item.index === index);
+    if (!point) return;
+    this.update({ curveSelectedIndex: index });
+    const id = curveTag(point, this.state.curveMetric);
+    if (id !== null) this.jumpTag(id);
+  }
+  showCurveHex(index: string): void {
+    if (this.disposed || this.state.summaryState !== 'ready' || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    const point = this.state.curvePage?.points.find(item => item.index === index), selected = this.state.selectedTag;
+    if (!point || !selected || curveTag(point, this.state.curveMetric) !== selected.id) return;
+    this.update({ curveSelectedIndex: index });
+    this.showHex({ offset: selected.offset, bitOffset: 0, bitLength: (11 + selected.availableDataSize) * 8, label: `媒体曲线 · Tag ${selected.id}` });
+  }
   dispose(): void {
     this.disposed = true;
     this.statusVersion++; this.pageVersion++;
@@ -1007,7 +1091,7 @@ export class Controller {
     this.hexRequest = null;
     this.stopHexTimer?.(); this.stopHexTimer = null;
     this.summaryRequest = null;
-    this.summaryPageVersion++;
+    this.summaryPageVersion++; this.curveVersion++;
     this.stopSummaryTimer?.(); this.stopSummaryTimer = null;
     for (const stop of this.replyStops.values()) stop();
     this.replyStops.clear();
