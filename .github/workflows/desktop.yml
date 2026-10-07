@@ -153,6 +153,15 @@ jobs:
       - name: PPS and B-frame multi-slice native source-bit checks
         working-directory: .
         run: /usr/bin/python3 -B tools/codec-regression/native_v3.py --input-dir "$PWD/.cache/linux-codec-regression/samples" --binary "$PWD/desktop/build/bin/MuxRay" --output-dir "$PWD/.cache/linux-codec-regression/native-v3"
+      - name: Generate MP3 side-info corpus and independent source-bit oracle
+        working-directory: .
+        run: /usr/bin/python3 -B tools/codec-regression/side_info_oracle.py --output-dir "$PWD/.cache/linux-codec-regression/side-info-samples"
+      - name: MP3 v3 fields, dependency facts and v1/v2 compatibility
+        working-directory: .
+        run: /usr/bin/python3 -B tools/codec-regression/verify_side_info.py --input-dir "$PWD/.cache/linux-codec-regression/side-info-samples" --cli "$PWD/.cache/linux-codec-regression/muxray" --output-dir "$PWD/.cache/linux-codec-regression/cli-side-info"
+      - name: Native MP3 side-info and long AVC context continuation
+        working-directory: .
+        run: /usr/bin/python3 -B tools/codec-regression/native_context_side.py --input-dir "$PWD/.cache/linux-codec-regression/samples" --side-info-dir "$PWD/.cache/linux-codec-regression/side-info-samples" --binary "$PWD/desktop/build/bin/MuxRay" --output-dir "$PWD/.cache/linux-codec-regression/native-context-side"
       - name: Preserve codec regression evidence
         if: always()
         uses: actions/upload-artifact@v4

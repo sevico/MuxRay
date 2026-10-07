@@ -1,0 +1,1023 @@
+{
+  "schemaVersion": 3,
+  "documentType": "flv-mp3-tag-detail",
+  "source": {
+    "sizeBytes": 446
+  },
+  "tag": {
+    "id": 0,
+    "typeCode": 8,
+    "typeName": "audio",
+    "offset": 13,
+    "span": {
+      "byteOffset": 13,
+      "bitOffset": 0,
+      "bitLength": 3432
+    },
+    "headerSpan": {
+      "byteOffset": 13,
+      "bitOffset": 0,
+      "bitLength": 88
+    },
+    "payloadSpan": {
+      "byteOffset": 24,
+      "bitOffset": 0,
+      "bitLength": 3344
+    },
+    "rawTypeFlags": 8,
+    "filter": false,
+    "dataSize": 418,
+    "availableDataSize": 418,
+    "dts": 0,
+    "streamId": 0,
+    "payloadComplete": true,
+    "previousTagSize": {
+      "present": true,
+      "span": {
+        "byteOffset": 442,
+        "bitOffset": 0,
+        "bitLength": 32
+      },
+      "value": 429,
+      "expected": 429,
+      "valid": true
+    }
+  },
+  "detail": {
+    "kind": "mp3Audio",
+    "span": {
+      "byteOffset": 24,
+      "bitOffset": 0,
+      "bitLength": 3344
+    },
+    "bitsConsumed": 40,
+    "complete": true,
+    "audioTagHeader": {
+      "raw": 47,
+      "span": {
+        "byteOffset": 24,
+        "bitOffset": 0,
+        "bitLength": 8
+      },
+      "soundFormat": {
+        "value": 2,
+        "name": "MP3",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 0,
+          "bitLength": 4
+        }
+      },
+      "soundRate": {
+        "value": 3,
+        "name": "44kHz",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 4,
+          "bitLength": 2
+        }
+      },
+      "soundSize": {
+        "value": 1,
+        "name": "16-bit",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 6,
+          "bitLength": 1
+        }
+      },
+      "soundType": {
+        "value": 1,
+        "name": "stereo",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 7,
+          "bitLength": 1
+        }
+      }
+    },
+    "audioDataSpan": {
+      "byteOffset": 25,
+      "bitOffset": 0,
+      "bitLength": 3336
+    },
+    "firstFrameHeader": {
+      "raw": 4294676480,
+      "span": {
+        "byteOffset": 25,
+        "bitOffset": 0,
+        "bitLength": 32
+      },
+      "syncWord": {
+        "value": 2047,
+        "span": {
+          "byteOffset": 25,
+          "bitOffset": 0,
+          "bitLength": 11
+        }
+      },
+      "version": {
+        "value": 3,
+        "name": "mpeg1",
+        "span": {
+          "byteOffset": 26,
+          "bitOffset": 3,
+          "bitLength": 2
+        }
+      },
+      "layer": {
+        "value": 1,
+        "name": "layerIII",
+        "span": {
+          "byteOffset": 26,
+          "bitOffset": 5,
+          "bitLength": 2
+        }
+      },
+      "protectionBit": {
+        "value": 1,
+        "name": "none",
+        "span": {
+          "byteOffset": 26,
+          "bitOffset": 7,
+          "bitLength": 1
+        }
+      },
+      "crcProtected": false,
+      "bitrateIndex": {
+        "value": 9,
+        "span": {
+          "byteOffset": 27,
+          "bitOffset": 0,
+          "bitLength": 4
+        }
+      },
+      "bitrateMode": "indexed",
+      "bitrateKbps": 128,
+      "samplingFrequencyIndex": {
+        "value": 0,
+        "span": {
+          "byteOffset": 27,
+          "bitOffset": 4,
+          "bitLength": 2
+        }
+      },
+      "samplingFrequencyHz": 44100,
+      "padding": {
+        "value": false,
+        "span": {
+          "byteOffset": 27,
+          "bitOffset": 6,
+          "bitLength": 1
+        }
+      },
+      "private": {
+        "value": false,
+        "span": {
+          "byteOffset": 27,
+          "bitOffset": 7,
+          "bitLength": 1
+        }
+      },
+      "channelMode": {
+        "value": 0,
+        "name": "stereo",
+        "span": {
+          "byteOffset": 28,
+          "bitOffset": 0,
+          "bitLength": 2
+        }
+      },
+      "modeExtension": {
+        "value": 0,
+        "span": {
+          "byteOffset": 28,
+          "bitOffset": 2,
+          "bitLength": 2
+        }
+      },
+      "channels": 2,
+      "copyright": {
+        "value": false,
+        "span": {
+          "byteOffset": 28,
+          "bitOffset": 4,
+          "bitLength": 1
+        }
+      },
+      "original": {
+        "value": false,
+        "span": {
+          "byteOffset": 28,
+          "bitOffset": 5,
+          "bitLength": 1
+        }
+      },
+      "emphasis": {
+        "value": 0,
+        "name": "none",
+        "span": {
+          "byteOffset": 28,
+          "bitOffset": 6,
+          "bitLength": 2
+        }
+      },
+      "samplesPerFrame": 1152,
+      "frameLengthBytes": 417,
+      "complete": true
+    },
+    "frames": {
+      "span": {
+        "byteOffset": 25,
+        "bitOffset": 0,
+        "bitLength": 3336
+      },
+      "maxFrames": 64,
+      "maxBytes": 1048576,
+      "bytesCovered": 417,
+      "bytesRead": 44,
+      "completeFrames": 1,
+      "uninspectedSpan": {
+        "byteOffset": 442,
+        "bitOffset": 0,
+        "bitLength": 0
+      },
+      "stopReason": "end",
+      "complete": true,
+      "items": [
+        {
+          "index": 0,
+          "span": {
+            "byteOffset": 25,
+            "bitOffset": 0,
+            "bitLength": 3336
+          },
+          "header": {
+            "raw": 4294676480,
+            "span": {
+              "byteOffset": 25,
+              "bitOffset": 0,
+              "bitLength": 32
+            },
+            "syncWord": {
+              "value": 2047,
+              "span": {
+                "byteOffset": 25,
+                "bitOffset": 0,
+                "bitLength": 11
+              }
+            },
+            "version": {
+              "value": 3,
+              "name": "mpeg1",
+              "span": {
+                "byteOffset": 26,
+                "bitOffset": 3,
+                "bitLength": 2
+              }
+            },
+            "layer": {
+              "value": 1,
+              "name": "layerIII",
+              "span": {
+                "byteOffset": 26,
+                "bitOffset": 5,
+                "bitLength": 2
+              }
+            },
+            "protectionBit": {
+              "value": 1,
+              "name": "none",
+              "span": {
+                "byteOffset": 26,
+                "bitOffset": 7,
+                "bitLength": 1
+              }
+            },
+            "crcProtected": false,
+            "bitrateIndex": {
+              "value": 9,
+              "span": {
+                "byteOffset": 27,
+                "bitOffset": 0,
+                "bitLength": 4
+              }
+            },
+            "bitrateMode": "indexed",
+            "bitrateKbps": 128,
+            "samplingFrequencyIndex": {
+              "value": 0,
+              "span": {
+                "byteOffset": 27,
+                "bitOffset": 4,
+                "bitLength": 2
+              }
+            },
+            "samplingFrequencyHz": 44100,
+            "padding": {
+              "value": false,
+              "span": {
+                "byteOffset": 27,
+                "bitOffset": 6,
+                "bitLength": 1
+              }
+            },
+            "private": {
+              "value": false,
+              "span": {
+                "byteOffset": 27,
+                "bitOffset": 7,
+                "bitLength": 1
+              }
+            },
+            "channelMode": {
+              "value": 0,
+              "name": "stereo",
+              "span": {
+                "byteOffset": 28,
+                "bitOffset": 0,
+                "bitLength": 2
+              }
+            },
+            "modeExtension": {
+              "value": 0,
+              "span": {
+                "byteOffset": 28,
+                "bitOffset": 2,
+                "bitLength": 2
+              }
+            },
+            "channels": 2,
+            "copyright": {
+              "value": false,
+              "span": {
+                "byteOffset": 28,
+                "bitOffset": 4,
+                "bitLength": 1
+              }
+            },
+            "original": {
+              "value": false,
+              "span": {
+                "byteOffset": 28,
+                "bitOffset": 5,
+                "bitLength": 1
+              }
+            },
+            "emphasis": {
+              "value": 0,
+              "name": "none",
+              "span": {
+                "byteOffset": 28,
+                "bitOffset": 6,
+                "bitLength": 2
+              }
+            },
+            "samplesPerFrame": 1152,
+            "frameLengthBytes": 417,
+            "complete": true
+          },
+          "boundaryComplete": true,
+          "crc": {
+            "status": "not_protected"
+          },
+          "sideInfo": {
+            "span": {
+              "byteOffset": 29,
+              "bitOffset": 0,
+              "bitLength": 256
+            },
+            "declaredBytes": 32,
+            "bitsConsumed": 256,
+            "mainDataBegin": {
+              "value": 200,
+              "span": {
+                "byteOffset": 29,
+                "bitOffset": 0,
+                "bitLength": 9
+              }
+            },
+            "privateBits": {
+              "value": 5,
+              "span": {
+                "byteOffset": 30,
+                "bitOffset": 1,
+                "bitLength": 3
+              }
+            },
+            "scfsiChannels": [
+              {
+                "channel": 0,
+                "flags": [
+                  {
+                    "value": true,
+                    "span": {
+                      "byteOffset": 30,
+                      "bitOffset": 4,
+                      "bitLength": 1
+                    }
+                  },
+                  {
+                    "value": false,
+                    "span": {
+                      "byteOffset": 30,
+                      "bitOffset": 5,
+                      "bitLength": 1
+                    }
+                  },
+                  {
+                    "value": true,
+                    "span": {
+                      "byteOffset": 30,
+                      "bitOffset": 6,
+                      "bitLength": 1
+                    }
+                  },
+                  {
+                    "value": false,
+                    "span": {
+                      "byteOffset": 30,
+                      "bitOffset": 7,
+                      "bitLength": 1
+                    }
+                  }
+                ]
+              },
+              {
+                "channel": 1,
+                "flags": [
+                  {
+                    "value": false,
+                    "span": {
+                      "byteOffset": 31,
+                      "bitOffset": 0,
+                      "bitLength": 1
+                    }
+                  },
+                  {
+                    "value": true,
+                    "span": {
+                      "byteOffset": 31,
+                      "bitOffset": 1,
+                      "bitLength": 1
+                    }
+                  },
+                  {
+                    "value": false,
+                    "span": {
+                      "byteOffset": 31,
+                      "bitOffset": 2,
+                      "bitLength": 1
+                    }
+                  },
+                  {
+                    "value": true,
+                    "span": {
+                      "byteOffset": 31,
+                      "bitOffset": 3,
+                      "bitLength": 1
+                    }
+                  }
+                ]
+              }
+            ],
+            "granules": [
+              {
+                "index": 0,
+                "channels": [
+                  {
+                    "index": 0,
+                    "part23Length": {
+                      "value": 100,
+                      "span": {
+                        "byteOffset": 31,
+                        "bitOffset": 4,
+                        "bitLength": 12
+                      }
+                    },
+                    "bigValues": {
+                      "value": 10,
+                      "span": {
+                        "byteOffset": 33,
+                        "bitOffset": 0,
+                        "bitLength": 9
+                      }
+                    },
+                    "globalGain": {
+                      "value": 180,
+                      "span": {
+                        "byteOffset": 34,
+                        "bitOffset": 1,
+                        "bitLength": 8
+                      }
+                    },
+                    "scalefacCompress": {
+                      "value": 10,
+                      "span": {
+                        "byteOffset": 35,
+                        "bitOffset": 1,
+                        "bitLength": 4
+                      }
+                    },
+                    "windowSwitchingFlag": {
+                      "value": true,
+                      "span": {
+                        "byteOffset": 35,
+                        "bitOffset": 5,
+                        "bitLength": 1
+                      }
+                    },
+                    "blockType": {
+                      "value": 2,
+                      "span": {
+                        "byteOffset": 35,
+                        "bitOffset": 6,
+                        "bitLength": 2
+                      }
+                    },
+                    "mixedBlockFlag": {
+                      "value": true,
+                      "span": {
+                        "byteOffset": 36,
+                        "bitOffset": 0,
+                        "bitLength": 1
+                      }
+                    },
+                    "tableSelect": [
+                      {
+                        "value": 1,
+                        "span": {
+                          "byteOffset": 36,
+                          "bitOffset": 1,
+                          "bitLength": 5
+                        }
+                      },
+                      {
+                        "value": 2,
+                        "span": {
+                          "byteOffset": 36,
+                          "bitOffset": 6,
+                          "bitLength": 5
+                        }
+                      }
+                    ],
+                    "subblockGain": [
+                      {
+                        "value": 3,
+                        "span": {
+                          "byteOffset": 37,
+                          "bitOffset": 3,
+                          "bitLength": 3
+                        }
+                      },
+                      {
+                        "value": 4,
+                        "span": {
+                          "byteOffset": 37,
+                          "bitOffset": 6,
+                          "bitLength": 3
+                        }
+                      },
+                      {
+                        "value": 5,
+                        "span": {
+                          "byteOffset": 38,
+                          "bitOffset": 1,
+                          "bitLength": 3
+                        }
+                      }
+                    ],
+                    "preflag": {
+                      "value": true,
+                      "span": {
+                        "byteOffset": 38,
+                        "bitOffset": 4,
+                        "bitLength": 1
+                      }
+                    },
+                    "scalefacScale": {
+                      "value": true,
+                      "span": {
+                        "byteOffset": 38,
+                        "bitOffset": 5,
+                        "bitLength": 1
+                      }
+                    },
+                    "count1TableSelect": {
+                      "value": false,
+                      "span": {
+                        "byteOffset": 38,
+                        "bitOffset": 6,
+                        "bitLength": 1
+                      }
+                    }
+                  },
+                  {
+                    "index": 1,
+                    "part23Length": {
+                      "value": 100,
+                      "span": {
+                        "byteOffset": 38,
+                        "bitOffset": 7,
+                        "bitLength": 12
+                      }
+                    },
+                    "bigValues": {
+                      "value": 10,
+                      "span": {
+                        "byteOffset": 40,
+                        "bitOffset": 3,
+                        "bitLength": 9
+                      }
+                    },
+                    "globalGain": {
+                      "value": 181,
+                      "span": {
+                        "byteOffset": 41,
+                        "bitOffset": 4,
+                        "bitLength": 8
+                      }
+                    },
+                    "scalefacCompress": {
+                      "value": 10,
+                      "span": {
+                        "byteOffset": 42,
+                        "bitOffset": 4,
+                        "bitLength": 4
+                      }
+                    },
+                    "windowSwitchingFlag": {
+                      "value": true,
+                      "span": {
+                        "byteOffset": 43,
+                        "bitOffset": 0,
+                        "bitLength": 1
+                      }
+                    },
+                    "blockType": {
+                      "value": 2,
+                      "span": {
+                        "byteOffset": 43,
+                        "bitOffset": 1,
+                        "bitLength": 2
+                      }
+                    },
+                    "mixedBlockFlag": {
+                      "value": true,
+                      "span": {
+                        "byteOffset": 43,
+                        "bitOffset": 3,
+                        "bitLength": 1
+                      }
+                    },
+                    "tableSelect": [
+                      {
+                        "value": 1,
+                        "span": {
+                          "byteOffset": 43,
+                          "bitOffset": 4,
+                          "bitLength": 5
+                        }
+                      },
+                      {
+                        "value": 2,
+                        "span": {
+                          "byteOffset": 44,
+                          "bitOffset": 1,
+                          "bitLength": 5
+                        }
+                      }
+                    ],
+                    "subblockGain": [
+                      {
+                        "value": 3,
+                        "span": {
+                          "byteOffset": 44,
+                          "bitOffset": 6,
+                          "bitLength": 3
+                        }
+                      },
+                      {
+                        "value": 4,
+                        "span": {
+                          "byteOffset": 45,
+                          "bitOffset": 1,
+                          "bitLength": 3
+                        }
+                      },
+                      {
+                        "value": 5,
+                        "span": {
+                          "byteOffset": 45,
+                          "bitOffset": 4,
+                          "bitLength": 3
+                        }
+                      }
+                    ],
+                    "preflag": {
+                      "value": true,
+                      "span": {
+                        "byteOffset": 45,
+                        "bitOffset": 7,
+                        "bitLength": 1
+                      }
+                    },
+                    "scalefacScale": {
+                      "value": true,
+                      "span": {
+                        "byteOffset": 46,
+                        "bitOffset": 0,
+                        "bitLength": 1
+                      }
+                    },
+                    "count1TableSelect": {
+                      "value": false,
+                      "span": {
+                        "byteOffset": 46,
+                        "bitOffset": 1,
+                        "bitLength": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "index": 1,
+                "channels": [
+                  {
+                    "index": 0,
+                    "part23Length": {
+                      "value": 100,
+                      "span": {
+                        "byteOffset": 46,
+                        "bitOffset": 2,
+                        "bitLength": 12
+                      }
+                    },
+                    "bigValues": {
+                      "value": 10,
+                      "span": {
+                        "byteOffset": 47,
+                        "bitOffset": 6,
+                        "bitLength": 9
+                      }
+                    },
+                    "globalGain": {
+                      "value": 182,
+                      "span": {
+                        "byteOffset": 48,
+                        "bitOffset": 7,
+                        "bitLength": 8
+                      }
+                    },
+                    "scalefacCompress": {
+                      "value": 10,
+                      "span": {
+                        "byteOffset": 49,
+                        "bitOffset": 7,
+                        "bitLength": 4
+                      }
+                    },
+                    "windowSwitchingFlag": {
+                      "value": true,
+                      "span": {
+                        "byteOffset": 50,
+                        "bitOffset": 3,
+                        "bitLength": 1
+                      }
+                    },
+                    "blockType": {
+                      "value": 2,
+                      "span": {
+                        "byteOffset": 50,
+                        "bitOffset": 4,
+                        "bitLength": 2
+                      }
+                    },
+                    "mixedBlockFlag": {
+                      "value": true,
+                      "span": {
+                        "byteOffset": 50,
+                        "bitOffset": 6,
+                        "bitLength": 1
+                      }
+                    },
+                    "tableSelect": [
+                      {
+                        "value": 1,
+                        "span": {
+                          "byteOffset": 50,
+                          "bitOffset": 7,
+                          "bitLength": 5
+                        }
+                      },
+                      {
+                        "value": 2,
+                        "span": {
+                          "byteOffset": 51,
+                          "bitOffset": 4,
+                          "bitLength": 5
+                        }
+                      }
+                    ],
+                    "subblockGain": [
+                      {
+                        "value": 3,
+                        "span": {
+                          "byteOffset": 52,
+                          "bitOffset": 1,
+                          "bitLength": 3
+                        }
+                      },
+                      {
+                        "value": 4,
+                        "span": {
+                          "byteOffset": 52,
+                          "bitOffset": 4,
+                          "bitLength": 3
+                        }
+                      },
+                      {
+                        "value": 5,
+                        "span": {
+                          "byteOffset": 52,
+                          "bitOffset": 7,
+                          "bitLength": 3
+                        }
+                      }
+                    ],
+                    "preflag": {
+                      "value": true,
+                      "span": {
+                        "byteOffset": 53,
+                        "bitOffset": 2,
+                        "bitLength": 1
+                      }
+                    },
+                    "scalefacScale": {
+                      "value": true,
+                      "span": {
+                        "byteOffset": 53,
+                        "bitOffset": 3,
+                        "bitLength": 1
+                      }
+                    },
+                    "count1TableSelect": {
+                      "value": false,
+                      "span": {
+                        "byteOffset": 53,
+                        "bitOffset": 4,
+                        "bitLength": 1
+                      }
+                    }
+                  },
+                  {
+                    "index": 1,
+                    "part23Length": {
+                      "value": 100,
+                      "span": {
+                        "byteOffset": 53,
+                        "bitOffset": 5,
+                        "bitLength": 12
+                      }
+                    },
+                    "bigValues": {
+                      "value": 10,
+                      "span": {
+                        "byteOffset": 55,
+                        "bitOffset": 1,
+                        "bitLength": 9
+                      }
+                    },
+                    "globalGain": {
+                      "value": 183,
+                      "span": {
+                        "byteOffset": 56,
+                        "bitOffset": 2,
+                        "bitLength": 8
+                      }
+                    },
+                    "scalefacCompress": {
+                      "value": 10,
+                      "span": {
+                        "byteOffset": 57,
+                        "bitOffset": 2,
+                        "bitLength": 4
+                      }
+                    },
+                    "windowSwitchingFlag": {
+                      "value": true,
+                      "span": {
+                        "byteOffset": 57,
+                        "bitOffset": 6,
+                        "bitLength": 1
+                      }
+                    },
+                    "blockType": {
+                      "value": 2,
+                      "span": {
+                        "byteOffset": 57,
+                        "bitOffset": 7,
+                        "bitLength": 2
+                      }
+                    },
+                    "mixedBlockFlag": {
+                      "value": true,
+                      "span": {
+                        "byteOffset": 58,
+                        "bitOffset": 1,
+                        "bitLength": 1
+                      }
+                    },
+                    "tableSelect": [
+                      {
+                        "value": 1,
+                        "span": {
+                          "byteOffset": 58,
+                          "bitOffset": 2,
+                          "bitLength": 5
+                        }
+                      },
+                      {
+                        "value": 2,
+                        "span": {
+                          "byteOffset": 58,
+                          "bitOffset": 7,
+                          "bitLength": 5
+                        }
+                      }
+                    ],
+                    "subblockGain": [
+                      {
+                        "value": 3,
+                        "span": {
+                          "byteOffset": 59,
+                          "bitOffset": 4,
+                          "bitLength": 3
+                        }
+                      },
+                      {
+                        "value": 4,
+                        "span": {
+                          "byteOffset": 59,
+                          "bitOffset": 7,
+                          "bitLength": 3
+                        }
+                      },
+                      {
+                        "value": 5,
+                        "span": {
+                          "byteOffset": 60,
+                          "bitOffset": 2,
+                          "bitLength": 3
+                        }
+                      }
+                    ],
+                    "preflag": {
+                      "value": true,
+                      "span": {
+                        "byteOffset": 60,
+                        "bitOffset": 5,
+                        "bitLength": 1
+                      }
+                    },
+                    "scalefacScale": {
+                      "value": true,
+                      "span": {
+                        "byteOffset": 60,
+                        "bitOffset": 6,
+                        "bitLength": 1
+                      }
+                    },
+                    "count1TableSelect": {
+                      "value": false,
+                      "span": {
+                        "byteOffset": 60,
+                        "bitOffset": 7,
+                        "bitLength": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ],
+            "complete": true
+          },
+          "dependency": {
+            "state": "before_tag",
+            "mainDataSpan": {
+              "byteOffset": 61,
+              "bitOffset": 0,
+              "bitLength": 3048
+            },
+            "knownPreviousBytes": 0,
+            "missingPreviousBytes": 200,
+            "part23Bits": 400,
+            "availableBits": 3048
+          }
+        }
+      ]
+    }
+  },
+  "diagnostics": []
+}

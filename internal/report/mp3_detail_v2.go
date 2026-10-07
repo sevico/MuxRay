@@ -43,6 +43,8 @@ type MP3FrameDetail struct {
 	Header           MP3FrameHeaderDetail `json:"header"`
 	BoundaryComplete bool                 `json:"boundaryComplete"`
 	CRC              MP3CRCDetail         `json:"crc"`
+	SideInfo         *MP3SideInfoDetail   `json:"sideInfo,omitempty"`
+	Dependency       *MP3DependencyDetail `json:"dependency,omitempty"`
 }
 type MP3CRCDetail struct {
 	Status   string  `json:"status"`

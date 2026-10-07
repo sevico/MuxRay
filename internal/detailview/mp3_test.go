@@ -148,6 +148,7 @@ func (r *mp3PrefixReader) ReadAt(p []byte, off int64) (int, error) {
 type mp3SparseFrameReader struct {
 	base         int64
 	bytes, reads int
+	sideReads    int
 }
 
 func (r *mp3SparseFrameReader) ReadAt(p []byte, off int64) (int, error) {
@@ -169,7 +170,13 @@ func (r *mp3SparseFrameReader) ReadAt(p []byte, off int64) (int, error) {
 		r.bytes += 4
 		return 4, nil
 	}
-	return 0, errors.New("read escaped fixed headers and first-frame metadata signatures")
+	if relative >= 4 && relative%417 == 4 && len(p) == 32 {
+		clear(p)
+		r.bytes += len(p)
+		r.sideReads++
+		return len(p), nil
+	}
+	return 0, errors.New("read escaped fixed headers, side information and first-frame metadata signatures")
 }
 func TestMP3LargePayloadUsesBoundedHeaders(t *testing.T) {
 	_, tag := fixture(t, 8, []byte{0x2f, 0xff, 0xfb, 0x90, 0x64})
@@ -179,7 +186,7 @@ func TestMP3LargePayloadUsesBoundedHeaders(t *testing.T) {
 	tag.DataSize, tag.AvailableDataSize = 0xffffff, 0xffffff
 	r := &mp3SparseFrameReader{base: int64(delta + 24)}
 	d, err := Parse(context.Background(), r, tag)
-	if err != nil || d.Complete || !hasDiagnostic(d, mp3.CodeFrameLimitReached) || r.bytes > 280 || r.reads > 75 {
+	if err != nil || d.Complete || !hasDiagnostic(d, mp3.CodeFrameLimitReached) || r.bytes > 280+64*32 || r.reads > 75+64 || r.sideReads != 64 {
 		t.Fatalf("bounded frame parse: err=%v bytes=%d reads=%d detail=%+v", err, r.bytes, r.reads, d)
 	}
 	if find(t, d, "tagId").Value != "18446744073709551615" || find(t, d, "version").Span.ByteOffset != decimal(delta+26) || find(t, d, "bytesCovered").Value != "26688" {

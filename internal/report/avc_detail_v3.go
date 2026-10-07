@@ -9,7 +9,7 @@ import (
 	"github.com/sevico/muxray/internal/flv"
 )
 
-var ErrDetailV3Unsupported = errors.New("report: detail schema version 3 supports only AVC")
+var ErrDetailV3Unsupported = errors.New("report: detail schema version 3 supports only AVC and MP3")
 
 // NewTagDetailV3 preserves the older projections and publishes only explicitly
 // requested PPS/slice prefixes. Prefix completeness never claims decoding.
@@ -20,6 +20,12 @@ func NewTagDetailV3(size uint64, tag flv.TagRecord, parsed flv.ParsedTagDetail, 
 	case *flv.AVCVideo:
 		if p != nil {
 			return NewAVCTagDetailV3(size, tag, *p, parameters), nil
+		}
+	case flv.MP3Audio:
+		return NewMP3TagDetailV3(size, tag, p), nil
+	case *flv.MP3Audio:
+		if p != nil {
+			return NewMP3TagDetailV3(size, tag, *p), nil
 		}
 	}
 	return nil, fmt.Errorf("%w: %T", ErrDetailV3Unsupported, parsed)

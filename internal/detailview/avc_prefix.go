@@ -10,11 +10,13 @@ import (
 
 func (b *builder) avcParameterContext(parent string, p avccontext.ParameterResolution) {
 	id := b.add(parent, "Parameter context", "bounded replay", p.State, nil)
+	b.add(id, "contextCanContinue", "derived boolean", strconv.FormatBool(p.CanResume), nil)
 	for _, f := range []struct {
 		name  string
 		value uint64
 	}{
 		{"startTagId", p.StartTagID}, {"nextTagId", p.NextTagID}, {"selectedTagId", p.SelectedTagID},
+		{"contextSegmentStartTagId", p.ResumeStartTagID}, {"checkpointCount", uint64(p.CheckpointCount)},
 		{"replayedTags", p.ScannedTags}, {"replayedVideoTags", p.VideoTags},
 		{"replayedConfigurations", p.Configurations}, {"replayedNALPackets", p.NALPackets},
 		{"contextBytesRead", p.BytesRead}, {"contextBarriers", p.BarrierCount},

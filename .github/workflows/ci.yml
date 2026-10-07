@@ -63,6 +63,8 @@ jobs:
         run: go test ./internal/mp3 -run=^$ -fuzz=FuzzFrameHeader -fuzztime=30s
       - name: Fuzz bounded MP3 frames and VBR metadata
         run: go test ./internal/mp3 -run=^$ -fuzz=FuzzFrameSequence -fuzztime=30s
+      - name: Fuzz bounded MP3 side information
+        run: go test ./internal/mp3 -run=^$ -fuzz=FuzzSideInformation -fuzztime=30s
       - name: Fuzz SPS VUI
         run: go test ./internal/avc -run=^$ -fuzz=FuzzSPSVUI -fuzztime=30s
       - name: Fuzz bounded PPS and slice prefixes

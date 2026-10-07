@@ -46,6 +46,8 @@ type Frame struct {
 	Header           FrameHeader
 	BoundaryComplete bool
 	CRC              FrameCRC
+	SideInfo         *SideInfo
+	Dependency       *MainDataDependency
 }
 
 // FrameCRC covers header bytes 2..3 and Layer III side information only.
@@ -95,6 +97,7 @@ func ParseFrameSequence(source io.ReaderAt, payload cursor.Span, options Options
 		limit = start + MaxFrameScanBytes
 	}
 	d := newDiagnosticCollector(options.MaxDiagnostics, end)
+	history := mainDataHistory{fromTagStart: true}
 	at := start
 	fail := func(code, message, reason string, off uint64) {
 		d.add(Diagnostic{Code: code, Severity: SeverityError, Offset: off, Message: message, RecoveryOffset: number(end)})
@@ -126,6 +129,9 @@ func ParseFrameSequence(source io.ReaderAt, payload cursor.Span, options Options
 		}
 		h := parsed.Header
 		f := Frame{Index: uint32(len(out.Frames)), Span: byteSpan(at, 4), Header: h, CRC: FrameCRC{Status: "not_checked"}}
+		if options.InspectSideInfo {
+			f.Dependency = &MainDataDependency{State: "unknown", MainDataSpan: byteSpan(at+4, 0)}
+		}
 		if !h.CRCProtected {
 			f.CRC.Status = "not_protected"
 		}
@@ -172,6 +178,7 @@ func ParseFrameSequence(source io.ReaderAt, payload cursor.Span, options Options
 			}
 			return buf, nil
 		}
+		var sideData []byte
 		if h.CRCProtected {
 			f.CRC.Span = byteSpan(at+4, min(uint64(2), available-4))
 			count := uint64(2 + sideInfoBytes(h))
@@ -185,6 +192,7 @@ func ParseFrameSequence(source io.ReaderAt, payload cursor.Span, options Options
 				}
 				f.CRC.Stored = binary.BigEndian.Uint16(prefix[:2])
 				f.CRC.Computed = crc16([]byte{byte(h.Raw >> 8), byte(h.Raw)}, prefix[2:])
+				sideData = prefix[2:]
 				f.CRC.ValuesPresent = true
 				f.CRC.Status = "match"
 				if f.CRC.Stored != f.CRC.Computed {
@@ -193,6 +201,26 @@ func ParseFrameSequence(source io.ReaderAt, payload cursor.Span, options Options
 				}
 			}
 		}
+		f.BoundaryComplete = length <= end-at
+		if options.InspectSideInfo {
+			sideOffset := uint64(4)
+			if h.CRCProtected {
+				sideOffset += 2
+			}
+			sideOffset = min(sideOffset, available)
+			if sideData == nil {
+				count := min(uint64(sideInfoBytes(h)), available-sideOffset)
+				if count != 0 {
+					var e error
+					sideData, e = read(at+sideOffset, count)
+					if e != nil {
+						return out, fmt.Errorf("mp3: read side information: %w", e)
+					}
+				}
+			}
+			f.SideInfo = parseSideInfo(sideData, at+sideOffset, h, d, end)
+			history.inspect(&f, d, end)
+		}
 		if at == start {
 			vbr, e := parseVBR(h, available, read, d, end)
 			if e != nil {
@@ -200,7 +228,6 @@ func ParseFrameSequence(source io.ReaderAt, payload cursor.Span, options Options
 			}
 			out.VBR = vbr
 		}
-		f.BoundaryComplete = length <= end-at
 		out.Frames = append(out.Frames, f)
 		if !f.BoundaryComplete {
 			fail(CodeFrameBodyTruncated, "declared MPEG frame extends beyond this FLV tag", "body_truncated", at)

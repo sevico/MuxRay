@@ -5,6 +5,10 @@ import type { Scheduler } from '../src/controller.ts';
 import type { API, Detail, DetailRequest, DetailResponse, Session, Tag } from '../src/protocol.ts';
 
 const detail: Detail = { kind: 'amf0ScriptData', complete: true, truncated: false, fields: [], diagnostics: [] };
+const replayDetail: Detail = { kind: 'avcVideo', complete: false, truncated: true, diagnostics: [], fields: [
+  { id: '0', parentId: '', name: 'Parameter context', type: 'bounded replay', value: 'budget_exhausted', span: null },
+  ...Object.entries({ nextTagId: '8192', selectedTagId: '9007199254740993', contextSegmentStartTagId: '0', contextCanContinue: 'true' }).map(([name, value], i) => ({ id: String(i + 1), parentId: '0', name, type: 'derived', value, span: null })),
+] };
 const ready = (request: DetailRequest, patch: Partial<DetailResponse> = {}): DetailResponse => ({ apiVersion: 1, ...request, state: 'ready', detail, error: null, ...patch });
 const pending = (request: DetailRequest) => ready(request, { state: 'pending', detail: null });
 function deferred<T>() {
@@ -186,3 +190,36 @@ test('a superseded Get reply and detail deadline are isolated from concurrent pa
   assert.equal(controller.getSnapshot().detailError, null); assert.equal(controller.getSnapshot().page?.tab, 'tags'); assert.equal(clock.tasks.size, 0);
 });
 import { unexpectedSummary } from './summary-fixture.ts';
+
+test('AVC context continuation is manual, serialized and advances the read identity', async () => {
+  const requests: DetailRequest[] = [], next = deferred<DetailResponse>();
+  const { controller, clock } = setup({ startDetail: async request => {
+    requests.push(request);
+    return requests.length === 1 ? ready(request, { detail: replayDetail }) : next.promise;
+  } });
+  await controller.open(); await settle(); controller.selectTag('9007199254740993'); await settle();
+  clock.tick(); await settle();
+  assert.equal(requests.length, 1, 'no automatic full-file loop');
+  controller.continueAVCContext(); controller.continueAVCContext();
+  assert.equal(requests.length, 2);
+  assert.deepEqual(requests[1], { ...requests[0], requestId: '2' });
+  next.resolve(ready(requests[1])); await settle();
+  controller.continueAVCContext(); await settle();
+  assert.equal(requests.length, 2, 'completed/non-AVC details cannot continue');
+  assert.equal(controller.getSnapshot().detailState, 'ready');
+  controller.dispose();
+});
+
+test('lost AVC continuation reply confirms the same request before permitting more work', async () => {
+  const requests: DetailRequest[] = [], queries: string[] = [];
+  const { controller, clock } = setup({
+    startDetail: async request => { requests.push(request); if (requests.length === 2) throw Error('lost reply'); return ready(request, { detail: replayDetail }); },
+    detailResult: async request => { queries.push(request.requestId); return ready({ ...request, tagId: '9007199254740993' }); },
+  });
+  await controller.open(); await settle(); controller.selectTag('9007199254740993'); await settle();
+  controller.continueAVCContext(); await settle(); controller.continueAVCContext();
+  clock.tick(); await settle();
+  assert.deepEqual(queries, ['2']); assert.equal(requests.length, 2);
+  assert.equal(controller.getSnapshot().detailState, 'ready');
+  controller.dispose();
+});

@@ -184,10 +184,10 @@ I/P/B 类型、帧号、条件 POC 字段及所引用 SPS/PPS 的原始位置。
 跨段字段保持无单一 Span。`prefixComplete` 仅表示解析到了 `redundant_pic_cnt`
 （PPS 到对应 present flag），不检查后续头部、PPS 扩展或图像正文；FMO 明确不支持。
 每个 slice 最多读 256 字节、每包累计 64 KiB。参数上下文与 NAL 长度查找独立，
-从来源配置顺序回放至所选 Tag 前，最多 8,192 个 Tag / 1 MiB 实际读取；
+从来源配置分段顺序回放至所选 Tag 前，每次最多 8,192 个 Tag / 1 MiB 实际读取；
 显示覆盖计数及 missing/invalidated/budget_exhausted，遇坏配置、EOS、编码切换
 或不可检查视频范围不沿用旧参数。长距离参数预算不否定已找到的 NAL 长度。
-CLI 对应 `detail --schema-version 3`，见 [ADR-024](../docs/decisions/024-bounded-pps-slice-prefix.md)。
+达到预算后显示已完成的 Tag 边界，可点击“继续准备参数”推进下一段；单 Tag 无法完成时不提供继续操作。每文档最多缓存 8 个紧凑检查点（合计上限 4 MiB），同文件随机跳转可以复用，取消或过期请求不提交，源变化/关闭即清除。每次仍受三秒截止和串行读取约束。CLI v3 自动推进最多 128 段，见 [ADR-025](../docs/decisions/025-avc-checkpoints-mp3-side-info.md)。
 FLV keyframe 声明也不证明 IDR，媒体概览仍使用原解析深度。
 
 MP3 深层详情仅支持 `SoundFormat=2`；保留的 `SoundFormat=14` 仍不支持。
@@ -199,12 +199,16 @@ Xing/Info 元数据帧可能不计入声明总数。CRC 不校验主数据、bit
 free-format 的码率和帧长保持未知，不搜索下一个同步字、不跨 Tag 拼接。
 损坏、截断和超预算保留已解析前缀及未检查范围，帧边界完整不保证可解码。
 继续使用同一详情 worker、源检查、展示预算和请求恢复机制。CLI 默认首帧头合同
-保持兼容，深层 CLI 使用 `detail --schema-version 2`；参见
+保持兼容，帧/VBR/CRC CLI 使用 `detail --schema-version 2`；参见
 [ADR-023](../docs/decisions/023-deeper-codec-details.md)。
+side-info 进一步展开 MPEG-1/2/2.5 的 SCFSI、granule/channel、长短块条件字段与精确源 bit 位置。每帧依赖摘要区分 `none/within_tag/before_tag/unknown`；`before_tag` 只表示需要 Tag 前历史，不是损坏。`knownPreviousBytes` 是同 Tag 的物理主数据槽位，不是 reservoir 剩余容量。桌面先保留各帧摘要，再展开前两帧 side-info，其余通过 `sideInfoOmittedFrames` 和详情截断标记明确提示；全部已检查帧可用 CLI v3 导出。不解码主数据或跨 Tag 拼接，详见 [ADR-025](../docs/decisions/025-avc-checkpoints-mp3-side-info.md)。
+
 生成编码样本、CRC 结构样本及六轮 Linux 原生结果见
 [深层详情验收](../docs/desktop-codec-details-20261007.md)。
 PPS/slice 前缀、回归固化和最新八轮结果见
 [PPS/slice 验收记录](../docs/desktop-pps-slice-20261007.md)。
+长文件上下文、MP3 side-info 及最新十二轮结果见
+[长文件与 side-info 验收](../docs/desktop-context-side-info-20261008.md)。
 
 详情读取前后检查原句柄的文件身份、大小和修改时间，发现改变后要求关闭重开。
 这不是不可变快照，不能识别所有同大小、同时间戳的原位修改。快速切换仅保留

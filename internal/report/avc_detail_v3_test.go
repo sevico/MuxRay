@@ -140,7 +140,7 @@ func TestAVCTagDetailV3TruncatedPrefixRetainsPartialFields(t *testing.T) {
 
 func TestAVCTagDetailV3RejectsOtherKindsAndNil(t *testing.T) {
 	var nilAVC *flv.AVCVideo
-	for _, value := range []flv.ParsedTagDetail{nil, nilAVC, flv.AACAudio{}, flv.MP3Audio{}, flv.ScriptData{}} {
+	for _, value := range []flv.ParsedTagDetail{nil, nilAVC, flv.AACAudio{}, flv.ScriptData{}} {
 		result, err := NewTagDetailV3(0, flv.TagRecord{}, value, avccontext.ParameterResolution{})
 		if result != nil || !errors.Is(err, ErrDetailV3Unsupported) {
 			t.Fatalf("unsupported %T: %v", value, err)

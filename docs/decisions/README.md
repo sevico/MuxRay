@@ -28,3 +28,4 @@ Repository-wide architecture and compatibility decisions are recorded here. An a
 | [ADR-022](./022-bounded-media-curves.md) | Accepted | Collect bounded source-window bitrate and declared GOP curves during Summary analysis and page them without source I/O |
 | [ADR-023](./023-deeper-codec-details.md) | Accepted | Add opt-in CLI v2 and bounded desktop H.264 VUI / MP3 frame, VBR and protected-header inspection |
 | [ADR-024](./024-bounded-pps-slice-prefix.md) | Accepted | Add AVC detail v3 PPS/slice prefixes with bounded parameter replay and reproducible codec regression |
+| [ADR-025](./025-avc-checkpoints-mp3-side-info.md) | Accepted | Resume bounded AVC context with compact checkpoints and add MP3 v3 side information |

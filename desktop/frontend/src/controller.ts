@@ -3,6 +3,7 @@ import { CURVE_PAGE_SIZE, curveTag, validateMediaCurveResponse } from './media-c
 import type { CurveMetric } from './media-curves.ts';
 import type { API, Detail, DetailRequest, DetailResponse, DiagnosticPage, HexRequest, HexResponse, HexWindow, PageResponse, PickResponse, Session, SessionResponse, Tag, TagPage } from './protocol.ts';
 import { unsigned } from './numbers.ts';
+import { avcReplayProgress } from './details.ts';
 import { HEX_WINDOW_BYTES, validateHexWindow, validateSelection } from './hex.ts';
 import type { HexSelection } from './hex.ts';
 import type { DetailQuery, SummaryKind, SummaryOverview, SummaryPage, SummaryPageRequest, SummaryResponse, SummaryEvent } from './protocol.ts';
@@ -719,6 +720,18 @@ export class Controller {
       this.detailBusy = false;
       this.ensureDetail();
     }
+  }
+  continueAVCContext(): void {
+    const progress = avcReplayProgress(this.state.detail);
+    if (this.disposed || this.state.summaryRunning || this.detailBusy || !this.detailPaused || !this.detailRequest ||
+        this.state.detailState !== 'ready' || !progress?.canContinue || progress.target !== this.detailRequest.tagId ||
+        !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.nextReadID === 18446744073709551615n) { this.update({ detailError: 'id_exhausted' }); return; }
+    this.clearHex();
+    this.detailRequest = { ...this.detailRequest, requestId: (++this.nextReadID).toString() };
+    this.detailPhase = 'start'; this.detailPaused = false; this.detailPolls = 0;
+    this.update({ detailState: 'loading', detailError: null, detailRetry: '' });
+    this.ensureDetail();
   }
   retryDetail(): void {
     if (this.disposed || this.state.summaryRunning || this.detailBusy || !this.detailPaused || !this.detailRequest || !this.state.detailRetry || !this.ready() || this.refreshStatus || this.pollFailed) return;

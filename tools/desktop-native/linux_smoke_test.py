@@ -35,12 +35,18 @@ class LinuxSmokeTest(unittest.TestCase):
             ['--max-source-bytes', str((16 << 20) - 1)], ['--max-source-bytes', str((1 << 30) + 1)],
             ['--output-dir', 'relative'], ['--output-dir', str(self.root)],
             ['--binary', str(self.root / 'missing')], ['--source', str(self.root)],
+            ['--continue-context', '-1'], ['--continue-context', '5'], ['--revisit-tag', '0'],
+            ['--continue-context', '2', '--revisit-tag', '4'],
         ]
         for extra in invalid:
             with self.subTest(extra=extra), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as caught:
                 smoke.arguments(self.argv + extra)
             self.assertEqual(caught.exception.code, 2)
         self.assertFalse((self.root / 'new').exists())
+
+    def test_replay_parameters_are_bounded_and_explicit(self):
+        args = smoke.arguments(self.argv + ['--tag', '20002', '--continue-context', '2', '--revisit-tag', '8193'])
+        self.assertEqual((args.tag, args.continue_context, args.revisit_tag), (20002, 2, 8193))
 
     def test_source_limit_is_checked_without_reading_large_file(self):
         source = self.root / 'large.flv'

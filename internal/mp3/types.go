@@ -1,5 +1,5 @@
 // Package mp3 provides bounded, source-span-preserving MPEG Audio Layer III
-// frame-header parsing.
+// frame-header, frame-boundary, and optional side-information parsing.
 package mp3
 
 import (
@@ -188,7 +188,10 @@ type Options struct {
 	MaxDiagnostics uint32
 	// InspectFrames opts FLV detail into bounded same-tag frame inspection.
 	InspectFrames bool
-	MaxFrames     uint32
+	// InspectSideInfo expands fixed Layer III side information and same-tag
+	// main-data dependency geometry. It also enables InspectFrames.
+	InspectSideInfo bool
+	MaxFrames       uint32
 }
 
 const (
@@ -203,6 +206,9 @@ const (
 
 // Normalized applies defaults and rejects values outside hard limits.
 func (options Options) Normalized() (Options, error) {
+	if options.InspectSideInfo {
+		options.InspectFrames = true
+	}
 	if options.MaxFrames == 0 {
 		options.MaxFrames = DefaultMaxFrames
 	} else if options.MaxFrames > HardMaxFrames {

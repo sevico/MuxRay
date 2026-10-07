@@ -27,6 +27,8 @@ def arguments(argv=None):
     parser.add_argument('--output-dir', type=Path, required=True, help='new absolute evidence directory')
     parser.add_argument('--source', type=Path, help='read-only local FLV; otherwise generate a small structural fixture')
     parser.add_argument('--tag', type=int, help='supported detail Tag; default generated=4, supplied source=0')
+    parser.add_argument('--continue-context', type=int, default=0, help='explicit AVC parameter replay actions, 0 through 4; export every stage')
+    parser.add_argument('--revisit-tag', type=int, help='after replay, visit an earlier Tag then return to the selected Tag')
     parser.add_argument('--max-source-bytes', type=int, default=MIN_SOURCE_LIMIT, help='16 MiB default; at most 1 GiB')
     parser.add_argument('--timeout-seconds', type=int, default=180, help='whole session deadline, 30–600 seconds; cleanup gets up to 10 more')
     parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
@@ -41,6 +43,10 @@ def arguments(argv=None):
         args.tag = 0 if args.source else 4
     if not 0 <= args.tag < 1_000_000:
         parser.error('--tag must be between 0 and 999999 (desktop index budget)')
+    if not 0 <= args.continue_context <= 4:
+        parser.error('--continue-context must be between 0 and 4')
+    if args.revisit_tag is not None and (not args.continue_context or not 0 <= args.revisit_tag < args.tag):
+        parser.error('--revisit-tag requires replay and an earlier nonnegative Tag')
     args.binary = args.binary.resolve()
     if not args.binary.is_file() or not os.access(args.binary, os.X_OK):
         parser.error('--binary must be an executable file; build with desktop/build-production.sh first')
@@ -268,6 +274,34 @@ def run_worker(args):
         require(entry.queryEditableText().setTextContents(str(path)), 'picker path write failed')
         require(node_text(entry) == str(path), 'picker path readback mismatch')
 
+    def select_tag(tag):
+        entry = find('entry', 'Tag ID')
+        require(entry.queryComponent().grabFocus(), 'Tag ID focus failed')
+        combo('a')
+        for char in str(tag):
+            key(char, True)
+            key(char, False)
+        screen.sync()
+        wait(lambda: node_text(find('entry', 'Tag ID')) == str(tag), 'Tag ID input')
+        click('跳转 Tag')
+        click(f'查看 Tag {tag} 详情', 'toggle button')
+        wait_text('详情诊断 (')
+
+    def export_snapshot(name, tag):
+        click(f'查看 Tag {tag} 原始字节')
+        wait(lambda: any(name_.startswith('查看 byte ') for _, _, _, name_ in rows()), 'Hex bytes')
+        path = out / name
+        click('导出诊断 JSON')
+        find('push button', 'Save')
+        picker_path(path, 6)
+        click('Save')
+        wait_text('已保存 ' + name)
+        snapshot = json.loads(path.read_text())
+        validate_export(snapshot, tag, record['origin'] == 'generated')
+        checked = check_snapshot(path, source, args.max_source_bytes)
+        require(checked['sourceSHA256'] == before_hash, 'source changed during native flow')
+        return snapshot, checked
+
     result = {'passed': False, 'pid': app.pid}
     try:
         wait_text('从一个文件开始')
@@ -280,30 +314,24 @@ def run_worker(args):
         # A broad '部分结果' match also occurs in the still-scanning placeholder.
         wait_text('容器索引完整', 90)
         focus('MuxRay · 码流透镜')
-        entry = find('entry', 'Tag ID')
-        require(entry.queryComponent().grabFocus(), 'Tag ID focus failed')
-        combo('a')
-        for char in str(args.tag):
-            key(char, True)
-            key(char, False)
-        screen.sync()
-        wait(lambda: node_text(find('entry', 'Tag ID')) == str(args.tag), 'Tag ID input')
-        click('跳转 Tag')
-        click(f'查看 Tag {args.tag} 详情', 'toggle button')
-        wait_text('详情诊断 (')
-        click(f'查看 Tag {args.tag} 原始字节')
-        wait(lambda: any(name.startswith('查看 byte ') for _, _, _, name in rows()), 'Hex bytes')
-        snapshot_path = out / 'snapshot.json'
-        click('导出诊断 JSON')
-        find('push button', 'Save')
-        # Picker is a native dialog in the same PID; GTK3 exposes its name entry at depth 6.
-        picker_path(snapshot_path, 6)
-        click('Save')
-        wait_text('已保存 snapshot.json')
-        snapshot = json.loads(snapshot_path.read_text())
-        validate_export(snapshot, args.tag, record['origin'] == 'generated')
-        result['snapshotCheck'] = check_snapshot(snapshot_path, source, args.max_source_bytes)
-        require(result['snapshotCheck']['sourceSHA256'] == before_hash, 'source changed during native flow')
+        select_tag(args.tag)
+        if args.continue_context:
+            snapshot, checked = export_snapshot('context-initial.json', args.tag)
+            result['contextStages'] = [{'file': 'context-initial.json', 'snapshotCheck': checked}]
+            for index in range(args.continue_context):
+                next_tag = next(f['value'] for f in snapshot['detail']['detail']['fields'] if f['name'] == 'nextTagId')
+                previous_progress = f'参数上下文已检查到 Tag {next_tag} 之前'
+                click('继续准备参数')
+                wait(lambda: not any(previous_progress in name or previous_progress in node_text(node) for node, _, _, name in rows()), 'parameter context advanced')
+                name = f'context-{index + 1}.json'
+                snapshot, checked = export_snapshot(name, args.tag)
+                result['contextStages'].append({'file': name, 'snapshotCheck': checked})
+            if args.revisit_tag is not None:
+                select_tag(args.revisit_tag)
+                _, checked = export_snapshot('context-revisit.json', args.revisit_tag)
+                result['contextStages'].append({'file': 'context-revisit.json', 'snapshotCheck': checked})
+                select_tag(args.tag)
+        _, result['snapshotCheck'] = export_snapshot('snapshot.json', args.tag)
         dump('saved-ui.json')
         result['sourceFDsBeforeClose'] = source_fds(observe(app.pid, known), source)
         require(result['sourceFDsBeforeClose'], 'no owned process holds the open source')
@@ -372,9 +400,13 @@ def launch(args):
                sys.executable, '-B', str(Path(__file__).resolve()), '--worker', '--binary', str(args.binary),
                '--output-dir', str(out), '--source', str(args.source), '--tag', str(args.tag),
                '--max-source-bytes', str(args.max_source_bytes), '--timeout-seconds', str(args.timeout_seconds)]
+    command.extend(['--continue-context', str(args.continue_context)])
+    if args.revisit_tag is not None:
+        command.extend(['--revisit-tag', str(args.revisit_tag)])
     record = {'binary': str(args.binary), 'binarySHA256': digest(args.binary), 'source': str(args.source),
               'sourceBytes': args.source.stat().st_size, 'origin': 'generated' if generated else 'user-supplied',
               'tag': args.tag, 'maxSourceBytes': args.max_source_bytes, 'timeoutSeconds': args.timeout_seconds,
+              'continueContext': args.continue_context, 'revisitTag': args.revisit_tag,
               'argv': command, 'environment': {key: env[key] for key in env if key.startswith('XDG_') or key in
                                             ('GSETTINGS_BACKEND', 'GDK_BACKEND', 'LC_ALL', 'NO_AT_BRIDGE', 'TMPDIR')}}
     save(out, 'run.json', record)

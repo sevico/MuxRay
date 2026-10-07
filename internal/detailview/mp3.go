@@ -112,6 +112,16 @@ func (b *builder) mp3Frames(root string, p *mp3.FrameSequence) {
 			value += fmt.Sprintf("; stored=0x%04x computed=0x%04x", f.CRC.Stored, f.CRC.Computed)
 		}
 		b.add(frame, "CRC16", "integrity check", value, crcSpan)
+		if d := f.Dependency; d != nil {
+			value := fmt.Sprintf("%s; prior same-tag slot bytes=%d", d.State, d.KnownPreviousBytes)
+			if d.MissingPreviousBytes != nil {
+				value += fmt.Sprintf("; bytes before tag=%d", *d.MissingPreviousBytes)
+			}
+			if d.Part23Bits != nil && d.AvailableBits != nil {
+				value += fmt.Sprintf("; declared bits=%d, same-tag window bits=%d", *d.Part23Bits, *d.AvailableBits)
+			}
+			b.add(frame, "mainDataDependency", "derived range check", value+"; not reservoir or decoded-audio validation", nil)
+		}
 	}
 	if v := p.VBR; v != nil {
 		meta := b.add(id, v.Kind, "VBR metadata", fmt.Sprintf("first-frame metadata; complete=%t; counts describe the whole stream, not this FLV tag", v.Complete), span(v.Span))
@@ -158,5 +168,21 @@ func (b *builder) mp3Frames(root string, p *mp3.FrameSequence) {
 	}
 	if !p.UninspectedSpan.Empty() {
 		b.add(id, "uninspectedFrames", "opaque", fmt.Sprintf("%d bytes from the first unresolved boundary", p.UninspectedSpan.BitLength/8), span(p.UninspectedSpan))
+	}
+	// Keep all retained frame/CRC/VBR summaries visible before spending the
+	// remaining generic field budget on detailed side information.
+	var expanded, total uint32
+	for _, f := range p.Frames {
+		if f.SideInfo != nil {
+			total++
+			if expanded < 2 {
+				b.mp3SideInfo(id, f)
+				expanded++
+			}
+		}
+	}
+	if total > expanded {
+		b.detail.Truncated = true
+		b.add(id, "sideInfoOmittedFrames", "derived count", fmt.Sprintf("%d; desktop expands the first two side-info records; CLI v3 retains all inspected records", total-expanded), nil)
 	}
 }

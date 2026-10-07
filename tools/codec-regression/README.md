@@ -95,3 +95,42 @@ name/value, encoded bits, `rbspBitStartIncludingNALHeader`, `bitLength`, and
 field names remain separate ordered entries. No product parser generates this
 oracle. The independent v3 validator consumes it without changing the
 v1/v2 regression gate.
+
+## MP3 side information and long AVC context
+
+Generate the independent MPEG-1/2/2.5 mono/stereo corpus and inspect CLI v3:
+
+```sh
+/usr/bin/python3 -B tools/codec-regression/side_info_oracle.py \
+  --output-dir "$PWD/.cache/codec-run/side-info-samples"
+/usr/bin/python3 -B tools/codec-regression/verify_side_info.py \
+  --input-dir "$PWD/.cache/codec-run/side-info-samples" \
+  --cli "$PWD/.cache/codec-run/muxray" --output-dir "$PWD/.cache/codec-run/cli-side-info"
+/usr/bin/python3 -B tools/codec-regression/native_context_side.py \
+  --input-dir "$PWD/.cache/codec-run/samples" \
+  --side-info-dir "$PWD/.cache/codec-run/side-info-samples" \
+  --binary "$PWD/desktop/build/bin/MuxRay" --output-dir "$PWD/.cache/codec-run/native-context-side"
+```
+
+The corpus includes naturally encoded switched blocks and deliberate mutations
+for truncated side information, invalid values, bad switched block type,
+Tag-external history, impossible declared main-data length and CRC match/mismatch.
+Unmodified generated audio is independently decoded with FFmpeg. The oracle
+extracts fixed fields and source bits without using the product parser and
+compares conditional presence, spans, dependency geometry and diagnostics.
+The verifier also validates all three JSON versions and default/v1 equality.
+
+The additional native entry point runs three MP3 cases and one long AVC case.
+The AVC fixture retains real configuration and multi-slice B-frame payloads but
+inserts many lightweight Tags to exercise three replay segments; it is a
+context-replay fixture, not a claim of a natural long recording. Native snapshots
+check monotonic completed boundaries, manual continuation, random-jump cache
+reuse and original SPS/PPS source links. Every round retains the same isolated
+GTK/WebKit, unchanged-source, export, FD-release and normal-exit checks.
+The existing six-case gate accepts side-info display truncation only when the
+explicit omitted-record count matches the retained frames and the first two
+records are expanded. It still rejects unexplained truncation.
+
+Use a fresh output directory per run. Generated media and local logs remain in
+`.cache`; CI runs these same commands and uploads JSON/log evidence. Contract and
+parser scope are defined in [ADR-025](../../docs/decisions/025-avc-checkpoints-mp3-side-info.md).

@@ -82,10 +82,14 @@ func runContext(ctx context.Context, args []string, stdout, stderr io.Writer) (c
 }
 
 func runDetail(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	return runDetailWithSource(ctx, args, stdout, stderr, func(path string) (detailSource, error) { return os.Open(path) })
+}
+
+func runDetailWithSource(ctx context.Context, args []string, stdout, stderr io.Writer, openSource func(string) (detailSource, error)) int {
 	flags := flag.NewFlagSet("muxray detail", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	pretty := flags.Bool("pretty", false, "indent JSON output")
-	schemaVersion := flags.Uint("schema-version", 1, "detail schema version (1: original; 2: AVC VUI/MP3 frames; 3: AVC PPS/slice prefixes)")
+	schemaVersion := flags.Uint("schema-version", 1, "detail schema version (1: original; 2: AVC VUI/MP3 frames; 3: AVC PPS/slice prefixes or MP3 side info)")
 	tagID := flags.Uint64("tag", ^uint64(0), "zero-based tag ID to parse (required)")
 	maxTags := flags.Uint64("max-tags", 0, fmt.Sprintf("maximum tags to index (0 uses %d; hard maximum %d)", flv.DefaultMaxTags, flv.HardMaxTags))
 	maxDiagnostics := flags.Uint64("max-diagnostics", 0, fmt.Sprintf("maximum scan diagnostics to retain (0 uses %d; range %d-%d)", flv.DefaultMaxDiagnostics, flv.MinDiagnostics, flv.HardMaxDiagnostics))
@@ -168,7 +172,7 @@ func runDetail(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	}
 
 	path := flags.Arg(0)
-	file, err := os.Open(path)
+	file, err := openSource(path)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "muxray: open input: %v\n", err)
 		return exitFailure
@@ -185,12 +189,23 @@ func runDetail(ctx context.Context, args []string, stdout, stderr io.Writer) int
 		return exitFailure
 	}
 
-	result, err := flv.ScanContext(ctx, file, uint64(info.Size()), flv.Options{
+	var observe flv.TagObserver
+	avcIndex := &avccontext.CandidateIndex{}
+	if *schemaVersion == 3 {
+		observe = func(scanCtx context.Context, tag flv.TagRecord) error { return avcIndex.Observe(scanCtx, file, tag) }
+	}
+	result, err := flv.ScanContextWithObserver(ctx, file, uint64(info.Size()), flv.Options{
 		MaxTags: *maxTags, MaxDiagnostics: uint32(*maxDiagnostics),
-	})
+	}, nil, observe)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "muxray: scan input: %v\n", err)
 		return exitFailure
+	}
+	if *schemaVersion == 3 {
+		if err := detailSourceUnchanged(file, info); err != nil {
+			_, _ = fmt.Fprintf(stderr, "muxray: verify input after scan: %v\n", err)
+			return exitFailure
+		}
 	}
 	if !result.Complete || result.HasErrors() {
 		_, _ = fmt.Fprintf(stderr, "muxray: cannot produce tag detail from an incomplete FLV index (%d scan diagnostics); run inspect for details\n", len(result.Diagnostics))
@@ -212,9 +227,9 @@ func runDetail(ctx context.Context, args []string, stdout, stderr io.Writer) int
 			}
 			return candidate, nil
 		}
-		framing, resolveErr := avccontext.Resolve(ctx, source, tag, lookup, avcOptions, avccontext.Limits{})
+		framing, resolveErr := avccontext.ResolveIndexed(ctx, source, tag, lookup, avcIndex, avcOptions, avccontext.Limits{})
 		if resolveErr == nil {
-			parameters, resolveErr = avccontext.ResolveParameters(ctx, source, tag, lookup, framing, avcOptions, avccontext.ParameterLimits{})
+			parameters, resolveErr = resolveAVCParameterSegments(ctx, source, tag, lookup, framing, avcOptions)
 		}
 		if resolveErr != nil {
 			_, _ = fmt.Fprintf(stderr, "muxray: resolve AVC parameter context: %v\n", resolveErr)
@@ -237,7 +252,8 @@ func runDetail(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	avcOptions.AVC.ParsePPS = *schemaVersion == 3
 	avcOptions.AVC.ParseSliceHeaders = *schemaVersion == 3
 	avcOptions.AVC.ParameterSets = parameters.Context
-	mp3Options.InspectFrames = *schemaVersion == 2
+	mp3Options.InspectFrames = *schemaVersion >= 2
+	mp3Options.InspectSideInfo = *schemaVersion == 3
 	detail, err := flv.ParseTagDetail(source, tag, flv.DetailOptions{AMF0: amfOptions, AAC: aacOptions, MP3: mp3Options, AVC: avcOptions})
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "muxray: parse tag %d detail: %v\n", *tagID, err)
@@ -260,6 +276,12 @@ func runDetail(ctx context.Context, args []string, stdout, stderr io.Writer) int
 			return exitUsage
 		}
 		return exitFailure
+	}
+	if *schemaVersion == 3 {
+		if err := detailSourceUnchanged(file, info); err != nil {
+			_, _ = fmt.Fprintf(stderr, "muxray: verify input before detail output: %v\n", err)
+			return exitFailure
+		}
 	}
 	if err := report.WriteParsedTagDetailJSON(stdout, document, *pretty); err != nil {
 		_, _ = fmt.Fprintf(stderr, "muxray: write detail report: %v\n", err)

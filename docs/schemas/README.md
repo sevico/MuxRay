@@ -12,8 +12,7 @@ The public Draft 2020-12 contracts are:
 - [`flv-media-summary-v2.schema.json`](./flv-media-summary-v2.schema.json) for opt-in AAC/AVC/MP3 `muxray summary --schema-version 2` analysis.
 - [`desktop-diagnostic-snapshot-v1.schema.json`](./desktop-diagnostic-snapshot-v1.schema.json) for bounded desktop diagnostic snapshots saved through the native file dialog.
 
-Scan and default detail use `schemaVersion: 1`; AVC/MP3 detail may select 2,
-AVC alone may select 3; media summary explicitly selects 1 or 2
+Scan and default detail use `schemaVersion: 1`; AVC/MP3 detail may select 2 or 3; media summary explicitly selects 1 or 2
 and defaults to 1. These are independent contracts. The scan report
 is selected by the `inspect` command. Detail consumers must select the validator
 using both `documentType` and `schemaVersion`: AMF0 uses
@@ -53,6 +52,17 @@ NAL framing remains available. A referenced SPS/PPS span can point into an
 earlier Tag. Slice RBSP mappings describe inspected bytes, not the opaque
 compressed body. Limits, unsupported FMO and error semantics are defined in
 [ADR-024](../decisions/024-bounded-pps-slice-prefix.md).
+
+## Opt-in MP3 side-info detail v3
+
+[`flv-mp3-tag-detail-v3.schema.json`](./flv-mp3-tag-detail-v3.schema.json) adds
+per-frame `sideInfo` and `dependency`, retaining version-dependent fields and
+exact source-bit Spans. Complete side information is not proof of audio
+decodability. `before_tag` is missing history, not corruption; `availableBits`
+counts only visible physical slots, not a reconstructed reservoir. Partial
+syntax keeps decoded invalid values and omits unread fields. See
+[ADR-025](../decisions/025-avc-checkpoints-mp3-side-info.md) for the bounds,
+conditional fields and AVC v3 segmented counter semantics. V1/v2 remain frozen.
 
 ## Deterministic CLI encoding
 

@@ -45,6 +45,13 @@ type ParameterResolution struct {
 	BarrierCount   uint64
 	SPSCount       uint32
 	PPSCount       uint32
+	// Segment-only progress is absent from the legacy JSON projection.
+	// StartTagID remains the framing origin; ResumeStartTagID is this segment's
+	// first tag. Work counters count only this segment, including an attempted
+	// partial Tag; NextTagID excludes that Tag and CanResume requires progress.
+	ResumeStartTagID uint64
+	CanResume        bool
+	CheckpointCount  uint32
 }
 
 // ResolveParameters independently reconstructs bounded SPS/PPS state from the
@@ -53,10 +60,26 @@ type ParameterResolution struct {
 // unreadable video generations are barriers rather than permission to reuse an
 // older avcC. Cancellation, I/O errors and exhausted budgets publish no context.
 func ResolveParameters(ctx context.Context, source io.ReaderAt, selected flv.TagRecord, lookup Lookup, framing Resolution, options flv.AVCVideoOptions, limits ParameterLimits) (ParameterResolution, error) {
+	return resolveParameters(ctx, source, selected, lookup, framing, options, limits, nil)
+}
+
+// ResolveParameterSegment performs at most one normal replay budget, starting
+// from an immutable checkpoint when supplied. It returns a candidate snapshot
+// only at a completed Tag boundary. The owner must validate source identity and
+// request currency before retaining it; errors/cancellation return no snapshot.
+func ResolveParameterSegment(ctx context.Context, source io.ReaderAt, selected flv.TagRecord, lookup Lookup, framing Resolution, options flv.AVCVideoOptions, limits ParameterLimits, checkpoint *ParameterCheckpoint) (ParameterResolution, *ParameterCheckpoint, error) {
+	replay := parameterReplay{seed: checkpoint}
+	result, err := resolveParameters(ctx, source, selected, lookup, framing, options, limits, &replay)
+	return result, replay.next, err
+}
+
+type parameterReplay struct{ seed, next *ParameterCheckpoint }
+
+func resolveParameters(ctx context.Context, source io.ReaderAt, selected flv.TagRecord, lookup Lookup, framing Resolution, options flv.AVCVideoOptions, limits ParameterLimits, replay *parameterReplay) (result ParameterResolution, err error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	result := ParameterResolution{State: StateNotNeeded, SelectedTagID: selected.ID}
+	result = ParameterResolution{State: StateNotNeeded, SelectedTagID: selected.ID}
 	if limits.MaxTags == 0 {
 		limits.MaxTags = DefaultParameterMaxTags
 	}
@@ -81,17 +104,36 @@ func ResolveParameters(ctx context.Context, source io.ReaderAt, selected flv.Tag
 	if lookup == nil || framing.SourceTagID >= selected.ID || !parameterWidthValid(framing.NALLengthSize) {
 		return result, ErrInvalidInput
 	}
-	options.AVC.ParsePPS, options.AVC.ParseSliceHeaders, options.AVC.ParseVUI = true, false, false
-	options.AVC.ParameterSets = nil
-	options.AVC, err = options.AVC.Normalized()
+	options.AVC, err = parameterOptions(options.AVC)
 	if err != nil {
 		return result, err
 	}
 	sets := avc.NewParameterSetContext()
 	width := uint8(0)
 	invalidated := false
-	result.StartTagID, result.NextTagID = framing.SourceTagID, framing.SourceTagID
-	for id := framing.SourceTagID; id < selected.ID; id++ {
+	start := framing.SourceTagID
+	if replay != nil && replay.seed != nil {
+		if !replay.seed.matches(framing, selected.ID, options.AVC) {
+			return result, ErrInvalidInput
+		}
+		start, width, invalidated = replay.seed.nextTagID, replay.seed.width, replay.seed.invalidated
+		sets = replay.seed.sets.Clone()
+	}
+	result.StartTagID, result.NextTagID = framing.SourceTagID, start
+	if replay != nil {
+		result.ResumeStartTagID = start
+		defer func() {
+			if err != nil {
+				return
+			}
+			result.CanResume = result.State == StateBudgetExhausted && result.NextTagID > start
+			if result.NextTagID == start && start != selected.ID {
+				return
+			}
+			replay.next = &ParameterCheckpoint{sourceTagID: framing.SourceTagID, lengthSpan: framing.SourceLengthSpan, declaredWidth: framing.NALLengthSize, options: options.AVC, nextTagID: result.NextTagID, sets: sets.CompactClone(), width: width, invalidated: invalidated}
+		}()
+	}
+	for id := start; id < selected.ID; id++ {
 		if err := ctx.Err(); err != nil {
 			return result, err
 		}
@@ -123,8 +165,6 @@ func ResolveParameters(ctx context.Context, source io.ReaderAt, selected flv.Tag
 			}
 			options.NALLengthSize = width
 			if kind == uint8(flv.AVCPacketTypeSequenceHeader) {
-				// A replacement starts a new generation even when malformed.
-				sets, width = avc.NewParameterSetContext(), 0
 				result.Configurations++
 			} else {
 				result.NALPackets++
@@ -134,6 +174,9 @@ func ResolveParameters(ctx context.Context, source io.ReaderAt, selected flv.Tag
 				return parameterError(result, err)
 			}
 			if kind == uint8(flv.AVCPacketTypeSequenceHeader) {
+				// Commit a replacement only after its whole read returns. A
+				// budget-exhausted Tag cannot corrupt the preceding checkpoint.
+				sets, width = avc.NewParameterSetContext(), 0
 				if parsed.ConfigPresent && parsed.Config.FramingComplete && parameterWidthValid(parsed.Config.LengthSize) {
 					width = parsed.Config.LengthSize
 					sets.AddConfiguration(parsed.Config)

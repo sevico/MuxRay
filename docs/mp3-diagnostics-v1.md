@@ -69,3 +69,18 @@ implemented by
 - `bitsConsumed` counts inspected syntax, not recovery: it is `0` when the FLV
   header is absent, `8` when SoundData has no complete fixed header, and `40`
   after a four-byte MPEG header is decoded.
+
+## Opt-in side-info diagnostics (detail v3 and desktop)
+
+These additions are emitted only by the deeper parser; v1/v2 output remains
+unchanged. All three are errors with recovery at the selected Tag payload end.
+
+| Code | Meaning |
+|---|---|
+| `MP3_SIDE_INFO_TRUNCATED` | The version/channel-dependent fixed side information is incomplete; unread fields stay absent. |
+| `MP3_SIDE_INFO_VALUE_INVALID` | A decoded side-info constraint is invalid, such as `big_values > 288` or switched `block_type = 0`. |
+| `MP3_MAIN_DATA_LENGTH_INVALID` | Declared part2_3 bits exceed the full backpointer distance plus current physical main-data slots. |
+
+A `before_tag` dependency is not an error: earlier history was not inspected.
+These checks do not validate Huffman data, scalefactors or reservoir usage.
+See [ADR-025](decisions/025-avc-checkpoints-mp3-side-info.md).

@@ -3,7 +3,7 @@ import { TagTrendPanel } from './TagTrendPanel';
 import { Controller, PAGE_SIZE } from './controller';
 import type { Diagnostic, Session, Tag } from './protocol';
 import type { ViewState } from './controller';
-import { detailRows, fieldValue } from './details';
+import { avcReplayProgress, detailRows, fieldValue } from './details';
 import { byteSize, previousStart, progressPercent, unsigned } from './numbers';
 import { selectionFromSpan } from './hex';
 import type { HexSelection } from './hex';
@@ -139,7 +139,7 @@ export function App({ controller }: { controller: Controller }) {
             <button disabled={!canPage || !bounds || view.loading || unsigned(bounds.next) >= unsigned(bounds.total) || !!isClosing} onClick={() => bounds && controller.select(view.tab, bounds.next)}>下一页</button>
           </div></div>}
         </section>
-        {view.selectedTag && <DetailPanel view={view} onRetry={() => controller.retryDetail()} onLocate={selection => controller.showHex(selection)} />}
+        {view.selectedTag && <DetailPanel view={view} onRetry={() => controller.retryDetail()} onContinue={() => controller.continueAVCContext()} onLocate={selection => controller.showHex(selection)} />}
         </div>
         <HexPanel view={view} controller={controller} disabled={!canPage || !!isClosing} message={fault} />
       </>}
@@ -156,10 +156,11 @@ function TagTable({ rows, selectedId, disabled, onSelect, onLocate }: { rows: Ta
   </tr>)}</tbody></table>;
 }
 
-function DetailPanel({ view, onRetry, onLocate }: { view: ViewState; onRetry: () => void; onLocate: (selection: HexSelection) => void }) {
+function DetailPanel({ view, onRetry, onContinue, onLocate }: { view: ViewState; onRetry: () => void; onContinue: () => void; onLocate: (selection: HexSelection) => void }) {
   const detail = view.detail;
   const kind = detail?.kind === 'amf0ScriptData' ? 'AMF0 Script Data' : detail?.kind === 'aacAudio' ? 'AAC Audio' : detail?.kind === 'avcVideo' ? 'AVC Video' : detail?.kind === 'mp3Audio' ? 'MP3 Audio' : 'Tag 详情';
   const busy = ['loading', 'pending', 'recovering'].includes(view.detailState);
+  const replay = avcReplayProgress(detail);
   return <section id="tag-detail" className="detail-panel" aria-label={`Tag ${view.selectedTag!.id} 详情`} aria-busy={busy}>
     <div className="detail-heading"><div><p className="eyebrow">按需解析 · TAG {view.selectedTag!.id}</p><h2>{kind}</h2></div>
       {view.trendPage && <a className="trend-return" href="#tag-trends">返回趋势 ↑</a>}
@@ -170,8 +171,9 @@ function DetailPanel({ view, onRetry, onLocate }: { view: ViewState; onRetry: ()
     {detail && <>
       <p className="detail-note">字段位置使用原文件的 byte 偏移和 bit 起点；位长包含字段占用的位数。{detail.kind === 'aacAudio' && ' AAC raw packet 仅显示封装信息与数据范围，不解码音频。'}</p>
       {detail.kind === 'avcVideo' && <p className="detail-note">AVC 展开 SPS VUI、PPS 必要字段和 slice 头前缀，显示参数集引用及 I/P/B 类型；前缀完整不代表整帧可解码。时序和 HRD 是码流声明。派生值及跨段字段的单一原始位置显示“—”。</p>}
+      {replay && <div className="detail-note" role="status">参数上下文已检查到 Tag {replay.next} 之前，目标为 Tag {replay.target}。{replay.canContinue ? <button disabled={busy || view.detailState !== 'ready' || view.summaryRunning} onClick={onContinue}>继续准备参数</button> : '当前段无法继续推进；请检查源数据或解析预算限制。'}</div>}
       {detail.kind === 'mp3Audio' && <>
-        <p className="detail-note">MP3 在当前 Tag 内检查帧边界、首帧 Xing/Info/VBRI 声明及受保护帧的头部和 side-info CRC。帧完整不代表音频可解码；预算外数据和未知帧长会明确保留为未检查范围。</p>
+        <p className="detail-note">MP3 在当前 Tag 内检查帧边界、VBR 声明、side-info 和头部 CRC，并显示主数据回指范围。范围覆盖不代表 bit-reservoir 或音频解码有效；Tag 之前的数据依赖保持未知。</p>
         <p className="detail-note">free-format 的码率和帧长未知；派生字段不标注单一原始位置，以“—”显示。</p>
       </>}
       {!detail.complete && <p className="detail-note problem">保留可解析的字段；请结合下方详情诊断检查未完成部分。</p>}

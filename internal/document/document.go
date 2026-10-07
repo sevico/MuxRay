@@ -73,6 +73,7 @@ type Document struct {
 	cancel         context.CancelFunc
 	scan           *session.Session
 	avcIndex       *avccontext.CandidateIndex
+	avcParameters  avccontext.ParameterCheckpoints
 	source         sourceFile
 	initial        os.FileInfo
 	parse          parseDetail
@@ -134,9 +135,6 @@ func startWithParser(ctx context.Context, source sourceFile, info os.FileInfo, o
 	d.scan = session.StartWithTagObserver(ctx, source, uint64(info.Size()), options, func(scanCtx context.Context, tag flv.TagRecord) error {
 		return index.Observe(scanCtx, source, tag)
 	})
-	if d.parse == nil {
-		d.parse = d.parseWithContext
-	}
 	go d.run()
 	return d
 }
@@ -152,6 +150,7 @@ func (d *Document) run() {
 			d.hex.Window = nil
 			d.clearSnapshotReadsLocked()
 			d.summary.Overview, d.summaryReport = nil, nil
+			d.avcParameters.Clear()
 			d.mu.Unlock()
 			// This single worker owns closure. No read or parse remains active.
 			_ = d.scan.Close(context.Background())
@@ -185,16 +184,20 @@ func (d *Document) run() {
 		var detail *detailview.Detail
 		var window *HexWindow
 		var summary *summaryview.Report
+		var checkpoint *avccontext.ParameterCheckpoint
 		var err error
 		if selected.kind == hexWork {
 			window, err = d.readHex(ctx, selected.offset, selected.count)
 		} else if selected.kind == summaryWork {
 			summary, err = d.readSummary(ctx, selected.id)
 		} else {
-			detail, err = d.readDetail(ctx, selected.tag)
+			detail, checkpoint, err = d.readDetail(ctx, selected.tag)
+		}
+		d.mu.Lock()
+		if err == nil {
+			err = ctx.Err()
 		}
 		cancel()
-		d.mu.Lock()
 		d.activeCancel = nil
 		d.active = nil
 		if !d.closed && selected.kind == summaryWork && d.summary.RequestID == selected.id {
@@ -222,6 +225,9 @@ func (d *Document) run() {
 					d.snapshotHex = d.hex
 				}
 			} else {
+				if err == nil && !d.changed {
+					d.avcParameters.Commit(checkpoint)
+				}
 				d.latest.Detail, d.latest.Err, d.latest.State = detail, err, "ready"
 				if err != nil {
 					d.latest.Detail, d.latest.State = nil, "failed"
@@ -248,6 +254,7 @@ func (d *Document) sourceUnchanged() error {
 	if !os.SameFile(d.initial, info) || d.initial.Size() != info.Size() || !d.initial.ModTime().Equal(info.ModTime()) || d.initial.Mode() != info.Mode() {
 		d.mu.Lock()
 		d.changed = true
+		d.avcParameters.Clear()
 		d.clearSnapshotReadsLocked()
 		d.invalidateSummaryLocked(ErrSourceChanged)
 		d.mu.Unlock()
@@ -256,36 +263,50 @@ func (d *Document) sourceUnchanged() error {
 	return nil
 }
 
-func (d *Document) readDetail(ctx context.Context, tag flv.TagRecord) (*detailview.Detail, error) {
+func (d *Document) readDetail(ctx context.Context, tag flv.TagRecord) (*detailview.Detail, *avccontext.ParameterCheckpoint, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := d.sourceUnchanged(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	detail, err := d.parse(ctx, d.source, tag)
+	var detail *detailview.Detail
+	var checkpoint *avccontext.ParameterCheckpoint
+	var err error
+	if d.parse != nil {
+		detail, err = d.parse(ctx, d.source, tag)
+	} else {
+		detail, checkpoint, err = d.parseWithContext(ctx, d.source, tag)
+	}
 	// Detect changes during a read before publishing any parsed fields.
 	if changed := d.sourceUnchanged(); changed != nil {
-		return nil, changed
+		return nil, nil, changed
 	}
 	if canceled := ctx.Err(); canceled != nil {
-		return nil, canceled
+		return nil, nil, canceled
 	}
-	return detail, err
+	return detail, checkpoint, err
 }
 
 // parseWithContext runs lookup and projection within the caller's single task
 // deadline and before/after source checks. Each candidate remains payload-bound.
-func (d *Document) parseWithContext(ctx context.Context, source io.ReaderAt, tag flv.TagRecord) (*detailview.Detail, error) {
+func (d *Document) parseWithContext(ctx context.Context, source io.ReaderAt, tag flv.TagRecord) (*detailview.Detail, *avccontext.ParameterCheckpoint, error) {
 	resolution, err := avccontext.ResolveIndexed(ctx, source, tag, d.scan.Tag, d.avcIndex, detailview.DesktopAVCOptions(), avccontext.Limits{MaxCandidates: AVCContextMaxCandidates, MaxBytes: AVCContextMaxBytes})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	parameters, err := avccontext.ResolveParameters(ctx, source, tag, d.scan.Tag, resolution, detailview.DesktopAVCOptions(), avccontext.ParameterLimits{})
+	d.mu.Lock()
+	checkpoint := d.avcParameters.Lookup(resolution, tag.ID, detailview.DesktopAVCOptions())
+	preview := d.avcParameters
+	d.mu.Unlock()
+	parameters, checkpoint, err := avccontext.ResolveParameterSegment(ctx, source, tag, d.scan.Tag, resolution, detailview.DesktopAVCOptions(), avccontext.ParameterLimits{}, checkpoint)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return detailview.ParseWithAVCParameters(ctx, source, tag, resolution, parameters)
+	preview.Commit(checkpoint)
+	parameters.CheckpointCount = preview.Count()
+	detail, err := detailview.ParseWithAVCParameters(ctx, source, tag, resolution, parameters)
+	return detail, checkpoint, err
 }
 
 // StartDetail shares request generations with StartHex. There is one active

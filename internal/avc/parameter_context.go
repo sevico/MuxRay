@@ -18,6 +18,55 @@ func (c *ParameterSetContext) Clone() *ParameterSetContext {
 	return &clone
 }
 
+// CompactClone retains only the immutable values needed by slice prefix
+// parsing. It owns no RBSP bytes, field mappings, VUI, or source handle. The
+// 32 SPS / 256 PPS slots and fixed-size pointees bound checkpoint storage.
+// This is a context snapshot, not a substitute for the parsed parameter detail.
+func (c *ParameterSetContext) CompactClone() *ParameterSetContext {
+	out := NewParameterSetContext()
+	if c == nil {
+		return out
+	}
+	for id, s := range c.sps {
+		if s == nil {
+			continue
+		}
+		out.sps[id] = &SequenceParameterSet{
+			RBSP:                        RBSPView{EBSPSpan: s.RBSP.EBSPSpan},
+			SequenceParameterSetID:      s.SequenceParameterSetID,
+			BitDepthLumaMinus8:          s.BitDepthLumaMinus8,
+			SeparateColourPlaneFlag:     s.SeparateColourPlaneFlag,
+			Log2MaxFrameNumMinus4:       s.Log2MaxFrameNumMinus4,
+			FrameMbsOnlyFlag:            s.FrameMbsOnlyFlag,
+			PicOrderCntType:             s.PicOrderCntType,
+			Log2MaxPicOrderCntLSBMinus4: s.Log2MaxPicOrderCntLSBMinus4,
+			DeltaPicOrderAlwaysZeroFlag: s.DeltaPicOrderAlwaysZeroFlag,
+			PicWidthInMbsMinus1:         s.PicWidthInMbsMinus1,
+			PicHeightInMapUnitsMinus1:   s.PicHeightInMapUnitsMinus1,
+			MBAdaptiveFrameFieldFlag:    s.MBAdaptiveFrameFieldFlag,
+			Complete:                    s.Complete,
+		}
+	}
+	for id, p := range c.pps {
+		if p == nil {
+			continue
+		}
+		out.pps[id] = &PictureParameterSet{
+			RBSP:                                  RBSPView{EBSPSpan: p.RBSP.EBSPSpan},
+			PictureParameterSetID:                 p.PictureParameterSetID,
+			SequenceParameterSetID:                p.SequenceParameterSetID,
+			BottomFieldPicOrderInFramePresentFlag: p.BottomFieldPicOrderInFramePresentFlag,
+			Complete:                              p.Complete,
+			Deep: &PPSDetails{
+				PicInitQPMinus26:           &SignedField{Value: p.Deep.PicInitQPMinus26.Value},
+				RedundantPicCntPresentFlag: &VUIBooleanField{Value: p.Deep.RedundantPicCntPresentFlag.Value},
+				PrefixComplete:             p.Deep.PrefixComplete,
+			},
+		}
+	}
+	return out
+}
+
 // AddConfiguration starts a fresh generation. Broken framing cannot supply
 // a reliable parameter-set generation and leaves the context empty.
 func (c *ParameterSetContext) AddConfiguration(record ConfigurationRecord) {

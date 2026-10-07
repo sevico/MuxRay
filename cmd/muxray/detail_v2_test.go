@@ -68,7 +68,7 @@ func TestDetailV2TruncatedFrameAndUnsupportedVersion(t *testing.T) {
 	for _, tc := range []struct {
 		version string
 		code    int
-	}{{"1", exitOK}, {"2", exitDiagnostics}, {"3", exitUsage}, {"0", exitUsage}} {
+	}{{"1", exitOK}, {"2", exitDiagnostics}, {"3", exitDiagnostics}, {"0", exitUsage}} {
 		var stdout, stderr bytes.Buffer
 		if code := run([]string{"detail", "--schema-version", tc.version, "--tag", "0", path}, &stdout, &stderr); code != tc.code {
 			t.Fatalf("version %s: exit %d, want %d: %s", tc.version, code, tc.code, stderr.String())

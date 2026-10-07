@@ -36,8 +36,16 @@ def verify_semantics(name, snapshot, expected):
         stop = 'body_truncated' if name == 'xing-vbr-tail-truncated' else 'diagnostics' if name == 'crc' else 'end'
         prefix = f'{want["completeFrameCount"]} complete frame boundaries; {want["physicalFrameCount"]} headers; stop={stop};'
         require(field_value(fields, 'Frame inspection').startswith(prefix), 'native MP3 frame summary differs')
+        omitted = max(0, want['physicalFrameCount'] - 2)
         require(detail['complete'] == (name not in ('xing-vbr-tail-truncated', 'crc')) and
-                detail['truncated'] == (name == 'xing-vbr-tail-truncated'), 'native MP3 complete/truncated distinction differs')
+                detail['truncated'] == (name == 'xing-vbr-tail-truncated' or omitted > 0), 'native MP3 complete/truncated distinction differs')
+        omission = [f for f in fields if f['name'] == 'sideInfoOmittedFrames']
+        require(len(omission) == bool(omitted), 'native side-info omission marker differs')
+        if omitted:
+            require(omission[0]['value'] == f'{omitted}; desktop expands the first two side-info records; CLI v3 retains all inspected records',
+                    'native side-info omission count/reason differs')
+        require(len([f for f in fields if f['name'].startswith('Side info Frame ')]) == min(2, want['physicalFrameCount']),
+                'native side-info preview count differs')
         if want['vbr'] is not None:
             require('complete=true' in field_value(fields, want['vbr']['kind']), 'native VBR is incomplete')
             require(field_value(fields, 'declaredStreamFrames') == str(want['vbr']['declaredFrames']['value']), 'native VBR declaration differs')

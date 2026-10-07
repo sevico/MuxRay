@@ -12,6 +12,9 @@ from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parent.parent
 CONTRACTS = (
+    ("docs/schemas/flv-mp3-tag-detail-v3.schema.json", "testdata/golden/flv-mp3-side-info-v3.json"),
+    ("docs/schemas/flv-mp3-tag-detail-v3.schema.json", "testdata/golden/flv-mp3-side-info-truncated-v3.json"),
+    ("docs/schemas/flv-mp3-tag-detail-v3.schema.json", "testdata/golden/flv-mp3-side-info-before-tag-v3.json"),
     ("docs/schemas/flv-avc-tag-detail-v3.schema.json", "testdata/golden/flv-avc-detail-v3.json"),
     ("docs/schemas/flv-avc-tag-detail-v3.schema.json", "testdata/golden/flv-avc-detail-nalu-v3.json"),
     ("docs/schemas/flv-avc-tag-detail-v3.schema.json", "testdata/golden/flv-avc-detail-missing-v3.json"),
@@ -1487,6 +1490,150 @@ def validate_avc_v3_edge_cases() -> None:
         require_invalid(validator, changed, 'v3 bounds/closed shape: ' + str(path))
 
 
+def validate_mp3_v3_edge_cases() -> None:
+    validator = Draft202012Validator(load_json("docs/schemas/flv-mp3-tag-detail-v3.schema.json"))
+    valid = load_json("testdata/golden/flv-mp3-side-info-v3.json")
+    base = ["detail", "frames", "items", 0]
+    mutations = (
+        ([], "schemaVersion", 2),
+        (base + ["sideInfo"], "bitsConsumed", 257),
+        (base + ["sideInfo"], "declaredBytes", 31),
+        (base + ["sideInfo"], "granules", []),
+        (base + ["sideInfo"], "scfsiChannels", []),
+        (base + ["sideInfo"], "extra", 1),
+        (base + ["dependency"], "state", "decodable"),
+        (base + ["dependency"], "knownPreviousBytes", -1),
+        (base + ["dependency"], "missingPreviousBytes", 1),
+        (base + ["sideInfo", "granules", 0, "channels", 0], "tableSelect", []),
+        (base + ["sideInfo", "granules", 0, "channels", 0], "blockType", {"value": 2, "span": {"byteOffset": 0, "bitOffset": 0, "bitLength": 2}}),
+    )
+    for path, key, value in mutations:
+        changed = deepcopy(valid)
+        target = changed
+        for part in path:
+            target = target[part]
+        target[key] = value
+        require_invalid(validator, changed, "MP3 v3 closed shape/layout: " + str(path + [key]))
+    for path, key in (
+        (base, "sideInfo"), (base, "dependency"),
+        (base + ["sideInfo"], "mainDataBegin"),
+        (base + ["sideInfo", "granules", 0, "channels", 0], "preflag"),
+        (base + ["sideInfo", "granules", 0, "channels", 0], "region0Count"),
+    ):
+        changed = deepcopy(valid)
+        target = changed
+        for part in path:
+            target = target[part]
+        del target[key]
+        require_invalid(validator, changed, "MP3 v3 complete presence: " + str(path + [key]))
+    changed = load_json("testdata/golden/flv-mp3-side-info-before-tag-v3.json")
+    del changed["detail"]["frames"]["items"][0]["dependency"]["missingPreviousBytes"]
+    require_invalid(validator, changed, "MP3 v3 missing Tag-external byte count")
+    # A reported source value can be invalid syntax: schemas must retain it.
+    changed = deepcopy(valid)
+    side = changed["detail"]["frames"]["items"][0]["sideInfo"]
+    side["complete"] = False
+    side["granules"][0]["channels"][0]["bigValues"]["value"] = 511
+    changed["detail"]["frames"]["items"][0]["dependency"]["state"] = "unknown"
+    require_valid(validator, changed, "MP3 v3 preserves invalid decoded side-info values")
+    # Encoded widths remain bounded even for malformed/partial syntax. Only
+    # the semantic big_values/block_type restrictions depend on completeness.
+    side_base = base + ["sideInfo"]
+    channel_base = side_base + ["granules", 0, "channels", 0]
+    for path, value in (
+        (side_base + ["mainDataBegin", "value"], 512),
+        (side_base + ["privateBits", "value"], 8),
+        (channel_base + ["part23Length", "value"], 4096),
+        (channel_base + ["bigValues", "value"], 512),
+        (channel_base + ["globalGain", "value"], 256),
+        (channel_base + ["scalefacCompress", "value"], 16),
+        (channel_base + ["region0Count", "value"], 16),
+        (channel_base + ["region1Count", "value"], 8),
+        (channel_base + ["tableSelect", 0, "value"], 32),
+        (channel_base + ["part23Length", "span", "bitLength"], 11),
+        (side_base + ["scfsiChannels", 0, "flags", 0, "span", "bitLength"], 2),
+    ):
+        for complete in (False, True):
+            changed = deepcopy(valid)
+            changed["detail"]["frames"]["items"][0]["sideInfo"]["complete"] = complete
+            target = changed
+            for key in path[:-1]:
+                target = target[key]
+            target[path[-1]] = value
+            require_invalid(validator, changed, "MP3 v3 encoded width: " + str(path))
+    changed = deepcopy(valid)
+    changed["detail"]["frames"]["items"][0]["sideInfo"]["granules"][0]["channels"][0]["bigValues"]["value"] = 289
+    require_invalid(validator, changed, "MP3 v3 complete big_values must not exceed 288")
+    changed["detail"]["frames"]["items"][0]["sideInfo"]["complete"] = False
+    require_valid(validator, changed, "MP3 v3 malformed big_values remains reportable")
+    changed = deepcopy(valid)
+    switched = changed["detail"]["frames"]["items"][1]["sideInfo"]
+    switched["granules"][0]["channels"][0]["blockType"]["value"] = 0
+    require_invalid(validator, changed, "MP3 v3 complete switched block_type cannot be zero")
+    switched["complete"] = False
+    require_valid(validator, changed, "MP3 v3 malformed switched block_type remains reportable")
+    for field, maximum in (("blockType", 3), ("subblockGain", 7)):
+        changed = deepcopy(valid)
+        side = changed["detail"]["frames"]["items"][1]["sideInfo"]
+        side["complete"] = False
+        target = side["granules"][0]["channels"][0][field]
+        if isinstance(target, list):
+            target = target[0]
+        target["value"] = maximum + 1
+        require_invalid(validator, changed, "MP3 v3 switched field width: " + field)
+    # Version-dependent widths apply even when malformed syntax is retained.
+    for version, rate, name in ((2, 22050, "mpeg2"), (0, 11025, "mpeg2.5")):
+        lsf = deepcopy(valid)
+        frame = lsf["detail"]["frames"]["items"][0]
+        header, side = frame["header"], frame["sideInfo"]
+        header["version"].update(value=version, name=name)
+        header.update(samplesPerFrame=576, samplingFrequencyHz=rate, bitrateKbps=80)
+        side.update(declaredBytes=17, bitsConsumed=136, scfsiChannels=[])
+        side["span"]["bitLength"] = 136
+        side["mainDataBegin"]["span"]["bitLength"] = 8
+        side["privateBits"]["value"] = 3
+        side["privateBits"]["span"]["bitLength"] = 2
+        side["granules"] = side["granules"][:1]
+        for channel in side["granules"][0]["channels"]:
+            del channel["preflag"]
+            channel["scalefacCompress"]["span"]["bitLength"] = 9
+        require_valid(validator, lsf, "MP3 v3 LSF field widths: " + name)
+        for path, value in (
+            (side_base + ["mainDataBegin", "value"], 256),
+            (side_base + ["privateBits", "value"], 4),
+            (channel_base + ["scalefacCompress", "value"], 512),
+        ):
+            changed = deepcopy(lsf)
+            changed["detail"]["frames"]["items"][0]["sideInfo"]["complete"] = False
+            target = changed
+            for key in path[:-1]:
+                target = target[key]
+            target[path[-1]] = value
+            require_invalid(validator, changed, "MP3 v3 LSF encoded width: " + str(path))
+    changed = load_json("testdata/golden/flv-mp3-side-info-before-tag-v3.json")
+    dependency = changed["detail"]["frames"]["items"][0]["dependency"]
+    dependency["state"] = "unknown"
+    dependency["part23Bits"] = 16380
+    require_valid(validator, changed, "MP3 v3 unknown dependency retains computable Tag-external gap")
+    changed = deepcopy(valid)
+    frame = changed["detail"]["frames"]["items"][0]
+    del frame["sideInfo"]
+    frame["boundaryComplete"] = False
+    dependency = frame["dependency"]
+    dependency["state"] = "unknown"
+    del dependency["part23Bits"], dependency["availableBits"]
+    require_valid(validator, changed, "MP3 v3 unread side information remains unknown")
+    for state in ("none", "within_tag", "before_tag"):
+        dependency["state"] = state
+        require_invalid(validator, changed, "MP3 v3 cannot know dependency without side information")
+    dependency["state"] = "unknown"
+    dependency["part23Bits"] = 0
+    require_invalid(validator, changed, "MP3 v3 cannot invent side information fields")
+    for version in (1, 2):
+        old = Draft202012Validator(load_json(f"docs/schemas/flv-mp3-tag-detail-v{version}.schema.json"))
+        require_invalid(old, valid, f"MP3 v{version} rejects v3")
+
+
 def main() -> None:
     manifest_schema = load_json("testdata/manifests/sample-manifest-v1.schema.json")
     Draft202012Validator.check_schema(manifest_schema)
@@ -1507,6 +1654,8 @@ def main() -> None:
     print(f"validated {len(seen_ids)} corpus manifest identities (media presence checked separately)")
     validate_codec_detail_v2_edge_cases()
     validate_avc_v3_edge_cases()
+    validate_mp3_v3_edge_cases()
+    print("validated MP3 v3 layouts, partial values, source fields, dependency states and version isolation")
     print("validated AVC v3 prefix presence, version isolation, closed fields and budgets")
     print("validated AVC/MP3 detail v2 version isolation, presence, bounds, CRC and VBR shapes")
     tag_page_validator = None
