@@ -95,3 +95,40 @@ jobs:
           & ./tools/desktop-native/summary-recovery-self-test.ps1
       - name: Production Windows build (no installer)
         run: ./build-production.ps1
+
+  linux-shell:
+    name: Desktop Linux tests and production build (non-GUI)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: desktop
+    env:
+      GOTOOLCHAIN: go1.27.0
+      CGO_ENABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.0'
+          cache: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+      - name: Install Linux desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev
+      - name: Production Linux build (no package)
+        run: ./build-production.sh
+      - name: Verify production bindings and module files
+        run: git diff --exit-code -- frontend/wailsjs/go go.mod go.sum
+      - name: Frontend tests
+        run: npm test
+        working-directory: desktop/frontend
+      - name: Host race tests and vet
+        run: |
+          go test -race -tags webkit2_41 -count=1 ./...
+          go vet -tags webkit2_41 ./...

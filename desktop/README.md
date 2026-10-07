@@ -214,7 +214,7 @@ Summary 使用 120 秒协作截止时间、每次 5 秒 IPC 等待、200 ms 串�
 
 前提：根模块要求的 Go 版本、Node 22.18+（本机使用 24.4.1）、npm、
 Wails CLI v2.14.0，以及已安装的 WebView2 Runtime。不要用 `@latest`
-悄悄改变已审定的 Wails 版本。其他系统的桌面壳尚未验收。
+悄悄改变已审定的 Wails 版本。Linux 构建见下一节；macOS 桌面壳尚未验收。
 
 ```powershell
 # 如尚未安装 CLI
@@ -230,6 +230,38 @@ cd desktop
 `-webview2 error` 不自动下载/安装 WebView2；缺少运行时应由用户安装。
 `-nopackage` 不生成安装包，也不附带第三方媒体或原版图标。
 不要直接用无 build tags 的 `go run .` 代替 Wails 的生产构建。
+
+## Linux 构建
+
+Ubuntu 24.04 / Linux Mint 22.x 使用 GTK 3 和 WebKitGTK 4.1。需要 Go、
+Node 22.18+、npm，以及以下开发包：
+
+```bash
+sudo apt-get install --no-install-recommends build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev
+
+# 在仓库根目录运行
+./desktop/build-production.sh
+./desktop/build/bin/MuxRay
+```
+
+脚本固定调用 Wails v2.14.0，默认使用 `GOTOOLCHAIN=go1.27.0`，允许调用者
+显式覆盖该环境变量；不会修改全局 Go 配置。首次运行需要下载对应工具链和
+依赖。构建使用 `webkit2_41` 标记、真实生成的绑定及 lockfile 中的前端依赖，
+并将该版本生成器在 Unix 上添加的绑定文件执行位恢复为 0644。
+
+Linux 使用 Wails 的 GTK 原生打开/保存对话框，不启用 Windows 的
+`pickerprocess` 原型。产物是本机可执行文件，需要系统提供 GTK/WebKitGTK
+运行库；当前不生成 AppImage、deb 或 rpm 包。
+
+```bash
+# 在 desktop/ 下，先完成上述构建
+GOTOOLCHAIN=go1.27.0 go test -race -tags webkit2_41 -count=1 ./...
+GOTOOLCHAIN=go1.27.0 go vet -tags webkit2_41 ./...
+```
+
+Linux CI 在 Ubuntu 24.04 构建并核对生成物、运行前端单测和 Go race/vet；
+它不启动 GUI。真实 GTK/WebKit 窗口检查与其证据边界见
+[Linux 验证记录](../docs/desktop-linux-20261007.md)。
 
 ## 检查与开发
 

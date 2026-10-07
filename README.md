@@ -62,7 +62,7 @@ Go 应用层新增 `internal/session.Open`：一个会话拥有一个后台扫�
 
 `internal/desktop` 提供异步打开、状态查询、取消、关闭、Tag/诊断分页及详情和 Hex 启动/查询 DTO。`internal/document` 保留同一只读文件至关闭，扫描和后续读取使用独立取消上下文；详情与 Hex 共用单一读取 worker 和递增请求 ID。应用一次只拥有一个槽位；旧 ID 不能操作新文件，64 位数值通过十进制字符串传输。宿主退出有独立的清理入口，仍保持纯 Go 构建。初始适配层见 [`桌面适配层说明`](docs/desktop-adapter-v1.md)，源生命周期及读取协议见 [`ADR-013`](docs/decisions/013-retained-document-details.md) 和 [`ADR-015`](docs/decisions/015-bounded-desktop-hex.md)。
 
-`desktop/` 是独立 Go 模块，接入 Wails v2.14.0 与 React/TypeScript。界面提供原生文件选择、进度、取消/关闭，以及扫描结束后的 Tag/诊断分页（每页 100 条）和 AMF0/AAC/AVC/MP3 按需详情。Hex 默认读取 512 字节、单次上限 4 KiB，支持字段/诊断源位置和 Tag ID 跳转；截断或未支持编码的原始字节也可独立查看。AVC NAL 长度通过有界候选索引定位最近可用 sequence header，长媒体尾部不再受 8,192 条距离上限影响；每次仍验证原始配置并限制解析与读取预算，缺失或超限时保留包头并明确诊断，不猜测长度。此定位不依赖先前选择或媒体概览；SPS/PPS 摘要和其他派生值不伪造连续源位置。MP3 只解析首个 MPEG 固定帧头，free-format 不虚构码率或帧长，CRC 标志不代表校验通过。根模块不引入 GUI 依赖；Windows 构建、测试和功能边界见 [`桌面开发说明`](desktop/README.md)、[`ADR-011`](docs/decisions/011-minimal-wails-shell.md)、[`ADR-014`](docs/decisions/014-bounded-desktop-avc-context.md) 与 [`ADR-020`](docs/decisions/020-indexed-desktop-avc-context.md)。四类详情联动、大文件、源变化恢复及阻塞关闭的既有实测见 [`Hex 原生验收记录`](docs/desktop-hex-20260913.md)。
+`desktop/` 是独立 Go 模块，接入 Wails v2.14.0 与 React/TypeScript。界面提供原生文件选择、进度、取消/关闭，以及扫描结束后的 Tag/诊断分页（每页 100 条）和 AMF0/AAC/AVC/MP3 按需详情。Hex 默认读取 512 字节、单次上限 4 KiB，支持字段/诊断源位置和 Tag ID 跳转；截断或未支持编码的原始字节也可独立查看。AVC NAL 长度通过有界候选索引定位最近可用 sequence header，长媒体尾部不再受 8,192 条距离上限影响；每次仍验证原始配置并限制解析与读取预算，缺失或超限时保留包头并明确诊断，不猜测长度。此定位不依赖先前选择或媒体概览；SPS/PPS 摘要和其他派生值不伪造连续源位置。MP3 只解析首个 MPEG 固定帧头，free-format 不虚构码率或帧长，CRC 标志不代表校验通过。根模块不引入 GUI 依赖；Windows 与 Linux 构建、测试和功能边界见 [`桌面开发说明`](desktop/README.md)、[`ADR-011`](docs/decisions/011-minimal-wails-shell.md)、[`ADR-014`](docs/decisions/014-bounded-desktop-avc-context.md) 与 [`ADR-020`](docs/decisions/020-indexed-desktop-avc-context.md)。四类详情联动、大文件、源变化恢复及阻塞关闭的既有实测见 [`Hex 原生验收记录`](docs/desktop-hex-20260913.md)。
 
 扫描、详情、汇总和输出共用 Ctrl+C 取消上下文，取消退出码为 `130`，不会伪造文件损坏诊断。取消时 stdout 可能不完整，调用方应丢弃；核心返回的部分索引仍可分页读取。取消是协作式的，不能强制中断已阻塞的底层读取或写入。设计依据见 [`ADR-008`](docs/decisions/008-cancellable-chunked-index.md)。
 
@@ -105,5 +105,7 @@ Go 应用层新增 `internal/session.Open`：一个会话拥有一个后台扫�
 新增 [`同一文件取消/成功选择对象级对照`](docs/desktop-gdi-cancel-select-20261004.md)：两组均重现 171→173→175→177，各三轮保留同核心 DC/Bitmap，成功接受不是本条件下存留的必要条件。取消组另有关闭输入前经 lookup-table 释放/析构销毁并由 ResetImages 重建的样本；完整创建栈既可对应销毁也可对应保留。十窗、双跟踪、独立原始审核和正常退出/清理通过，首次采集准备失败及修正保留；下一步追查具体实例的引用持有，尚未合入生产修复。
 后续 [`具体图像列表与引用持有者`](docs/desktop-gdi-reference-20261004.md)：两次取消后，manager 剩余引用均为 1，并继续持有 lookup 和核心图像列表。第二周期进一步验证 `CDefCollection → CEnumerableObjectCollection → 数组元素 → manager` 的具体持有槽与 AddRef 调用；集合清空和析构有对应 Release 路径，上层集合为何继续存在仍待定位。未修改生产释放逻辑。
 新增 [`CDefCollection 引用来源与集合清理边界`](docs/desktop-gdi-collection-20261007.md)：两个新进程各取消一次、工作线程退出 60 秒以上后，集合仍为 2、元素集合为 1、manager 为 1；A 的 Clear、B 的 RemoveObjectAt 及两组集合析构入口均未命中。取得/释放对偶与内联引用增量已核实，析构后残留指针不能当作活持有者；最后两份引用仍未归属。两组正常退出与采集清理通过，下一步建议验证文件选择器辅助进程原型，尚未实施生产修复。
+
+Linux 现提供 `desktop/build-production.sh` 和 Ubuntu 24.04 非 GUI CI；Linux Mint 22.3 上的真实 GTK/WebKit 打开、取消、诊断、导出、源释放和正常退出结果见 [`Linux 验证记录`](docs/desktop-linux-20261007.md)。这不替代 Windows 辅助选择器的待完成验收。
 
 项目许可证尚待确定；在许可证落定前，不应把代码作为已授权的正式发行版分发。
