@@ -342,6 +342,8 @@ python3 -B tools/codec-regression/native_browse_evidence.py \
 ```
 
 运行结果保存在对应证据目录的 `result.json`、日志和原生导出中。
+本轮干净提交构建、十五类场景及来源按钮补验见
+[编解码器浏览与快照 v2 验收](../docs/desktop-codec-browser-snapshot-20261008.md)。
 此前真实 GTK/WebKit 窗口检查与其证据边界见
 [Linux 验证记录](../docs/desktop-linux-20261007.md)。
 

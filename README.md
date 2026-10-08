@@ -74,7 +74,7 @@ go run ./cmd/muxray detail --tag 0 --pretty sample.flv
 
 新增 [native_browse_evidence.py](tools/codec-regression/native_browse_evidence.py) 检查 MP3 选帧、H.264 声明与 NAL 证据，以及当前曲线页随快照 v2 导出；命令和范围见 [桌面开发说明](desktop/README.md#linux-构建)。
 
-最新生成样本、独立字段比对和 Linux 十二轮结果见 [长文件与 side-info 验收](docs/desktop-context-side-info-20261008.md)。
+长文件与 side-info 的既有十二轮结果见 [长文件与 side-info 验收](docs/desktop-context-side-info-20261008.md)。本轮 MP3 选帧、H.264 对照、快照 v2 的十五类场景与来源按钮补验见 [编解码器浏览与导出验收](docs/desktop-codec-browser-snapshot-20261008.md)。
 
 损坏或超限的 AMF0/AAC/AVC/MP3 语法仍会输出部分结果、精确到 bit 的诊断和 Tag payload 末端恢复位置，并以状态码 2 退出。非 AAC/MP3 Audio、非 AVC Video、尚未支持的编解码器以及不完整的容器索引不会伪装成详情文档。稳定诊断码见 [`docs/amf0-diagnostics-v1.md`](docs/amf0-diagnostics-v1.md)、[`docs/aac-diagnostics-v1.md`](docs/aac-diagnostics-v1.md)、[`docs/avc-diagnostics-v1.md`](docs/avc-diagnostics-v1.md) 和 [`docs/mp3-diagnostics-v1.md`](docs/mp3-diagnostics-v1.md)。
 
