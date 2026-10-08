@@ -1,0 +1,2458 @@
+{
+  "schemaVersion": 2,
+  "documentType": "desktopDiagnosticSnapshot",
+  "fileName": "mp3-frames.flv",
+  "createdAt": "2026-09-29T00:00:00Z",
+  "producer": {
+    "name": "MuxRay",
+    "version": "0.1.0-dev"
+  },
+  "scope": {
+    "kind": "bounded_desktop_snapshot",
+    "sourceValidation": "existing_change_latch_only",
+    "scanDiagnostics": "first_100_retained",
+    "summary": "ready_overview_and_requested_event_page",
+    "trend": "requested_source_order_window",
+    "trendInterpretation": "local_display_rule_not_parser_diagnostic",
+    "mediaCurve": "requested_retained_summary_curve_page",
+    "mediaCurveInterpretation": "codec_payload_rate_and_declared_gop_not_transport_rate_or_decodability"
+  },
+  "session": {
+    "sessionId": "scan-1",
+    "state": "finished",
+    "terminal": true,
+    "closed": false,
+    "progress": {
+      "sourceSize": "2547",
+      "bytesScanned": "2547",
+      "tagCount": "2",
+      "diagnosticCount": 0
+    },
+    "scan": {
+      "complete": true,
+      "hasErrors": false
+    },
+    "failure": null
+  },
+  "selection": {
+    "schemaVersion": 2,
+    "sessionId": "scan-1",
+    "selectedTagId": "0",
+    "detailRequestId": "9007199254740994",
+    "hexRequestId": "9007199254740995",
+    "summaryRequestId": "9007199254740993",
+    "summaryPage": {
+      "kind": "mp3",
+      "start": "0",
+      "count": 100
+    },
+    "trend": {
+      "start": "0",
+      "count": 512,
+      "type": "all",
+      "metric": "delta",
+      "gapThreshold": "1000"
+    },
+    "mediaCurve": {
+      "start": "0",
+      "count": 64,
+      "metric": "gopMax"
+    }
+  },
+  "scanDiagnostics": {
+    "sessionId": "scan-1",
+    "bounds": {
+      "start": "0",
+      "limit": 100,
+      "total": "0",
+      "next": "0"
+    },
+    "diagnostics": []
+  },
+  "selectedTag": {
+    "id": "0",
+    "typeCode": 8,
+    "typeName": "audio",
+    "offset": "13",
+    "span": {
+      "byteOffset": "13",
+      "bitOffset": 0,
+      "bitLength": 10104
+    },
+    "headerSpan": {
+      "byteOffset": "13",
+      "bitOffset": 0,
+      "bitLength": 88
+    },
+    "payloadSpan": {
+      "byteOffset": "24",
+      "bitOffset": 0,
+      "bitLength": 10016
+    },
+    "rawTypeFlags": 8,
+    "filter": false,
+    "dataSize": 1252,
+    "availableDataSize": 1252,
+    "dts": "0",
+    "streamId": 0,
+    "payloadComplete": true,
+    "previousTagSize": {
+      "present": true,
+      "span": {
+        "byteOffset": "1276",
+        "bitOffset": 0,
+        "bitLength": 32
+      },
+      "value": 1263,
+      "expected": 1263,
+      "valid": true
+    }
+  },
+  "detail": {
+    "apiVersion": 1,
+    "sessionId": "scan-1",
+    "requestId": "9007199254740994",
+    "tagId": "0",
+    "state": "ready",
+    "detail": {
+      "kind": "mp3Audio",
+      "complete": true,
+      "truncated": true,
+      "fields": [
+        {
+          "id": "0",
+          "parentId": "",
+          "name": "tagId",
+          "type": "uint64",
+          "value": "0",
+          "span": null
+        },
+        {
+          "id": "1",
+          "parentId": "",
+          "name": "MP3 audio",
+          "type": "mp3Audio",
+          "value": "Same-tag frame boundaries, first-frame VBR metadata and header/side-information CRC; compressed audio is not decoded or validated",
+          "span": {
+            "byteOffset": "24",
+            "bitOffset": 0,
+            "bitLength": 10016
+          }
+        },
+        {
+          "id": "2",
+          "parentId": "1",
+          "name": "AudioTagHeader",
+          "type": "bitfield",
+          "value": "0x2f",
+          "span": {
+            "byteOffset": "24",
+            "bitOffset": 0,
+            "bitLength": 8
+          }
+        },
+        {
+          "id": "3",
+          "parentId": "2",
+          "name": "soundFormat",
+          "type": "uint4",
+          "value": "2 (MP3)",
+          "span": {
+            "byteOffset": "24",
+            "bitOffset": 0,
+            "bitLength": 4
+          }
+        },
+        {
+          "id": "4",
+          "parentId": "2",
+          "name": "soundRate",
+          "type": "uint2",
+          "value": "3 (44 kHz FLV hint; see MPEG sampling frequency)",
+          "span": {
+            "byteOffset": "24",
+            "bitOffset": 4,
+            "bitLength": 2
+          }
+        },
+        {
+          "id": "5",
+          "parentId": "2",
+          "name": "soundSize",
+          "type": "uint1",
+          "value": "1 (16-bit FLV hint)",
+          "span": {
+            "byteOffset": "24",
+            "bitOffset": 6,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "6",
+          "parentId": "2",
+          "name": "soundType",
+          "type": "uint1",
+          "value": "1 (stereo FLV hint; see MPEG channels)",
+          "span": {
+            "byteOffset": "24",
+            "bitOffset": 7,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "7",
+          "parentId": "1",
+          "name": "SoundData",
+          "type": "opaque",
+          "value": "1251 bytes; audio bodies remain opaque",
+          "span": {
+            "byteOffset": "25",
+            "bitOffset": 0,
+            "bitLength": 10008
+          }
+        },
+        {
+          "id": "8",
+          "parentId": "1",
+          "name": "MPEG frame header",
+          "type": "bitfield",
+          "value": "0xfffb9064",
+          "span": {
+            "byteOffset": "25",
+            "bitOffset": 0,
+            "bitLength": 32
+          }
+        },
+        {
+          "id": "9",
+          "parentId": "8",
+          "name": "syncWord",
+          "type": "uint11",
+          "value": "0x7ff",
+          "span": {
+            "byteOffset": "25",
+            "bitOffset": 0,
+            "bitLength": 11
+          }
+        },
+        {
+          "id": "10",
+          "parentId": "8",
+          "name": "version",
+          "type": "uint2",
+          "value": "3 (mpeg1)",
+          "span": {
+            "byteOffset": "26",
+            "bitOffset": 3,
+            "bitLength": 2
+          }
+        },
+        {
+          "id": "11",
+          "parentId": "8",
+          "name": "layer",
+          "type": "uint2",
+          "value": "1 (layerIII)",
+          "span": {
+            "byteOffset": "26",
+            "bitOffset": 5,
+            "bitLength": 2
+          }
+        },
+        {
+          "id": "12",
+          "parentId": "8",
+          "name": "protectionBit",
+          "type": "uint1",
+          "value": "1",
+          "span": {
+            "byteOffset": "26",
+            "bitOffset": 7,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "13",
+          "parentId": "8",
+          "name": "crcProtected",
+          "type": "derived boolean",
+          "value": "false (header declaration; see frame CRC status)",
+          "span": null
+        },
+        {
+          "id": "14",
+          "parentId": "8",
+          "name": "bitrateIndex",
+          "type": "uint4",
+          "value": "9",
+          "span": {
+            "byteOffset": "27",
+            "bitOffset": 0,
+            "bitLength": 4
+          }
+        },
+        {
+          "id": "15",
+          "parentId": "8",
+          "name": "bitrateMode",
+          "type": "derived enum",
+          "value": "indexed",
+          "span": null
+        },
+        {
+          "id": "16",
+          "parentId": "8",
+          "name": "samplingFrequencyIndex",
+          "type": "uint2",
+          "value": "0",
+          "span": {
+            "byteOffset": "27",
+            "bitOffset": 4,
+            "bitLength": 2
+          }
+        },
+        {
+          "id": "17",
+          "parentId": "8",
+          "name": "padding",
+          "type": "boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "27",
+            "bitOffset": 6,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "18",
+          "parentId": "8",
+          "name": "private",
+          "type": "boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "27",
+            "bitOffset": 7,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "19",
+          "parentId": "8",
+          "name": "channelMode",
+          "type": "uint2",
+          "value": "1 (jointStereo)",
+          "span": {
+            "byteOffset": "28",
+            "bitOffset": 0,
+            "bitLength": 2
+          }
+        },
+        {
+          "id": "20",
+          "parentId": "8",
+          "name": "modeExtension",
+          "type": "uint2",
+          "value": "2",
+          "span": {
+            "byteOffset": "28",
+            "bitOffset": 2,
+            "bitLength": 2
+          }
+        },
+        {
+          "id": "21",
+          "parentId": "8",
+          "name": "copyright",
+          "type": "boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "28",
+            "bitOffset": 4,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "22",
+          "parentId": "8",
+          "name": "original",
+          "type": "boolean",
+          "value": "true",
+          "span": {
+            "byteOffset": "28",
+            "bitOffset": 5,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "23",
+          "parentId": "8",
+          "name": "emphasis",
+          "type": "uint2",
+          "value": "0 (none)",
+          "span": {
+            "byteOffset": "28",
+            "bitOffset": 6,
+            "bitLength": 2
+          }
+        },
+        {
+          "id": "24",
+          "parentId": "8",
+          "name": "channels",
+          "type": "derived count",
+          "value": "2",
+          "span": null
+        },
+        {
+          "id": "25",
+          "parentId": "8",
+          "name": "bitrateKbps",
+          "type": "derived kbit/s",
+          "value": "128",
+          "span": null
+        },
+        {
+          "id": "26",
+          "parentId": "8",
+          "name": "samplingFrequencyHz",
+          "type": "derived Hz",
+          "value": "44100",
+          "span": null
+        },
+        {
+          "id": "27",
+          "parentId": "8",
+          "name": "samplesPerFrame",
+          "type": "derived samples",
+          "value": "1152",
+          "span": null
+        },
+        {
+          "id": "28",
+          "parentId": "8",
+          "name": "frameLengthBytes",
+          "type": "derived bytes",
+          "value": "417",
+          "span": null
+        },
+        {
+          "id": "29",
+          "parentId": "1",
+          "name": "Frame inspection",
+          "type": "bounded sequence",
+          "value": "3 complete frame boundaries; 3 headers; stop=end; audio main data is not decoded",
+          "span": {
+            "byteOffset": "25",
+            "bitOffset": 0,
+            "bitLength": 10008
+          }
+        },
+        {
+          "id": "30",
+          "parentId": "29",
+          "name": "selectedFrameIndex",
+          "type": "derived selection",
+          "value": "2",
+          "span": null
+        },
+        {
+          "id": "31",
+          "parentId": "29",
+          "name": "selectableFrameIndices",
+          "type": "derived indices",
+          "value": "0,1,2",
+          "span": null
+        },
+        {
+          "id": "32",
+          "parentId": "29",
+          "name": "checkedFrameCount",
+          "type": "derived count",
+          "value": "3",
+          "span": null
+        },
+        {
+          "id": "33",
+          "parentId": "29",
+          "name": "frameBudget",
+          "type": "derived count",
+          "value": "64",
+          "span": null
+        },
+        {
+          "id": "34",
+          "parentId": "29",
+          "name": "byteCoverageBudget",
+          "type": "derived bytes",
+          "value": "1048576",
+          "span": null
+        },
+        {
+          "id": "35",
+          "parentId": "29",
+          "name": "bytesCovered",
+          "type": "derived bytes",
+          "value": "1251",
+          "span": null
+        },
+        {
+          "id": "36",
+          "parentId": "29",
+          "name": "bytesRead",
+          "type": "derived bytes",
+          "value": "116",
+          "span": null
+        },
+        {
+          "id": "37",
+          "parentId": "29",
+          "name": "Frame 0",
+          "type": "MPEG frame",
+          "value": "declared length=417 bytes; boundary complete=true; version=mpeg1; bitrate=128 kbit/s; sampling=44100 Hz; channels=2",
+          "span": {
+            "byteOffset": "25",
+            "bitOffset": 0,
+            "bitLength": 3336
+          }
+        },
+        {
+          "id": "38",
+          "parentId": "37",
+          "name": "header",
+          "type": "bitfield",
+          "value": "0xfffb9064",
+          "span": {
+            "byteOffset": "25",
+            "bitOffset": 0,
+            "bitLength": 32
+          }
+        },
+        {
+          "id": "39",
+          "parentId": "37",
+          "name": "CRC16",
+          "type": "integrity check",
+          "value": "not_protected (header bits and Layer III side information only; main data excluded)",
+          "span": null
+        },
+        {
+          "id": "40",
+          "parentId": "37",
+          "name": "mainDataDependency",
+          "type": "derived range check",
+          "value": "none; prior same-tag slot bytes=0; declared bits=0, same-tag window bits=3048; not reservoir or decoded-audio validation",
+          "span": null
+        },
+        {
+          "id": "41",
+          "parentId": "29",
+          "name": "Frame 1",
+          "type": "MPEG frame",
+          "value": "declared length=417 bytes; boundary complete=true; version=mpeg1; bitrate=128 kbit/s; sampling=44100 Hz; channels=2",
+          "span": {
+            "byteOffset": "442",
+            "bitOffset": 0,
+            "bitLength": 3336
+          }
+        },
+        {
+          "id": "42",
+          "parentId": "41",
+          "name": "header",
+          "type": "bitfield",
+          "value": "0xfffb9064",
+          "span": {
+            "byteOffset": "442",
+            "bitOffset": 0,
+            "bitLength": 32
+          }
+        },
+        {
+          "id": "43",
+          "parentId": "41",
+          "name": "CRC16",
+          "type": "integrity check",
+          "value": "not_protected (header bits and Layer III side information only; main data excluded)",
+          "span": null
+        },
+        {
+          "id": "44",
+          "parentId": "41",
+          "name": "mainDataDependency",
+          "type": "derived range check",
+          "value": "none; prior same-tag slot bytes=381; declared bits=0, same-tag window bits=3048; not reservoir or decoded-audio validation",
+          "span": null
+        },
+        {
+          "id": "45",
+          "parentId": "29",
+          "name": "Frame 2",
+          "type": "MPEG frame",
+          "value": "declared length=417 bytes; boundary complete=true; version=mpeg1; bitrate=128 kbit/s; sampling=44100 Hz; channels=2",
+          "span": {
+            "byteOffset": "859",
+            "bitOffset": 0,
+            "bitLength": 3336
+          }
+        },
+        {
+          "id": "46",
+          "parentId": "45",
+          "name": "header",
+          "type": "bitfield",
+          "value": "0xfffb9064",
+          "span": {
+            "byteOffset": "859",
+            "bitOffset": 0,
+            "bitLength": 32
+          }
+        },
+        {
+          "id": "47",
+          "parentId": "45",
+          "name": "CRC16",
+          "type": "integrity check",
+          "value": "not_protected (header bits and Layer III side information only; main data excluded)",
+          "span": null
+        },
+        {
+          "id": "48",
+          "parentId": "45",
+          "name": "mainDataDependency",
+          "type": "derived range check",
+          "value": "none; prior same-tag slot bytes=762; declared bits=0, same-tag window bits=3048; not reservoir or decoded-audio validation",
+          "span": null
+        },
+        {
+          "id": "49",
+          "parentId": "29",
+          "name": "Side info Frame 2",
+          "type": "Layer III side information",
+          "value": "complete=true; 256 of 256 bits inspected",
+          "span": {
+            "byteOffset": "863",
+            "bitOffset": 0,
+            "bitLength": 256
+          }
+        },
+        {
+          "id": "50",
+          "parentId": "49",
+          "name": "mainDataBegin",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "863",
+            "bitOffset": 0,
+            "bitLength": 9
+          }
+        },
+        {
+          "id": "51",
+          "parentId": "49",
+          "name": "privateBits",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "864",
+            "bitOffset": 1,
+            "bitLength": 3
+          }
+        },
+        {
+          "id": "52",
+          "parentId": "49",
+          "name": "SCFSI channel 0",
+          "type": "scale-factor selection",
+          "value": "encoded reuse flags; scale factors not decoded",
+          "span": null
+        },
+        {
+          "id": "53",
+          "parentId": "52",
+          "name": "scfsi[0]",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "864",
+            "bitOffset": 4,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "54",
+          "parentId": "52",
+          "name": "scfsi[1]",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "864",
+            "bitOffset": 5,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "55",
+          "parentId": "52",
+          "name": "scfsi[2]",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "864",
+            "bitOffset": 6,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "56",
+          "parentId": "52",
+          "name": "scfsi[3]",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "864",
+            "bitOffset": 7,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "57",
+          "parentId": "49",
+          "name": "SCFSI channel 1",
+          "type": "scale-factor selection",
+          "value": "encoded reuse flags; scale factors not decoded",
+          "span": null
+        },
+        {
+          "id": "58",
+          "parentId": "57",
+          "name": "scfsi[0]",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "865",
+            "bitOffset": 0,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "59",
+          "parentId": "57",
+          "name": "scfsi[1]",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "865",
+            "bitOffset": 1,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "60",
+          "parentId": "57",
+          "name": "scfsi[2]",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "865",
+            "bitOffset": 2,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "61",
+          "parentId": "57",
+          "name": "scfsi[3]",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "865",
+            "bitOffset": 3,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "62",
+          "parentId": "49",
+          "name": "Granule 0",
+          "type": "granule",
+          "value": "encoded side information",
+          "span": null
+        },
+        {
+          "id": "63",
+          "parentId": "62",
+          "name": "Channel 0",
+          "type": "channel",
+          "value": "encoded side information",
+          "span": null
+        },
+        {
+          "id": "64",
+          "parentId": "63",
+          "name": "part23Length",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "865",
+            "bitOffset": 4,
+            "bitLength": 12
+          }
+        },
+        {
+          "id": "65",
+          "parentId": "63",
+          "name": "bigValues",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "867",
+            "bitOffset": 0,
+            "bitLength": 9
+          }
+        },
+        {
+          "id": "66",
+          "parentId": "63",
+          "name": "globalGain",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "868",
+            "bitOffset": 1,
+            "bitLength": 8
+          }
+        },
+        {
+          "id": "67",
+          "parentId": "63",
+          "name": "scalefacCompress",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "869",
+            "bitOffset": 1,
+            "bitLength": 4
+          }
+        },
+        {
+          "id": "68",
+          "parentId": "63",
+          "name": "windowSwitchingFlag",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "869",
+            "bitOffset": 5,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "69",
+          "parentId": "63",
+          "name": "tableSelect[0]",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "869",
+            "bitOffset": 6,
+            "bitLength": 5
+          }
+        },
+        {
+          "id": "70",
+          "parentId": "63",
+          "name": "tableSelect[1]",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "870",
+            "bitOffset": 3,
+            "bitLength": 5
+          }
+        },
+        {
+          "id": "71",
+          "parentId": "63",
+          "name": "tableSelect[2]",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "871",
+            "bitOffset": 0,
+            "bitLength": 5
+          }
+        },
+        {
+          "id": "72",
+          "parentId": "63",
+          "name": "region0Count",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "871",
+            "bitOffset": 5,
+            "bitLength": 4
+          }
+        },
+        {
+          "id": "73",
+          "parentId": "63",
+          "name": "region1Count",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "872",
+            "bitOffset": 1,
+            "bitLength": 3
+          }
+        },
+        {
+          "id": "74",
+          "parentId": "63",
+          "name": "preflag",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "872",
+            "bitOffset": 4,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "75",
+          "parentId": "63",
+          "name": "scalefacScale",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "872",
+            "bitOffset": 5,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "76",
+          "parentId": "63",
+          "name": "count1TableSelect",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "872",
+            "bitOffset": 6,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "77",
+          "parentId": "62",
+          "name": "Channel 1",
+          "type": "channel",
+          "value": "encoded side information",
+          "span": null
+        },
+        {
+          "id": "78",
+          "parentId": "77",
+          "name": "part23Length",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "872",
+            "bitOffset": 7,
+            "bitLength": 12
+          }
+        },
+        {
+          "id": "79",
+          "parentId": "77",
+          "name": "bigValues",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "874",
+            "bitOffset": 3,
+            "bitLength": 9
+          }
+        },
+        {
+          "id": "80",
+          "parentId": "77",
+          "name": "globalGain",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "875",
+            "bitOffset": 4,
+            "bitLength": 8
+          }
+        },
+        {
+          "id": "81",
+          "parentId": "77",
+          "name": "scalefacCompress",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "876",
+            "bitOffset": 4,
+            "bitLength": 4
+          }
+        },
+        {
+          "id": "82",
+          "parentId": "77",
+          "name": "windowSwitchingFlag",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "877",
+            "bitOffset": 0,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "83",
+          "parentId": "77",
+          "name": "tableSelect[0]",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "877",
+            "bitOffset": 1,
+            "bitLength": 5
+          }
+        },
+        {
+          "id": "84",
+          "parentId": "77",
+          "name": "tableSelect[1]",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "877",
+            "bitOffset": 6,
+            "bitLength": 5
+          }
+        },
+        {
+          "id": "85",
+          "parentId": "77",
+          "name": "tableSelect[2]",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "878",
+            "bitOffset": 3,
+            "bitLength": 5
+          }
+        },
+        {
+          "id": "86",
+          "parentId": "77",
+          "name": "region0Count",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "879",
+            "bitOffset": 0,
+            "bitLength": 4
+          }
+        },
+        {
+          "id": "87",
+          "parentId": "77",
+          "name": "region1Count",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "879",
+            "bitOffset": 4,
+            "bitLength": 3
+          }
+        },
+        {
+          "id": "88",
+          "parentId": "77",
+          "name": "preflag",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "879",
+            "bitOffset": 7,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "89",
+          "parentId": "77",
+          "name": "scalefacScale",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "880",
+            "bitOffset": 0,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "90",
+          "parentId": "77",
+          "name": "count1TableSelect",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "880",
+            "bitOffset": 1,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "91",
+          "parentId": "49",
+          "name": "Granule 1",
+          "type": "granule",
+          "value": "encoded side information",
+          "span": null
+        },
+        {
+          "id": "92",
+          "parentId": "91",
+          "name": "Channel 0",
+          "type": "channel",
+          "value": "encoded side information",
+          "span": null
+        },
+        {
+          "id": "93",
+          "parentId": "92",
+          "name": "part23Length",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "880",
+            "bitOffset": 2,
+            "bitLength": 12
+          }
+        },
+        {
+          "id": "94",
+          "parentId": "92",
+          "name": "bigValues",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "881",
+            "bitOffset": 6,
+            "bitLength": 9
+          }
+        },
+        {
+          "id": "95",
+          "parentId": "92",
+          "name": "globalGain",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "882",
+            "bitOffset": 7,
+            "bitLength": 8
+          }
+        },
+        {
+          "id": "96",
+          "parentId": "92",
+          "name": "scalefacCompress",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "883",
+            "bitOffset": 7,
+            "bitLength": 4
+          }
+        },
+        {
+          "id": "97",
+          "parentId": "92",
+          "name": "windowSwitchingFlag",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "884",
+            "bitOffset": 3,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "98",
+          "parentId": "92",
+          "name": "tableSelect[0]",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "884",
+            "bitOffset": 4,
+            "bitLength": 5
+          }
+        },
+        {
+          "id": "99",
+          "parentId": "92",
+          "name": "tableSelect[1]",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "885",
+            "bitOffset": 1,
+            "bitLength": 5
+          }
+        },
+        {
+          "id": "100",
+          "parentId": "92",
+          "name": "tableSelect[2]",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "885",
+            "bitOffset": 6,
+            "bitLength": 5
+          }
+        },
+        {
+          "id": "101",
+          "parentId": "92",
+          "name": "region0Count",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "886",
+            "bitOffset": 3,
+            "bitLength": 4
+          }
+        },
+        {
+          "id": "102",
+          "parentId": "92",
+          "name": "region1Count",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "886",
+            "bitOffset": 7,
+            "bitLength": 3
+          }
+        },
+        {
+          "id": "103",
+          "parentId": "92",
+          "name": "preflag",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "887",
+            "bitOffset": 2,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "104",
+          "parentId": "92",
+          "name": "scalefacScale",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "887",
+            "bitOffset": 3,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "105",
+          "parentId": "92",
+          "name": "count1TableSelect",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "887",
+            "bitOffset": 4,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "106",
+          "parentId": "91",
+          "name": "Channel 1",
+          "type": "channel",
+          "value": "encoded side information",
+          "span": null
+        },
+        {
+          "id": "107",
+          "parentId": "106",
+          "name": "part23Length",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "887",
+            "bitOffset": 5,
+            "bitLength": 12
+          }
+        },
+        {
+          "id": "108",
+          "parentId": "106",
+          "name": "bigValues",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "889",
+            "bitOffset": 1,
+            "bitLength": 9
+          }
+        },
+        {
+          "id": "109",
+          "parentId": "106",
+          "name": "globalGain",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "890",
+            "bitOffset": 2,
+            "bitLength": 8
+          }
+        },
+        {
+          "id": "110",
+          "parentId": "106",
+          "name": "scalefacCompress",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "891",
+            "bitOffset": 2,
+            "bitLength": 4
+          }
+        },
+        {
+          "id": "111",
+          "parentId": "106",
+          "name": "windowSwitchingFlag",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "891",
+            "bitOffset": 6,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "112",
+          "parentId": "106",
+          "name": "tableSelect[0]",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "891",
+            "bitOffset": 7,
+            "bitLength": 5
+          }
+        },
+        {
+          "id": "113",
+          "parentId": "106",
+          "name": "tableSelect[1]",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "892",
+            "bitOffset": 4,
+            "bitLength": 5
+          }
+        },
+        {
+          "id": "114",
+          "parentId": "106",
+          "name": "tableSelect[2]",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "893",
+            "bitOffset": 1,
+            "bitLength": 5
+          }
+        },
+        {
+          "id": "115",
+          "parentId": "106",
+          "name": "region0Count",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "893",
+            "bitOffset": 6,
+            "bitLength": 4
+          }
+        },
+        {
+          "id": "116",
+          "parentId": "106",
+          "name": "region1Count",
+          "type": "encoded unsigned",
+          "value": "0",
+          "span": {
+            "byteOffset": "894",
+            "bitOffset": 2,
+            "bitLength": 3
+          }
+        },
+        {
+          "id": "117",
+          "parentId": "106",
+          "name": "preflag",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "894",
+            "bitOffset": 5,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "118",
+          "parentId": "106",
+          "name": "scalefacScale",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "894",
+            "bitOffset": 6,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "119",
+          "parentId": "106",
+          "name": "count1TableSelect",
+          "type": "encoded boolean",
+          "value": "false",
+          "span": {
+            "byteOffset": "894",
+            "bitOffset": 7,
+            "bitLength": 1
+          }
+        },
+        {
+          "id": "120",
+          "parentId": "29",
+          "name": "sideInfoOmittedFrames",
+          "type": "derived count",
+          "value": "2; desktop expands only the selected side-info record; CLI v3 retains all inspected records",
+          "span": null
+        }
+      ],
+      "diagnostics": []
+    },
+    "error": null
+  },
+  "hex": {
+    "apiVersion": 1,
+    "sessionId": "scan-1",
+    "requestId": "9007199254740995",
+    "offset": "0",
+    "count": 4096,
+    "state": "ready",
+    "window": {
+      "offset": "0",
+      "sourceSize": "2547",
+      "hex": "464c5601000000000900000000080004e4000000000000002ffffb90640000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fffb90640000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fffb90640000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004ef080004e400001a000000002ffffb90640000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fffb90640000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fffb90640000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004ef",
+      "eof": true
+    },
+    "error": null
+  },
+  "summary": {
+    "apiVersion": 1,
+    "sessionId": "scan-1",
+    "requestId": "9007199254740993",
+    "state": "ready",
+    "processed": "2",
+    "total": "2",
+    "overview": {
+      "sourceSize": "2547",
+      "indexedTags": "2",
+      "scanComplete": true,
+      "scanHasErrors": false,
+      "complete": true,
+      "hasErrors": false,
+      "metrics": [
+        {
+          "section": "tags",
+          "name": "total",
+          "value": "2",
+          "unit": "tags"
+        },
+        {
+          "section": "tags",
+          "name": "audio",
+          "value": "2",
+          "unit": "tags"
+        },
+        {
+          "section": "tags",
+          "name": "video",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "tags",
+          "name": "script",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "tags",
+          "name": "other",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "tags",
+          "name": "dataSizeBytes",
+          "value": "2504",
+          "unit": "byte"
+        },
+        {
+          "section": "audioCodecs",
+          "name": "aacTagCount",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "audioCodecs",
+          "name": "mp3TagCount",
+          "value": "2",
+          "unit": "tags"
+        },
+        {
+          "section": "audioCodecs",
+          "name": "otherTagCount",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "audioCodecs",
+          "name": "unknownTagCount",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "audioCodecs",
+          "name": "switchCount",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "audio",
+          "name": "tagCount",
+          "value": "2",
+          "unit": "tags"
+        },
+        {
+          "section": "audio",
+          "name": "indexedDataSizeBytes",
+          "value": "2504",
+          "unit": "byte"
+        },
+        {
+          "section": "audio",
+          "name": "mediaTagCount",
+          "value": "2",
+          "unit": "tags"
+        },
+        {
+          "section": "audio",
+          "name": "mediaDataSizeBytes",
+          "value": "2504",
+          "unit": "byte"
+        },
+        {
+          "section": "audio",
+          "name": "excludedTagCount",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "audio",
+          "name": "unclassifiedTagCount",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "audioTiming",
+          "name": "sampleCount",
+          "value": "2",
+          "unit": "tags"
+        },
+        {
+          "section": "audioTiming",
+          "name": "firstMs",
+          "value": "0",
+          "unit": "ms"
+        },
+        {
+          "section": "audioTiming",
+          "name": "lastMs",
+          "value": "26",
+          "unit": "ms"
+        },
+        {
+          "section": "audioTiming",
+          "name": "minMs",
+          "value": "0",
+          "unit": "ms"
+        },
+        {
+          "section": "audioTiming",
+          "name": "maxMs",
+          "value": "26",
+          "unit": "ms"
+        },
+        {
+          "section": "audioTiming",
+          "name": "rangeMs",
+          "value": "26",
+          "unit": "ms"
+        },
+        {
+          "section": "audioTiming",
+          "name": "forwardDeltaTotalMs",
+          "value": "26",
+          "unit": "ms"
+        },
+        {
+          "section": "audioTiming",
+          "name": "regressionCount",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "audioTiming",
+          "name": "duplicateCount",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "audioTiming",
+          "name": "largestForwardGapMs",
+          "value": "26",
+          "unit": "ms"
+        },
+        {
+          "section": "audioBitrate",
+          "name": "basis",
+          "value": "flvMediaTagCoveredDataSizeOverForwardDtsIntervals",
+          "unit": ""
+        },
+        {
+          "section": "audioBitrate",
+          "name": "coveredBytes",
+          "value": "1252",
+          "unit": "byte"
+        },
+        {
+          "section": "audioBitrate",
+          "name": "coveredIntervalMs",
+          "value": "26",
+          "unit": "ms"
+        },
+        {
+          "section": "audioBitrate",
+          "name": "averageBitsPerSecond",
+          "value": "385230",
+          "unit": "bps"
+        },
+        {
+          "section": "video",
+          "name": "tagCount",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "video",
+          "name": "indexedDataSizeBytes",
+          "value": "0",
+          "unit": "byte"
+        },
+        {
+          "section": "video",
+          "name": "mediaTagCount",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "video",
+          "name": "mediaDataSizeBytes",
+          "value": "0",
+          "unit": "byte"
+        },
+        {
+          "section": "video",
+          "name": "excludedTagCount",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "video",
+          "name": "unclassifiedTagCount",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "videoTiming",
+          "name": "sampleCount",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "videoTiming",
+          "name": "firstMs",
+          "value": null,
+          "unit": "ms"
+        },
+        {
+          "section": "videoTiming",
+          "name": "lastMs",
+          "value": null,
+          "unit": "ms"
+        },
+        {
+          "section": "videoTiming",
+          "name": "minMs",
+          "value": null,
+          "unit": "ms"
+        },
+        {
+          "section": "videoTiming",
+          "name": "maxMs",
+          "value": null,
+          "unit": "ms"
+        },
+        {
+          "section": "videoTiming",
+          "name": "rangeMs",
+          "value": null,
+          "unit": "ms"
+        },
+        {
+          "section": "videoTiming",
+          "name": "forwardDeltaTotalMs",
+          "value": null,
+          "unit": "ms"
+        },
+        {
+          "section": "videoTiming",
+          "name": "regressionCount",
+          "value": null,
+          "unit": "count"
+        },
+        {
+          "section": "videoTiming",
+          "name": "duplicateCount",
+          "value": null,
+          "unit": "count"
+        },
+        {
+          "section": "videoTiming",
+          "name": "largestForwardGapMs",
+          "value": null,
+          "unit": "ms"
+        },
+        {
+          "section": "videoBitrate",
+          "name": "basis",
+          "value": null,
+          "unit": ""
+        },
+        {
+          "section": "videoBitrate",
+          "name": "coveredBytes",
+          "value": null,
+          "unit": "byte"
+        },
+        {
+          "section": "videoBitrate",
+          "name": "coveredIntervalMs",
+          "value": null,
+          "unit": "ms"
+        },
+        {
+          "section": "videoBitrate",
+          "name": "averageBitsPerSecond",
+          "value": null,
+          "unit": "bps"
+        },
+        {
+          "section": "mp3",
+          "name": "tagCount",
+          "value": "2",
+          "unit": "tags"
+        },
+        {
+          "section": "mp3",
+          "name": "indexedDataSizeBytes",
+          "value": "2504",
+          "unit": "byte"
+        },
+        {
+          "section": "mp3",
+          "name": "mediaTagCount",
+          "value": "2",
+          "unit": "tags"
+        },
+        {
+          "section": "mp3",
+          "name": "mediaDataSizeBytes",
+          "value": "2504",
+          "unit": "byte"
+        },
+        {
+          "section": "mp3",
+          "name": "excludedTagCount",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "mp3",
+          "name": "unclassifiedTagCount",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "mp3Timing",
+          "name": "sampleCount",
+          "value": "2",
+          "unit": "tags"
+        },
+        {
+          "section": "mp3Timing",
+          "name": "firstMs",
+          "value": "0",
+          "unit": "ms"
+        },
+        {
+          "section": "mp3Timing",
+          "name": "lastMs",
+          "value": "26",
+          "unit": "ms"
+        },
+        {
+          "section": "mp3Timing",
+          "name": "minMs",
+          "value": "0",
+          "unit": "ms"
+        },
+        {
+          "section": "mp3Timing",
+          "name": "maxMs",
+          "value": "26",
+          "unit": "ms"
+        },
+        {
+          "section": "mp3Timing",
+          "name": "rangeMs",
+          "value": "26",
+          "unit": "ms"
+        },
+        {
+          "section": "mp3Timing",
+          "name": "forwardDeltaTotalMs",
+          "value": "26",
+          "unit": "ms"
+        },
+        {
+          "section": "mp3Timing",
+          "name": "regressionCount",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "mp3Timing",
+          "name": "duplicateCount",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "mp3Timing",
+          "name": "largestForwardGapMs",
+          "value": "26",
+          "unit": "ms"
+        },
+        {
+          "section": "mp3Bitrate",
+          "name": "basis",
+          "value": "flvMediaTagCoveredDataSizeOverForwardDtsIntervals",
+          "unit": ""
+        },
+        {
+          "section": "mp3Bitrate",
+          "name": "coveredBytes",
+          "value": "1252",
+          "unit": "byte"
+        },
+        {
+          "section": "mp3Bitrate",
+          "name": "coveredIntervalMs",
+          "value": "26",
+          "unit": "ms"
+        },
+        {
+          "section": "mp3Bitrate",
+          "name": "averageBitsPerSecond",
+          "value": "385230",
+          "unit": "bps"
+        },
+        {
+          "section": "videoPts",
+          "name": "sampleCount",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "videoPts",
+          "name": "firstMs",
+          "value": null,
+          "unit": "ms"
+        },
+        {
+          "section": "videoPts",
+          "name": "lastMs",
+          "value": null,
+          "unit": "ms"
+        },
+        {
+          "section": "videoPts",
+          "name": "minMs",
+          "value": null,
+          "unit": "ms"
+        },
+        {
+          "section": "videoPts",
+          "name": "maxMs",
+          "value": null,
+          "unit": "ms"
+        },
+        {
+          "section": "videoPts",
+          "name": "rangeMs",
+          "value": null,
+          "unit": "ms"
+        },
+        {
+          "section": "videoPts",
+          "name": "forwardDeltaTotalMs",
+          "value": null,
+          "unit": "ms"
+        },
+        {
+          "section": "videoPts",
+          "name": "regressionCount",
+          "value": null,
+          "unit": "count"
+        },
+        {
+          "section": "videoPts",
+          "name": "duplicateCount",
+          "value": null,
+          "unit": "count"
+        },
+        {
+          "section": "videoPts",
+          "name": "largestForwardGapMs",
+          "value": null,
+          "unit": "ms"
+        },
+        {
+          "section": "keyframes",
+          "name": "declaredCount",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "gop",
+          "name": "count",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "gop",
+          "name": "closedDurationCount",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "gop",
+          "name": "nonPositiveDurationCount",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "gop",
+          "name": "minDurationMs",
+          "value": null,
+          "unit": "ms"
+        },
+        {
+          "section": "gop",
+          "name": "maxDurationMs",
+          "value": null,
+          "unit": "ms"
+        },
+        {
+          "section": "gop",
+          "name": "averageDurationMs",
+          "value": null,
+          "unit": "ms"
+        },
+        {
+          "section": "aac",
+          "name": "eventCount",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "aac",
+          "name": "analyzedCount",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "aac",
+          "name": "skippedByBudgetCount",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "aac",
+          "name": "changeCount",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "avc",
+          "name": "eventCount",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "avc",
+          "name": "analyzedCount",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "avc",
+          "name": "skippedByBudgetCount",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "avc",
+          "name": "changeCount",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "mp3Headers",
+          "name": "eventCount",
+          "value": "2",
+          "unit": "count"
+        },
+        {
+          "section": "mp3Headers",
+          "name": "validCount",
+          "value": "2",
+          "unit": "count"
+        },
+        {
+          "section": "mp3Headers",
+          "name": "malformedCount",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "mp3Headers",
+          "name": "freeFormatCount",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "mp3Headers",
+          "name": "parameterChangeCount",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "mp3Headers",
+          "name": "bitrateChangeCount",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "composition",
+          "name": "sampleCount",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "composition",
+          "name": "negativeCount",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "composition",
+          "name": "zeroCount",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "composition",
+          "name": "positiveCount",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "composition",
+          "name": "minMs",
+          "value": null,
+          "unit": "ms"
+        },
+        {
+          "section": "composition",
+          "name": "maxMs",
+          "value": null,
+          "unit": "ms"
+        },
+        {
+          "section": "avSync",
+          "name": "startExtremaSkewMs",
+          "value": null,
+          "unit": "ms"
+        },
+        {
+          "section": "avSync",
+          "name": "endExtremaSkewMs",
+          "value": null,
+          "unit": "ms"
+        },
+        {
+          "section": "avSync",
+          "name": "rangesOverlap",
+          "value": null,
+          "unit": ""
+        },
+        {
+          "section": "avSync",
+          "name": "overlapMs",
+          "value": null,
+          "unit": "ms"
+        }
+      ],
+      "lists": [
+        {
+          "kind": "keyframes",
+          "observed": "0",
+          "retained": "0",
+          "truncated": false
+        },
+        {
+          "kind": "aac",
+          "observed": "0",
+          "retained": "0",
+          "truncated": false
+        },
+        {
+          "kind": "avc",
+          "observed": "0",
+          "retained": "0",
+          "truncated": false
+        },
+        {
+          "kind": "mp3",
+          "observed": "2",
+          "retained": "2",
+          "truncated": false
+        },
+        {
+          "kind": "diagnostics",
+          "observed": "0",
+          "retained": "0",
+          "truncated": false
+        }
+      ]
+    },
+    "error": null
+  },
+  "summaryPage": {
+    "apiVersion": 1,
+    "sessionId": "scan-1",
+    "requestId": "9007199254740993",
+    "kind": "mp3",
+    "page": {
+      "bounds": {
+        "start": "0",
+        "limit": 100,
+        "total": "2",
+        "next": "2"
+      },
+      "events": [
+        {
+          "id": "0",
+          "tagId": "0",
+          "offset": "13",
+          "bitOffset": 0,
+          "dts": "0",
+          "title": "mp3Header",
+          "severity": "",
+          "message": "",
+          "values": [
+            {
+              "section": "",
+              "name": "complete",
+              "value": "true",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "version",
+              "value": "mpeg1",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "channelMode",
+              "value": "jointStereo",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "samplingFrequencyHz",
+              "value": "44100",
+              "unit": "Hz"
+            },
+            {
+              "section": "",
+              "name": "channels",
+              "value": "2",
+              "unit": "count"
+            },
+            {
+              "section": "",
+              "name": "samplesPerFrame",
+              "value": "1152",
+              "unit": "count"
+            },
+            {
+              "section": "",
+              "name": "bitrateMode",
+              "value": "indexed",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "bitrateKbps",
+              "value": "128",
+              "unit": "kbps"
+            },
+            {
+              "section": "",
+              "name": "parametersChangedFromPrevious",
+              "value": null,
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "bitrateChangedFromPrevious",
+              "value": null,
+              "unit": ""
+            }
+          ]
+        },
+        {
+          "id": "1",
+          "tagId": "1",
+          "offset": "1280",
+          "bitOffset": 0,
+          "dts": "26",
+          "title": "mp3Header",
+          "severity": "",
+          "message": "",
+          "values": [
+            {
+              "section": "",
+              "name": "complete",
+              "value": "true",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "version",
+              "value": "mpeg1",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "channelMode",
+              "value": "jointStereo",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "samplingFrequencyHz",
+              "value": "44100",
+              "unit": "Hz"
+            },
+            {
+              "section": "",
+              "name": "channels",
+              "value": "2",
+              "unit": "count"
+            },
+            {
+              "section": "",
+              "name": "samplesPerFrame",
+              "value": "1152",
+              "unit": "count"
+            },
+            {
+              "section": "",
+              "name": "bitrateMode",
+              "value": "indexed",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "bitrateKbps",
+              "value": "128",
+              "unit": "kbps"
+            },
+            {
+              "section": "",
+              "name": "parametersChangedFromPrevious",
+              "value": "false",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "bitrateChangedFromPrevious",
+              "value": "false",
+              "unit": ""
+            }
+          ]
+        }
+      ]
+    },
+    "error": null
+  },
+  "trend": {
+    "sessionId": "scan-1",
+    "bounds": {
+      "start": "0",
+      "limit": 512,
+      "total": "2",
+      "next": "2"
+    },
+    "contextStart": "0",
+    "contextScanned": 0,
+    "points": [
+      {
+        "tagId": "0",
+        "offset": "13",
+        "dts": "0",
+        "typeCode": 8,
+        "streamId": 0,
+        "dataSize": 1252,
+        "availableDataSize": 1252,
+        "payloadComplete": true,
+        "previousTagSizeState": "valid",
+        "filtered": false,
+        "previousTagId": null,
+        "previousDts": null,
+        "deltaMs": null,
+        "context": "start"
+      },
+      {
+        "tagId": "1",
+        "offset": "1280",
+        "dts": "26",
+        "typeCode": 8,
+        "streamId": 0,
+        "dataSize": 1252,
+        "availableDataSize": 1252,
+        "payloadComplete": true,
+        "previousTagSizeState": "valid",
+        "filtered": false,
+        "previousTagId": "0",
+        "previousDts": "0",
+        "deltaMs": "26",
+        "context": "found"
+      }
+    ]
+  },
+  "trendIssues": [],
+  "omitted": [],
+  "mediaCurvePage": {
+    "apiVersion": 1,
+    "sessionId": "scan-1",
+    "requestId": "9007199254740993",
+    "page": {
+      "bounds": {
+        "start": "0",
+        "limit": 64,
+        "total": "1",
+        "next": "1"
+      },
+      "windowTags": 256,
+      "indexedTags": "2",
+      "scanComplete": true,
+      "complete": true,
+      "points": [
+        {
+          "index": "0",
+          "startTag": "0",
+          "nextTag": "2",
+          "audio": {
+            "coveredBytes": "1252",
+            "coveredIntervalMs": "26",
+            "bitsPerSecond": "385230",
+            "tagId": "1"
+          },
+          "video": {
+            "coveredBytes": "0",
+            "coveredIntervalMs": "0",
+            "bitsPerSecond": null,
+            "tagId": null
+          },
+          "mp3": {
+            "coveredBytes": "1252",
+            "coveredIntervalMs": "26",
+            "bitsPerSecond": "385230",
+            "tagId": "1"
+          },
+          "gop": {
+            "declaredCount": "0",
+            "closedCount": "0",
+            "totalDurationMs": "0",
+            "minDurationMs": null,
+            "maxDurationMs": null,
+            "averageDurationMs": null,
+            "tagId": null
+          },
+          "unclassifiedTags": "0"
+        }
+      ]
+    },
+    "error": null
+  }
+}

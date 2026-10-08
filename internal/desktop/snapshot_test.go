@@ -81,7 +81,7 @@ func TestSnapshotCaptureFullRetainedWorkflowGolden(t *testing.T) {
 	if got := finishSummary(t, b, id, "9007199254740993"); got.Error != nil {
 		t.Fatal(got.Error)
 	}
-	b.StartDetail(DetailRequest{id, "9007199254740994", "0"})
+	b.StartDetail(DetailRequest{SessionID: id, RequestID: "9007199254740994", TagID: "0"})
 	if got := finishDetail(t, b, id, "9007199254740994"); got.Error != nil {
 		t.Fatal(got.Error)
 	}
@@ -161,7 +161,7 @@ func TestSnapshotCaptureValidationAndIdentityOmissions(t *testing.T) {
 	cleanupApp(t, app)
 	id := app.Bindings().OpenFile(OpenRequest{Path: path}).Session.SessionID
 	finishReal(t, app, id)
-	app.Bindings().StartDetail(DetailRequest{id, "1", "0"})
+	app.Bindings().StartDetail(DetailRequest{SessionID: id, RequestID: "1", TagID: "0"})
 	finishDetail(t, app.Bindings(), id, "1")
 	q := SnapshotRequest{SessionID: id, SelectedTagID: snapshotText("1"), DetailRequestID: snapshotText("1"), HexRequestID: snapshotText("2"), SummaryRequestID: snapshotText("3"), Trend: &SnapshotTrendRequest{"18446744073709551615", 512, "all", "dts", "1"}}
 	captured, failure := app.CaptureSnapshot(q)
@@ -339,10 +339,12 @@ func TestSnapshotMaximumSectionsAndHardByteBudget(t *testing.T) {
 	cleanupApp(t, app)
 	id := app.Bindings().OpenFile(OpenRequest{Path: "x.flv"}).Session.SessionID
 	waitOpened(t, app)
-	captured, failure := app.CaptureSnapshot(SnapshotRequest{SessionID: id, SummaryRequestID: snapshotText("1")})
-	checkFault(t, failure, CodeSnapshotFailed)
-	if captured.Data != nil {
-		t.Fatal("oversized capture yielded bytes")
+	for _, version := range []uint8{0, 2} {
+		captured, failure := app.CaptureSnapshot(SnapshotRequest{SchemaVersion: version, SessionID: id, SummaryRequestID: snapshotText("1")})
+		checkFault(t, failure, CodeSnapshotFailed)
+		if captured.Data != nil {
+			t.Fatal("oversized capture yielded bytes")
+		}
 	}
 }
 

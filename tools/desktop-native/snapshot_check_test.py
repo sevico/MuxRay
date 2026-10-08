@@ -74,6 +74,65 @@ class SnapshotCheckTests(unittest.TestCase):
         self.assertEqual(result["trendPointsMatchingSource"], 3)
         self.assertEqual(self.report["detail"]["requestId"], "9007199254740994")
 
+    def v2_report(self):
+        return json.loads((checker.ROOT / "testdata/golden/desktop-diagnostic-snapshot-full-v2.json").read_text(encoding="utf-8"))
+
+    def test_v2_retains_selected_mp3_frame_curve_and_source_bytes(self):
+        report = self.v2_report()
+        source = self.directory / report["fileName"]
+        source.write_bytes(bytes.fromhex(report["hex"]["window"]["hex"]))
+        self.assertEqual(source.stat().st_size, int(report["session"]["progress"]["sourceSize"]))
+        self.assertTrue(self.check(report, source)["schemaValid"])
+        self.assertEqual(next(f["value"] for f in report["detail"]["detail"]["fields"] if f["name"] == "selectedFrameIndex"), "2")
+        self.assertIsNotNone(report["mediaCurvePage"]["page"]["points"][0]["mp3"]["bitsPerSecond"])
+
+    def test_v2_curve_identity_coordinates_arithmetic_and_unknowns_cannot_be_forged(self):
+        mutations = {
+            "identity": lambda r: r["mediaCurvePage"].update(requestId="1"),
+            "coverage": lambda r: r["mediaCurvePage"]["page"].update(indexedTags="3"),
+            "bounds": lambda r: r["mediaCurvePage"]["page"]["bounds"].update(next="0"),
+            "point": lambda r: r["mediaCurvePage"]["page"]["points"][0].update(startTag="1"),
+            "rate": lambda r: r["mediaCurvePage"]["page"]["points"][0]["mp3"].update(bitsPerSecond="1"),
+            "rate_source": lambda r: r["mediaCurvePage"]["page"]["points"][0]["mp3"].update(tagId="2"),
+            "unknown_rate": lambda r: r["mediaCurvePage"]["page"]["points"][0]["video"].update(coveredBytes="1"),
+            "unknown_gop": lambda r: r["mediaCurvePage"]["page"]["points"][0]["gop"].update(totalDurationMs="1"),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                report = self.v2_report()
+                mutate(report)
+                self.report_path.write_text(json.dumps(report), encoding="utf-8")
+                with self.assertRaises((ValueError, ValidationError)):
+                    checker.check_snapshot(self.report_path)
+
+    def test_snapshot_versions_and_omissions_remain_distinct(self):
+        for name in ("minimal-v1", "minimal-v2", "full-v1", "full-v2"):
+            path = checker.ROOT / f"testdata/golden/desktop-diagnostic-snapshot-{name}.json"
+            self.assertTrue(checker.check_snapshot(path)["schemaValid"])
+        for version in (0, 3, True, "2"):
+            report = self.v2_report()
+            report["schemaVersion"] = version
+            self.report_path.write_text(json.dumps(report), encoding="utf-8")
+            with self.subTest(version=version), self.assertRaisesRegex(ValueError, "Unsupported snapshot version"):
+                checker.check_snapshot(self.report_path)
+        report = self.v2_report()
+        report["mediaCurvePage"] = None
+        self.report_path.write_text(json.dumps(report), encoding="utf-8")
+        with self.assertRaises((ValueError, ValidationError)):
+            checker.check_snapshot(self.report_path)
+
+    def test_v2_gop_extrema_must_occur_in_the_retained_intervals(self):
+        report = self.v2_report()
+        gop = report["mediaCurvePage"]["page"]["points"][0]["gop"]
+        gop.update(declaredCount="1", closedCount="1", totalDurationMs="100", minDurationMs="100",
+                   maxDurationMs="100", averageDurationMs="100", tagId="1")
+        checker.check_curve_page(report)
+        for change in ({"minDurationMs": "1", "maxDurationMs": "200"}, {"declaredCount": "0"}):
+            altered = copy.deepcopy(report)
+            altered["mediaCurvePage"]["page"]["points"][0]["gop"].update(change)
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                checker.check_curve_page(altered)
+
     def test_large_source_requires_explicit_limit_and_reads_at_most_one_mib(self):
         length = checker.MAX_FIXTURE + 1
         source = self.directory / "large-acceptance.flv"

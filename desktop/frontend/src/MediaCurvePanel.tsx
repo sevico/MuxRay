@@ -16,7 +16,7 @@ export function MediaCurvePanel({ view, controller, disabled, message }: {
   return <section className="curve-panel" aria-label="媒体码率与 GOP 曲线" aria-busy={busy}>
     <div className="summary-heading"><div><p className="eyebrow">MEDIA CURVES · 源 TAG 窗口</p><h2>媒体码率与 GOP 曲线</h2></div><button className="primary" disabled={!ready || busy} onClick={() => controller.loadMediaCurves()}>查看媒体曲线</button></div>
     <p className="summary-note">每 256 个源 Tag 聚合，非固定时间桶，也非解码帧。曲线覆盖全部已索引窗口，按需加载当前页；区间与 GOP 归到闭合它的 Tag 所在窗口，可能起于前窗。分页不重读源文件。</p>
-    <p className="summary-note">音频码率包含 MP3；码率使用已覆盖字节与已知时长；无可用的已知时长时显示“未知”，不补零。GOP 依据封装中的关键帧声明，不保证 IDR。定位使用码率的首个正向闭合 Tag，或 GOP 最长时长的闭合 Tag。现有诊断 JSON 快照 v1 不包含此曲线。</p>
+    <p className="summary-note">音频码率包含 MP3；码率使用已覆盖字节与已知时长；无可用的已知时长时显示“未知”，不补零。GOP 依据封装中的关键帧声明，不保证 IDR。定位使用码率的首个正向闭合 Tag，或 GOP 最长时长的闭合 Tag。导出诊断 JSON v2 会保存当前已加载的曲线页和指标。</p>
     {!ready && !page && <p className="trend-note">请先完成媒体概览分析，再查看曲线。</p>}
     {view.curveError && <div className="request-error" role="alert"><span>{message(view.curveError)}</span><button disabled={!ready || busy} onClick={() => controller.retryMediaCurves()}>重试媒体曲线</button></div>}
     {busy && <p role="status">正在读取媒体曲线页…</p>}

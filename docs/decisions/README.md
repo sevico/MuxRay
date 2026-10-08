@@ -29,3 +29,4 @@ Repository-wide architecture and compatibility decisions are recorded here. An a
 | [ADR-023](./023-deeper-codec-details.md) | Accepted | Add opt-in CLI v2 and bounded desktop H.264 VUI / MP3 frame, VBR and protected-header inspection |
 | [ADR-024](./024-bounded-pps-slice-prefix.md) | Accepted | Add AVC detail v3 PPS/slice prefixes with bounded parameter replay and reproducible codec regression |
 | [ADR-025](./025-avc-checkpoints-mp3-side-info.md) | Accepted | Resume bounded AVC context with compact checkpoints and add MP3 v3 side information |
+| [ADR-026](./026-desktop-codec-evidence-snapshot-v2.md) | Accepted | Browse bounded MP3 frames, compare selected-Tag H.264 evidence and freeze retained curve pages in snapshot v2 |

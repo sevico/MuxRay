@@ -15,6 +15,7 @@ import (
 	"github.com/sevico/muxray/internal/avccontext"
 	"github.com/sevico/muxray/internal/detailview"
 	"github.com/sevico/muxray/internal/flv"
+	"github.com/sevico/muxray/internal/mp3"
 	"github.com/sevico/muxray/internal/session"
 	"github.com/sevico/muxray/internal/summaryview"
 )
@@ -50,11 +51,12 @@ const (
 )
 
 type work struct {
-	id     uint64
-	kind   workKind
-	tag    flv.TagRecord
-	offset uint64
-	count  uint32
+	id       uint64
+	kind     workKind
+	tag      flv.TagRecord
+	offset   uint64
+	count    uint32
+	mp3Frame *uint32
 }
 
 // DetailResult is the latest selected request. Its value is copied on return;
@@ -191,7 +193,7 @@ func (d *Document) run() {
 		} else if selected.kind == summaryWork {
 			summary, err = d.readSummary(ctx, selected.id)
 		} else {
-			detail, checkpoint, err = d.readDetail(ctx, selected.tag)
+			detail, checkpoint, err = d.readDetail(ctx, selected.tag, selected.mp3Frame)
 		}
 		d.mu.Lock()
 		if err == nil {
@@ -263,7 +265,7 @@ func (d *Document) sourceUnchanged() error {
 	return nil
 }
 
-func (d *Document) readDetail(ctx context.Context, tag flv.TagRecord) (*detailview.Detail, *avccontext.ParameterCheckpoint, error) {
+func (d *Document) readDetail(ctx context.Context, tag flv.TagRecord, mp3Frame *uint32) (*detailview.Detail, *avccontext.ParameterCheckpoint, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
@@ -273,7 +275,9 @@ func (d *Document) readDetail(ctx context.Context, tag flv.TagRecord) (*detailvi
 	var detail *detailview.Detail
 	var checkpoint *avccontext.ParameterCheckpoint
 	var err error
-	if d.parse != nil {
+	if mp3Frame != nil {
+		detail, err = detailview.ParseWithMP3Frame(ctx, d.source, tag, *mp3Frame)
+	} else if d.parse != nil {
 		detail, err = d.parse(ctx, d.source, tag)
 	} else {
 		detail, checkpoint, err = d.parseWithContext(ctx, d.source, tag)
@@ -312,19 +316,25 @@ func (d *Document) parseWithContext(ctx context.Context, source io.ReaderAt, tag
 // StartDetail shares request generations with StartHex. There is one active
 // read task and one replaceable pending selection, even during blocked I/O.
 func (d *Document) StartDetail(id, tagID uint64) (DetailResult, error) {
+	return d.StartDetailWithMP3Frame(id, tagID, nil)
+}
+
+// StartDetailWithMP3Frame selects one inspected MP3 frame, or the normal preview
+// when frameIndex is nil. An admitted ID binds both the Tag and frame selection.
+func (d *Document) StartDetailWithMP3Frame(id, tagID uint64, frameIndex *uint32) (DetailResult, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.closed || d.ctx.Err() != nil {
 		return DetailResult{}, session.ErrClosed
 	}
-	if id == 0 {
+	if id == 0 || (frameIndex != nil && *frameIndex >= mp3.DefaultMaxFrames) {
 		return DetailResult{}, ErrInvalidRequest
 	}
 	if id < d.request.id {
 		return DetailResult{}, ErrStaleRequest
 	}
 	if id == d.request.id {
-		if d.request.kind != detailWork || tagID != d.request.tag.ID {
+		if d.request.kind != detailWork || tagID != d.request.tag.ID || !sameMP3Frame(d.request.mp3Frame, frameIndex) {
 			return DetailResult{}, ErrInvalidRequest
 		}
 		return cloneResult(d.latest), nil
@@ -336,8 +346,19 @@ func (d *Document) StartDetail(id, tagID uint64) (DetailResult, error) {
 		}
 		return DetailResult{}, err
 	}
-	d.admitLocked(work{id: id, kind: detailWork, tag: tag})
+	if frameIndex != nil {
+		if tag.Type() != flv.TagTypeAudio {
+			return DetailResult{}, ErrInvalidRequest
+		}
+		index := *frameIndex
+		frameIndex = &index // Do not retain a caller-owned mutable pointer.
+	}
+	d.admitLocked(work{id: id, kind: detailWork, tag: tag, mp3Frame: frameIndex})
 	return cloneResult(d.latest), nil
+}
+
+func sameMP3Frame(a, b *uint32) bool {
+	return a == nil && b == nil || a != nil && b != nil && *a == *b
 }
 
 // admitLocked replaces the pending task without bypassing the active worker.

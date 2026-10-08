@@ -101,9 +101,9 @@ func TestSummaryAPIRealIdentityPagesAndReadyCache(t *testing.T) {
 	}
 	checkFault(t, b.GetSummaryEvents(SummaryPageRequest{id, q.RequestID, "aac", "2", 1}).Error, CodeInvalidArgument)
 	checkFault(t, b.GetSummaryEvents(SummaryPageRequest{id, q.RequestID, "aac", "18446744073709551615", 1}).Error, CodeInvalidArgument)
-	checkFault(t, b.StartDetail(DetailRequest{id, q.RequestID, "0"}).Error, CodeInvalidArgument)
+	checkFault(t, b.StartDetail(DetailRequest{SessionID: id, RequestID: q.RequestID, TagID: "0"}).Error, CodeInvalidArgument)
 	checkFault(t, b.StartHex(HexRequest{id, q.RequestID, "0", 1}).Error, CodeInvalidArgument)
-	if r := b.StartDetail(DetailRequest{id, "9007199254740994", "1"}); r.Error != nil {
+	if r := b.StartDetail(DetailRequest{SessionID: id, RequestID: "9007199254740994", TagID: "1"}); r.Error != nil {
 		t.Fatal(r.Error)
 	}
 	if r := finishDetail(t, b, id, "9007199254740994"); r.Error != nil || r.Detail == nil {

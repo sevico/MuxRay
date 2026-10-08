@@ -109,6 +109,7 @@ Generate the independent MPEG-1/2/2.5 mono/stereo corpus and inspect CLI v3:
 /usr/bin/python3 -B tools/codec-regression/native_context_side.py \
   --input-dir "$PWD/.cache/codec-run/samples" \
   --side-info-dir "$PWD/.cache/codec-run/side-info-samples" \
+  --timeout-seconds 420 \
   --binary "$PWD/desktop/build/bin/MuxRay" --output-dir "$PWD/.cache/codec-run/native-context-side"
 ```
 
@@ -127,6 +128,8 @@ context-replay fixture, not a claim of a natural long recording. Native snapshot
 check monotonic completed boundaries, manual continuation, random-jump cache
 reuse and original SPS/PPS source links. Every round retains the same isolated
 GTK/WebKit, unchanged-source, export, FD-release and normal-exit checks.
+The example allows 420 seconds for the long-context round's five GTK exports;
+this harness deadline does not change the product's per-request parsing timeout.
 The existing six-case gate accepts side-info display truncation only when the
 explicit omitted-record count matches the retained frames and the first two
 records are expanded. It still rejects unexplained truncation.
@@ -134,3 +137,53 @@ records are expanded. It still rejects unexplained truncation.
 Use a fresh output directory per run. Generated media and local logs remain in
 `.cache`; CI runs these same commands and uploads JSON/log evidence. Contract and
 parser scope are defined in [ADR-025](../../docs/decisions/025-avc-checkpoints-mp3-side-info.md).
+
+## MP3 frame browsing, AVC evidence and curve snapshots
+
+After building both the CLI and production desktop, run the three additional
+native rounds against the same generated inputs:
+
+```sh
+/usr/bin/python3 -B tools/codec-regression/native_browse_evidence.py \
+  --input-dir "$PWD/.cache/codec-run/samples" \
+  --side-info-dir "$PWD/.cache/codec-run/side-info-samples" \
+  --binary "$PWD/desktop/build/bin/MuxRay" \
+  --cli "$PWD/.cache/codec-run/muxray" \
+  --output-dir "$PWD/.cache/codec-run/native-browse-evidence"
+```
+
+The MP3 round opens the 15-frame `mpeg1-stereo.flv`, visits frames 0, 1 and 2,
+saves `mp3-frame-2.json`, then selects frame 14 and saves `snapshot.json`. Each
+snapshot must expand exactly its selected side-information record while keeping
+all frame summaries. Every encoded field, conditional presence, source span,
+CRC status and same-Tag dependency is checked against the independent source-bit
+oracle. Selection retains the default 64-frame / 1 MiB inspection limits; it
+does not inspect frames outside the checked range or rebuild the audio reservoir.
+
+Two H.264 rounds inspect a real multi-slice B-frame Tag and an IDR Tag. Saved
+FFmpeg traces and original NAL bytes supply the expected declaration comparison,
+slice-type set and evidence spans. IDR is an observed NAL type, and these checks
+do not assert complete pictures or independent decodability. Existing PPS/slice
+prefix verification also runs on each selected Tag.
+The native flow clicks each available declaration, NAL, IDR and slice source
+button, then saves its accessible UI tree between the initial and final snapshots. Each stage must show
+the expected byte offset, bit offset and bit length, and its Hex bytes must match
+the original source. `--avc-evidence-only` reruns these two rounds when a prior
+MP3 round already supplies the browsing evidence.
+
+Every round first loads the media summary and its current curve page. The v2
+snapshot must retain the selected metric, summary request identity, complete
+page bounds and values. These small fixtures fit one 256-Tag window; independent
+FLV framing, media payload sizes and monotonic DTS values supply bitrate and
+declared-GOP aggregates. The actual CLI v2 summary is a separate cross-check.
+The one-Tag MP3 sample correctly has no covered bitrate interval. CLI output is
+never used as the codec evidence oracle.
+
+`--cli` is required; `--timeout-seconds` defaults to 240 per round (30–600).
+Prefer a short output path such as `.cache/cb/n3`: GTK/D-Bus helpers also create
+Unix sockets under the private evidence directories, which have path limits.
+The wrapper preserves the existing native resource checks, source hashes,
+source-linked Hex, schema validation, FD release, normal application exit and
+isolated-harness cleanup. Failures retain their logs and snapshots in the new
+output directory. Its no-GUI mutation tests are included in the existing
+`python3 -B -m unittest discover -s tools/codec-regression -p '*_test.py'` command.

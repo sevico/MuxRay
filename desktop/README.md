@@ -61,7 +61,7 @@ GOP 依据 FLV 关键帧声明，不证明 IDR。未知值不补零，可在精�
 闭合 Tag。选中后可继续查看实际 Tag 原始字节，当前曲线页会保留。
 
 重新分析、取消/失败、源变化和关闭会清空旧曲线；查询超时可显式重试。
-现有诊断快照 v1 不包含曲线。完整定义见
+诊断快照 v2 可包含当前已加载的曲线页与所选指标；v1 仍不包含曲线。曲线定义见
 [ADR-022](../docs/decisions/022-bounded-media-curves.md)。
 生成样本、逐点独立核对和生产窗口结果见
 [媒体曲线验收记录](../docs/desktop-media-curves-20261007.md)。
@@ -69,10 +69,14 @@ GOP 依据 FLV 关键帧声明，不证明 IDR。未知值不补零，可在精�
 ## 诊断快照导出
 
 扫描结束后点击“导出诊断 JSON”，先冻结当前会话的有界结果，再选择保存位置。
-文件采用独立的 `desktopDiagnosticSnapshot` v1 格式，包含文件名、生成时间、扫描
+界面显式请求独立的 `desktopDiagnosticSnapshot` v2 格式，包含文件名、生成时间、扫描
 覆盖、前 100 条保留结构诊断、选中 Tag、匹配的已完成详情/Hex、已有 Summary 概览
-与当前事件页，以及当前趋势窗口、阈值和局部观察项。坐标保持十进制字符串。
+与当前事件页，以及当前趋势窗口、阈值和局部观察项。v2 还包含当前已完成的媒体曲线页，
+最多 64 点，保留起点、数量、指标和 Summary 请求身份；选中 MP3 帧与 H.264 对照信息
+随已有详情字段树冻结。坐标保持十进制字符串，未知值保持 null。
 缺失、未请求或已淘汰的部分显式列入 `omitted`；不会为导出补跑分析或读取媒体。
+`mediaCurvePage` 始终为已有页或 null，不接受客户端提供曲线数据。未指定版本或
+显式版本 1 仍输出原 v1 形状，不能携带曲线选择；两版本使用独立 schema。
 
 快照最多 2 MiB，Hex 最多为已有窗口的 4 KiB 实际字节；报告可能包含 AMF 字段文本
 和原始媒体字节。只保存源文件名，不包含源绝对路径。它不是完整 CLI 报告，也不是
@@ -81,7 +85,8 @@ GOP 依据 FLV 关键帧声明，不证明 IDR。未知值不补零，可在精�
 关闭源文件不会取消已经冻结的保存。保存期间可继续浏览或关闭当前文件；新保存
 和打开操作会等待结果确认。通信超时后查询原请求，失败时“重试”只确认保存结果，
 不重复弹窗或写文件。写入失败不替换已有目标，源文件和硬链接别名禁止作为目标。
-详情见 [ADR-019](../docs/decisions/019-desktop-diagnostic-snapshot.md)，实际导出、保存恢复
+详情见 [ADR-019](../docs/decisions/019-desktop-diagnostic-snapshot.md) 与
+[ADR-026](../docs/decisions/026-desktop-codec-evidence-snapshot-v2.md)，既有导出、保存恢复
 及检查范围见 [诊断快照验收记录](../docs/desktop-snapshot-20260929.md)。
 已有真实语料、40 分钟生成 AVC/AAC 及生产进程资源观测见
 [桌面语料回归记录](../docs/desktop-corpus-20260930.md)。
@@ -188,7 +193,14 @@ I/P/B 类型、帧号、条件 POC 字段及所引用 SPS/PPS 的原始位置。
 显示覆盖计数及 missing/invalidated/budget_exhausted，遇坏配置、EOS、编码切换
 或不可检查视频范围不沿用旧参数。长距离参数预算不否定已找到的 NAL 长度。
 达到预算后显示已完成的 Tag 边界，可点击“继续准备参数”推进下一段；单 Tag 无法完成时不提供继续操作。每文档最多缓存 8 个紧凑检查点（合计上限 4 MiB），同文件随机跳转可以复用，取消或过期请求不提交，源变化/关闭即清除。每次仍受三秒截止和串行读取约束。CLI v3 自动推进最多 128 段，见 [ADR-025](../docs/decisions/025-avc-checkpoints-mp3-side-info.md)。
-FLV keyframe 声明也不证明 IDR，媒体概览仍使用原解析深度。
+“H.264 关键帧声明与 NAL 证据”显示所选 Tag 的 FLV FrameType、IDR NAL 观察和
+P/B/I/SP/SI slice 类型集合，并分别标明 NAL 头与 slice 类型覆盖。已观察到的 IDR
+在部分覆盖时仍可报告；只有全部 NAL 头可用时，“未观察到”才是完整的负向结论，
+否则显示未知。保留/未分类计数和覆盖提示可用于判断观察范围。
+FLV 声明、NAL type 和单段 slice_type 证据可定位 Hex；派生集合不伪造源 Span。
+I slice 不证明 IDR，多 slice 不等同于多个完整图像，声明与观察差异不新增损坏诊断。
+此对照复用解析结果且不增加读取，媒体概览的 GOP 仍使用 FLV 声明，见
+[ADR-026](../docs/decisions/026-desktop-codec-evidence-snapshot-v2.md)。
 
 MP3 深层详情仅支持 `SoundFormat=2`；保留的 `SoundFormat=14` 仍不支持。
 在当前 Tag 内按帧头推导的长度检查至多 64 帧、1 MiB 覆盖范围，仅读取帧头与必要的
@@ -201,7 +213,14 @@ free-format 的码率和帧长保持未知，不搜索下一个同步字、不�
 继续使用同一详情 worker、源检查、展示预算和请求恢复机制。CLI 默认首帧头合同
 保持兼容，帧/VBR/CRC CLI 使用 `detail --schema-version 2`；参见
 [ADR-023](../docs/decisions/023-deeper-codec-details.md)。
-side-info 进一步展开 MPEG-1/2/2.5 的 SCFSI、granule/channel、长短块条件字段与精确源 bit 位置。每帧依赖摘要区分 `none/within_tag/before_tag/unknown`；`before_tag` 只表示需要 Tag 前历史，不是损坏。`knownPreviousBytes` 是同 Tag 的物理主数据槽位，不是 reservoir 剩余容量。桌面先保留各帧摘要，再展开前两帧 side-info，其余通过 `sideInfoOmittedFrames` 和详情截断标记明确提示；全部已检查帧可用 CLI v3 导出。不解码主数据或跨 Tag 拼接，详见 [ADR-025](../docs/decisions/025-avc-checkpoints-mp3-side-info.md)。
+side-info 进一步展开 MPEG-1/2/2.5 的 SCFSI、granule/channel、长短块条件字段与精确源 bit 位置。每帧依赖摘要区分 `none/within_tag/before_tag/unknown`；`before_tag` 只表示需要 Tag 前历史，不是损坏。`knownPreviousBytes` 是同 Tag 的物理主数据槽位，不是 reservoir 剩余容量。不解码主数据或跨 Tag 拼接，详见 [ADR-025](../docs/decisions/025-avc-checkpoints-mp3-side-info.md)。
+
+“MP3 逐帧详情”默认保留前两帧预览；也可通过选择框、上一/下一帧或“末个可选 MP3 帧”
+浏览当前检查范围内的完整帧边界，索引从 0 开始。选帧仍从本 Tag 的有界前缀检查，
+保留依赖计算所需的前序历史，不把所选帧当作新流起点；64 帧 / 1 MiB 的预算不变。
+所有已检查帧的边界、CRC、依赖和 VBR 摘要保留，只展开所选帧的 side-info。
+未展开记录继续通过 `sideInfoOmittedFrames` 和展示省略标记提示；截断边界、未知帧长
+和预算外帧不可选。可返回“前两帧预览”，全部已检查帧仍可用 CLI v3 导出。
 
 生成编码样本、CRC 结构样本及六轮 Linux 原生结果见
 [深层详情验收](../docs/desktop-codec-details-20261007.md)。
@@ -308,6 +327,21 @@ Linux CI 在 Ubuntu 24.04 构建并核对生成物、运行前端单测和 Go ra
 随后在独立 D-Bus/Xvfb 中执行真实 GTK 打开、详情/Hex、原生导出、FD 释放与正常退出，
 并上传验收日志。本机复现命令与依赖见
 [Linux smoke](../tools/desktop-native/README.md#linux-生产程序-smoke)。
+新增的 [native_browse_evidence.py](../tools/codec-regression/native_browse_evidence.py)
+复用同一隔离环境，检查 MP3 第三帧/末帧选择、B 多 slice 与 IDR 证据定位、曲线和
+快照 v2，并与原始字节及 CLI Summary 核对。先按
+[回归工具](../tools/codec-regression/README.md) 生成两组样本、构建 CLI 和生产桌面，再运行：
+
+```bash
+# 在仓库根目录运行；输出目录必须尚不存在
+python3 -B tools/codec-regression/native_browse_evidence.py \
+  --input-dir /absolute/path/to/codec-samples \
+  --side-info-dir /absolute/path/to/side-info-samples \
+  --binary desktop/build/bin/MuxRay --cli /absolute/path/to/muxray \
+  --output-dir /absolute/path/to/new-browse-evidence
+```
+
+运行结果保存在对应证据目录的 `result.json`、日志和原生导出中。
 此前真实 GTK/WebKit 窗口检查与其证据边界见
 [Linux 验证记录](../docs/desktop-linux-20261007.md)。
 

@@ -82,21 +82,31 @@ func Parse(ctx context.Context, source io.ReaderAt, tag flv.TagRecord) (*Detail,
 // It does not search or read that context source: all reads stay in the selected
 // payload, while context provenance spans describe the earlier configuration.
 func ParseWithAVCContext(ctx context.Context, source io.ReaderAt, tag flv.TagRecord, resolution avccontext.Resolution) (*Detail, error) {
-	return parseWithParameters(ctx, source, tag, resolution, nil)
+	return parseWithParameters(ctx, source, tag, resolution, nil, nil)
 }
 
 // ParseWithAVCParameters expands PPS and slice prefixes using a separately
 // bounded replay result. It reads only the selected Tag, not previous payloads.
 func ParseWithAVCParameters(ctx context.Context, source io.ReaderAt, tag flv.TagRecord, resolution avccontext.Resolution, parameters avccontext.ParameterResolution) (*Detail, error) {
-	return parseWithParameters(ctx, source, tag, resolution, &parameters)
+	return parseWithParameters(ctx, source, tag, resolution, &parameters, nil)
 }
 
-func parseWithParameters(ctx context.Context, source io.ReaderAt, tag flv.TagRecord, resolution avccontext.Resolution, parameters *avccontext.ParameterResolution) (*Detail, error) {
+// ParseWithMP3Frame expands one selectable frame within the normal desktop
+// inspection budget. Parsing still starts at the Tag's first frame so physical
+// main-data dependency ranges retain their same-Tag history.
+func ParseWithMP3Frame(ctx context.Context, source io.ReaderAt, tag flv.TagRecord, index uint32) (*Detail, error) {
+	return parseWithParameters(ctx, source, tag, avccontext.Resolution{}, nil, &index)
+}
+
+func parseWithParameters(ctx context.Context, source io.ReaderAt, tag flv.TagRecord, resolution avccontext.Resolution, parameters *avccontext.ParameterResolution, mp3Frame *uint32) (*Detail, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	if mp3Frame != nil && (tag.Type() != flv.TagTypeAudio || *mp3Frame >= mp3.DefaultMaxFrames) {
+		return nil, ErrInvalidInput
 	}
 	if tag.Type() != flv.TagTypeScript && tag.Type() != flv.TagTypeAudio && tag.Type() != flv.TagTypeVideo {
 		return nil, ErrUnsupported
@@ -149,15 +159,21 @@ func parseWithParameters(ctx context.Context, source io.ReaderAt, tag flv.TagRec
 		b.add("", "tagId", "uint64", decimal(tag.ID), nil)
 		switch audio := parsed.(type) {
 		case flv.AACAudio:
+			if mp3Frame != nil {
+				return nil, ErrInvalidInput
+			}
 			for _, d := range audio.Diagnostics {
 				b.diagnostic(d.Code, string(d.Severity), d.Offset, d.BitOffset, d.Message, d.Expected, d.Actual)
 			}
 			b.aac(audio)
 		case flv.MP3Audio:
+			if mp3Frame != nil && !selectableMP3Frame(audio.Frames, *mp3Frame) {
+				return nil, ErrInvalidInput
+			}
 			for _, d := range audio.Diagnostics {
 				b.diagnostic(d.Code, string(d.Severity), d.Offset, d.BitOffset, d.Message, d.Expected, d.Actual)
 			}
-			b.mp3(audio)
+			b.mp3(audio, mp3Frame)
 		default:
 			return nil, ErrUnsupported
 		}

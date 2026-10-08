@@ -92,17 +92,21 @@ def check_snapshot(report_path, source_path=None, max_source_bytes=MAX_FIXTURE):
         raise ValueError("Snapshot exceeds 2 MiB")
     raw = report_path.read_bytes()
     report = json.loads(raw.decode("utf-8"))
-    schema = json.loads((ROOT / "docs/schemas/desktop-diagnostic-snapshot-v1.schema.json").read_text(encoding="utf-8"))
+    version = report.get("schemaVersion")
+    if type(version) is not int or version not in (1, 2):
+        raise ValueError("Unsupported snapshot version")
+    schema = json.loads((ROOT / f"docs/schemas/desktop-diagnostic-snapshot-v{version}.schema.json").read_text(encoding="utf-8"))
     Draft202012Validator(schema, format_checker=Draft202012Validator.FORMAT_CHECKER).validate(report)
     session_id = report["session"]["sessionId"]
     if report["selection"]["sessionId"] != session_id:
         raise ValueError("Selection belongs to a different session")
-    for name in ("scanDiagnostics", "detail", "hex", "summary", "summaryPage", "trend"):
+    sections = ("mediaCurvePage",) if version == 2 else ()
+    for name in ("scanDiagnostics", "detail", "hex", "summary", "summaryPage", "trend") + sections:
         section = report[name]
         if section is not None and section["sessionId"] != session_id:
             raise ValueError(f"{name} belongs to a different session")
     omitted = {item["section"] for item in report["omitted"]}
-    for name in ("selectedTag", "detail", "hex", "summary", "summaryPage", "trend"):
+    for name in ("selectedTag", "detail", "hex", "summary", "summaryPage", "trend") + sections:
         if (report[name] is None) != (name in omitted):
             raise ValueError(f"{name} omission does not match its presence")
     if report["selectedTag"] is not None and report["selectedTag"]["id"] != report["selection"]["selectedTagId"]:
@@ -120,12 +124,59 @@ def check_snapshot(report_path, source_path=None, max_source_bytes=MAX_FIXTURE):
                 or offset > size or length != min(section["count"], size - offset)
                 or window["eof"] != (offset + length == size)):
             raise ValueError("Hex window does not match its requested coverage")
+    if version == 2 and report["mediaCurvePage"] is not None:
+        check_curve_page(report)
     result = {"report": report_path.name, "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(),
               "fileName": report["fileName"], "scanComplete": report["session"]["scan"]["complete"],
               "omitted": report["omitted"], "schemaValid": True}
     if source_path is not None:
         result.update(check_source(report, source_path, max_source_bytes))
     return result
+
+
+def check_curve_page(report):
+    response, selection = report["mediaCurvePage"], report["selection"]
+    query = selection.get("mediaCurve")
+    summary = report["summary"]
+    if not query or not summary or response["requestId"] != selection["summaryRequestId"] or response["requestId"] != summary["requestId"]:
+        raise ValueError("Curve summary identity mismatch")
+    page, overview = response["page"], summary["overview"]
+    if page["indexedTags"] != overview["indexedTags"] or page["scanComplete"] != overview["scanComplete"] or page["complete"] != overview["complete"]:
+        raise ValueError("Curve summary coverage mismatch")
+    bounds = page["bounds"]
+    start, next_page, total = (int(bounds[key]) for key in ("start", "next", "total"))
+    indexed = int(page["indexedTags"])
+    if (bounds["start"] != query["start"] or bounds["limit"] != query["count"] or page["windowTags"] != 256 or
+            total != (indexed + 255) // 256 or not 0 <= start <= total or next_page != min(start + query["count"], total) or
+            len(page["points"]) != next_page - start):
+        raise ValueError("Curve page coordinates mismatch")
+    for ordinal, point in enumerate(page["points"], start):
+        first, end = int(point["startTag"]), int(point["nextTag"])
+        if int(point["index"]) != ordinal or first != ordinal * 256 or end != min(first + 256, indexed) or int(point["unclassifiedTags"]) > end - first:
+            raise ValueError("Curve point coordinates mismatch")
+        for codec in ("audio", "video", "mp3"):
+            rate = point[codec]
+            size, duration = int(rate["coveredBytes"]), int(rate["coveredIntervalMs"])
+            if duration == 0:
+                if size != 0 or rate["bitsPerSecond"] is not None or rate["tagId"] is not None:
+                    raise ValueError("Curve unknown rate invented values")
+            elif rate["bitsPerSecond"] is None or int(rate["bitsPerSecond"]) != size * 8000 // duration or rate["tagId"] is None or not first <= int(rate["tagId"]) < end:
+                raise ValueError("Curve rate arithmetic or source Tag mismatch")
+        gop = point["gop"]
+        count, duration = int(gop["closedCount"]), int(gop["totalDurationMs"])
+        if not count <= int(gop["declaredCount"]) <= end - first:
+            raise ValueError("Curve GOP counts exceed source window")
+        if count == 0:
+            if duration != 0 or any(gop[key] is not None for key in ("minDurationMs", "maxDurationMs", "averageDurationMs", "tagId")):
+                raise ValueError("Curve unknown GOP invented values")
+        else:
+            if any(gop[key] is None for key in ("minDurationMs", "maxDurationMs", "averageDurationMs", "tagId")):
+                raise ValueError("Curve known GOP missing values")
+            minimum, maximum, average = (int(gop[key]) for key in ("minDurationMs", "maxDurationMs", "averageDurationMs"))
+            if (not 0 < minimum <= average <= maximum or average != duration // count or
+                    not maximum + minimum * (count - 1) <= duration <= minimum + maximum * (count - 1) or
+                    not first <= int(gop["tagId"]) < end):
+                raise ValueError("Curve GOP arithmetic or source Tag mismatch")
 
 
 def check_source(report, source_path, max_source_bytes):

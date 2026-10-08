@@ -97,6 +97,13 @@ func (b *builder) avc(ctx context.Context, source io.ReaderAt, tag flv.TagRecord
 	if parameters != nil {
 		b.avcParameterContext(root, *parameters)
 	}
+	if needsContext && p.HeaderPresent {
+		var sequence *avc.NALUnitSequence
+		if p.NALUnitsPresent {
+			sequence = &p.NALUnits
+		}
+		b.avcEvidence(root, p.Header.FrameType, p.Header.FrameTypeSpan, sequence)
+	}
 	if p.ConfigPresent {
 		if err := b.avcConfig(ctx, root, p.Config); err != nil {
 			return err

@@ -223,3 +223,49 @@ test('lost AVC continuation reply confirms the same request before permitting mo
   assert.equal(controller.getSnapshot().detailState, 'ready');
   controller.dispose();
 });
+
+function mp3Detail(index?: number): Detail {
+  return { kind: 'mp3Audio', complete: true, truncated: true, diagnostics: [], fields: [
+    { id: 'root', parentId: '', name: 'Frame inspection', type: 'bounded sequence', value: '', span: null },
+    ...Object.entries({ selectedFrameIndex: index === undefined ? 'preview' : String(index), selectableFrameIndices: '0,1,2,3', checkedFrameCount: '4' })
+      .map(([name, value], i) => ({ id: String(i), parentId: 'root', name, type: 'derived', value, span: null })),
+  ] };
+}
+test('MP3 frame selection issues a new identity only for selectable frames and can restore the preview', async () => {
+  const starts: DetailRequest[] = [];
+  const { controller } = setup({ startDetail: async request => { starts.push(request); return ready(request, { detail: mp3Detail(request.mp3FrameIndex) }); } });
+  await controller.open(); await settle(); controller.selectTag('0'); await settle();
+  for (const index of [-1, 4, 64, NaN, 0.5]) controller.selectMP3Frame(index);
+  assert.equal(starts.length, 1);
+  controller.selectMP3Frame(2); await settle(); controller.selectMP3Frame(2); await settle();
+  controller.selectMP3Frame(3); await settle(); controller.selectMP3Frame(null); await settle();
+  assert.deepEqual(starts.map(request => [request.requestId, request.mp3FrameIndex]), [['1', undefined], ['2', 2], ['3', 3], ['4', undefined]]);
+  assert.equal(controller.getSnapshot().detailState, 'ready'); controller.dispose();
+});
+test('a lost MP3 frame start reply confirms the same frame identity without starting another parse', async () => {
+  const lost = deferred<DetailResponse>(), starts: DetailRequest[] = [];
+  const { controller, clock } = setup({ startDetail: request => {
+    starts.push(request); return request.mp3FrameIndex === undefined ? Promise.resolve(ready(request, { detail: mp3Detail() })) : lost.promise;
+  }, detailResult: async () => ready(starts[1], { detail: mp3Detail(2) }) });
+  await controller.open(); await settle(); controller.selectTag('0'); await settle(); controller.selectMP3Frame(2); controller.selectMP3Frame(3);
+  clock.tick(REPLY_TIMEOUT_MS); await settle(); clock.tick(); await settle();
+  assert.equal(starts.length, 2); assert.equal(starts[1].mp3FrameIndex, 2); assert.equal(controller.getSnapshot().detailState, 'ready');
+  lost.resolve(ready(starts[1], { detail: mp3Detail(3) })); await settle();
+  assert.equal(controller.getSnapshot().detail?.fields[1].value, '2'); controller.dispose();
+});
+test('wrong selected MP3 frame in a matching response is rejected and Tag switches clear frame selection', async () => {
+  const starts: DetailRequest[] = [];
+  const { controller } = setup({ startDetail: async request => {
+    starts.push(request); return ready(request, { detail: mp3Detail(request.mp3FrameIndex === undefined ? undefined : 1) });
+  } });
+  await controller.open(); await settle(); controller.selectTag('0'); await settle(); controller.selectMP3Frame(2); await settle();
+  assert.equal(controller.getSnapshot().detailError, 'invalid_response');
+  controller.selectTag('1'); await settle(); assert.equal(starts.at(-1)?.mp3FrameIndex, undefined);
+  assert.equal(controller.getSnapshot().detailState, 'ready'); controller.dispose();
+});
+
+test('an MP3 preview request rejects a stale selected-frame result', async () => {
+  const { controller } = setup({ startDetail: async request => ready(request, { detail: mp3Detail(2) }) });
+  await controller.open(); await settle(); controller.selectTag('0'); await settle();
+  assert.equal(controller.getSnapshot().detailError, 'invalid_response'); controller.dispose();
+});

@@ -11,6 +11,7 @@ The public Draft 2020-12 contracts are:
 - [`flv-media-summary-v1.schema.json`](./flv-media-summary-v1.schema.json) for bounded cross-tag AAC/AVC `muxray summary` analysis.
 - [`flv-media-summary-v2.schema.json`](./flv-media-summary-v2.schema.json) for opt-in AAC/AVC/MP3 `muxray summary --schema-version 2` analysis.
 - [`desktop-diagnostic-snapshot-v1.schema.json`](./desktop-diagnostic-snapshot-v1.schema.json) for bounded desktop diagnostic snapshots saved through the native file dialog.
+- [`desktop-diagnostic-snapshot-v2.schema.json`](./desktop-diagnostic-snapshot-v2.schema.json) adds the currently retained media curve page to an explicitly requested desktop snapshot v2.
 
 Scan and default detail use `schemaVersion: 1`; AVC/MP3 detail may select 2 or 3; media summary explicitly selects 1 or 2
 and defaults to 1. These are independent contracts. The scan report
@@ -31,7 +32,7 @@ document now exists. V2 adds MP3 classification, header observations, and audio
 codec counts under its own closed Schema. See [v2 semantics](../media-summary-v2.md).
 
 Desktop snapshots use `documentType: "desktopDiagnosticSnapshot"` and
-`schemaVersion: 1`. They preserve the selected, already completed bounded desktop
+`schemaVersion: 1` or `2`. They preserve the selected, already completed bounded desktop
 results, including explicit coverage and omissions, rather than extending a CLI
 report. They include a source basename, creation timestamp and opaque session/
 request identities, so repeated saves are not byte-identical. Source absolute
@@ -39,6 +40,18 @@ paths are absent; uint64 coordinates remain canonical decimal strings. The
 encoded snapshot is at most 2 MiB, with at most 4096 actual Hex bytes, 512 trend
 points and one requested Summary event page of at most 100 entries. Details and
 source-validation limits are defined in [ADR-019](../decisions/019-desktop-diagnostic-snapshot.md).
+
+The desktop UI explicitly selects v2. Its `mediaCurvePage` is a retained
+`MediaCurveResponse` or explicit null with an omission reason. The page is copied
+from the completed Summary identified by `selection.summaryRequestId`, with at
+most 64 points. `selection.mediaCurve` records a canonical decimal `start`,
+`count` from 1 through 64, and `audio`, `video`, `mp3`, `gopAverage` or `gopMax`.
+It carries no client-provided report data. Unknown rates/durations remain null;
+partial coverage remains explicit. The selected MP3 frame and H.264 evidence
+stay in the existing bounded detail field tree. Capture performs no source
+reread or reanalysis and retains the whole-report 2 MiB limit. Absent or explicit
+request version 1 preserves the original v1 members and rejects curve selection.
+See [ADR-026](../decisions/026-desktop-codec-evidence-snapshot-v2.md).
 
 ## Opt-in AVC prefix detail v3
 

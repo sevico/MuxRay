@@ -15,7 +15,7 @@ MuxRay 是一个面向 FLV 和音视频码流的跨平台诊断工具。项目�
 - 媒体概览 v2 桌面视图：可取消分析、精确时间/码率指标、有界事件分页与 Tag/Hex 联动；
 - 分页媒体曲线：每 256 个源 Tag 聚合音频/视频/MP3 码率与声明 GOP 时长，覆盖全部已索引窗口并可定位 Tag/Hex；
 - 有界 Tag 趋势窗口：原始 DTS、声明/实际载荷、同类型及 Stream ID 前驱时间差，异常观察项可定位详情与 Hex；
-- 桌面诊断快照 JSON 导出：冻结已有有界详情、Hex、概览和趋势，通过原生保存对话框写出并恢复丢失的保存回复；
+- 桌面诊断快照 JSON v2 导出：冻结已有有界详情、Hex、概览、趋势及当前媒体曲线页，通过原生保存对话框写出并恢复丢失的保存回复；
 - AVC 桌面有界配置候选索引、长媒体前置配置定位、NAL 长度来源、SPS/PPS 摘要与准确源位置；
 - 按 Tag、资源有界的通用详情分发；
 - AMF0 ScriptData 详情解析；
@@ -66,9 +66,13 @@ go run ./cmd/muxray detail --tag 0 --pretty sample.flv
 
 `detail --schema-version 3` 的 AVC 结果使用独立的 [AVC v3 schema](docs/schemas/flv-avc-tag-detail-v3.schema.json)。PPS 解析到 `redundant_pic_cnt_present_flag`，slice 头前缀解析到 `redundant_pic_cnt`，显示 I/P/B 类型、帧号、条件 POC 字段和原始 SPS/PPS 引用。每个 slice 最多读取 256 字节，每包累计 64 KiB；上下文从来源配置分段顺序回放，每段最多 8,192 个 Tag / 1 MiB 实际读取，CLI 自动推进最多 128 段，桌面用“继续准备参数”推进并复用最多 8 个检查点。参数集缺失、失效或预算不足时保留已知字段，不沿用旧配置；NAL 长度查找仍独立有效。FMO 明确报告不支持，前缀完整不表示完整头部或图像可解码。详见 [ADR-024](docs/decisions/024-bounded-pps-slice-prefix.md)。
 
-`detail --schema-version 3` 也支持 [MP3 v3 schema](docs/schemas/flv-mp3-tag-detail-v3.schema.json)：解析 MPEG-1/2/2.5 单双声道 side-info，保留每个字段的原始 bit 位置，区分本 Tag 内回溯、需要 Tag 之前数据及未知依赖。它检查主数据槽位的长度关系，不解码 Huffman 或重建 reservoir；缺少 Tag 前历史不算损坏。桌面最多展开两帧 side-info 并明确提示省略，CLI 保留全部已检查帧。详见 [ADR-025](docs/decisions/025-avc-checkpoints-mp3-side-info.md)。
+`detail --schema-version 3` 也支持 [MP3 v3 schema](docs/schemas/flv-mp3-tag-detail-v3.schema.json)：解析 MPEG-1/2/2.5 单双声道 side-info，保留每个字段的原始 bit 位置，区分本 Tag 内回溯、需要 Tag 之前数据及未知依赖。它检查主数据槽位的长度关系，不解码 Huffman 或重建 reservoir；缺少 Tag 前历史不算损坏。桌面默认展开前两帧，也可在同一 64 帧 / 1 MiB 检查范围内选择完整边界的帧，只展开所选 side-info，并保留同 Tag 前序依赖历史及省略提示；CLI 保留全部已检查帧。详见 [ADR-025](docs/decisions/025-avc-checkpoints-mp3-side-info.md) 与 [ADR-026](docs/decisions/026-desktop-codec-evidence-snapshot-v2.md)。
+
+桌面 H.264 详情对照所选 Tag 的 FLV 关键帧声明、已观察 IDR NAL 和 slice 类型集合，分别说明 NAL 头与 slice 类型覆盖，并可定位原始声明和代表证据。I slice 不等于 IDR，多 slice 不代表多个完整图像；覆盖不全时不会把未观察到当作不存在。此对照复用已有解析结果，不增加源读取，也不改变 Summary 按声明统计的 GOP。
 
 新增编解码器的生成样本、独立字段/源位对照和 Linux 基础、PPS/slice、side-info/长文件原生验收已固化到 [回归工具](tools/codec-regression/README.md)，CI 使用相同入口，生成媒体不进入 Git。
+
+新增 [native_browse_evidence.py](tools/codec-regression/native_browse_evidence.py) 检查 MP3 选帧、H.264 声明与 NAL 证据，以及当前曲线页随快照 v2 导出；命令和范围见 [桌面开发说明](desktop/README.md#linux-构建)。
 
 最新生成样本、独立字段比对和 Linux 十二轮结果见 [长文件与 side-info 验收](docs/desktop-context-side-info-20261008.md)。
 
@@ -104,9 +108,12 @@ Go 应用层新增 `internal/session.Open`：一个会话拥有一个后台扫�
 [`ADR-018`](docs/decisions/018-bounded-tag-trends.md)，验证见
 [`趋势验证记录`](docs/desktop-trends-20260927.md)。
 
-桌面导出采用独立的 `desktopDiagnosticSnapshot` v1 格式，只保存当前已载入的有界
-证据，明确标记部分覆盖与省略项，不重跑媒体分析；原生保存支持结果恢复及源文件
-保护。设计见 [`ADR-019`](docs/decisions/019-desktop-diagnostic-snapshot.md)，实际保存与
+桌面导出采用独立的 `desktopDiagnosticSnapshot` v2 格式，只保存当前已载入的有界
+证据，包括选中编解码器详情与最多 64 点的当前媒体曲线页，总量仍不超过 2 MiB。
+快照明确标记部分覆盖、曲线选择和省略原因，不重读源文件或补跑分析；显式 v1 与
+未指定版本的请求保持原 v1 形状。原生保存支持结果恢复及源文件保护。设计见
+[`ADR-019`](docs/decisions/019-desktop-diagnostic-snapshot.md) 与
+[`ADR-026`](docs/decisions/026-desktop-codec-evidence-snapshot-v2.md)，既有保存与
 恢复结果见 [`诊断快照验收记录`](docs/desktop-snapshot-20260929.md)。
 真实语料、40 分钟生成 AVC/AAC、原生导出与资源观测的范围和证据见
 [`桌面语料回归记录`](docs/desktop-corpus-20260930.md)。

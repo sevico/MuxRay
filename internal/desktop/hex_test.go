@@ -59,8 +59,8 @@ func TestHexAPIWindowIdentityAndSharedFence(t *testing.T) {
 	}
 	checkFault(t, b.StartHex(HexRequest{id, request.RequestID, "14", 512}).Error, CodeInvalidArgument)
 	checkFault(t, b.StartHex(HexRequest{id, request.RequestID, "13", 1}).Error, CodeInvalidArgument)
-	checkFault(t, b.StartDetail(DetailRequest{id, request.RequestID, "0"}).Error, CodeInvalidArgument)
-	if d := b.StartDetail(DetailRequest{id, "9007199254740994", "1"}); d.Error != nil {
+	checkFault(t, b.StartDetail(DetailRequest{SessionID: id, RequestID: request.RequestID, TagID: "0"}).Error, CodeInvalidArgument)
+	if d := b.StartDetail(DetailRequest{SessionID: id, RequestID: "9007199254740994", TagID: "1"}); d.Error != nil {
 		t.Fatal(d.Error)
 	}
 	if d := finishDetail(t, b, id, "9007199254740994"); d.Error != nil || d.Detail.Kind != "aacAudio" {
@@ -124,7 +124,7 @@ func TestHexAPIValidationAndSourceChange(t *testing.T) {
 	if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
 		t.Fatal(err)
 	}
-	b.StartDetail(DetailRequest{id, "2", "0"})
+	b.StartDetail(DetailRequest{SessionID: id, RequestID: "2", TagID: "0"})
 	checkFault(t, finishDetail(t, b, id, "2").Error, CodeSourceChanged)
 }
 

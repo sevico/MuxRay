@@ -4,6 +4,7 @@ import type { CurveMetric } from './media-curves.ts';
 import type { API, Detail, DetailRequest, DetailResponse, DiagnosticPage, HexRequest, HexResponse, HexWindow, PageResponse, PickResponse, Session, SessionResponse, Tag, TagPage } from './protocol.ts';
 import { unsigned } from './numbers.ts';
 import { avcReplayProgress } from './details.ts';
+import { mp3FrameSelection } from './codec-details.ts';
 import { HEX_WINDOW_BYTES, validateHexWindow, validateSelection } from './hex.ts';
 import type { HexSelection } from './hex.ts';
 import type { DetailQuery, SummaryKind, SummaryOverview, SummaryPage, SummaryPageRequest, SummaryResponse, SummaryEvent } from './protocol.ts';
@@ -120,6 +121,9 @@ function detailResult(response: DetailResponse, request: DetailRequest): DetailR
     if (response.error || response.detail) throw new RequestError('invalid_response');
   } else if (response.state === 'ready') {
     if (response.error || !response.detail) throw new RequestError('invalid_response');
+    const mp3Selection = mp3FrameSelection(response.detail);
+    if ((mp3Selection && mp3Selection.selected !== (request.mp3FrameIndex ?? null)) ||
+        (request.mp3FrameIndex !== undefined && !mp3Selection)) throw new RequestError('invalid_response');
   } else throw new RequestError('invalid_response');
   return response;
 }
@@ -317,7 +321,10 @@ export class Controller {
   private freezeSnapshot(): SnapshotRequest {
     const summaryPage = this.state.summaryPage;
     const trendPage = this.state.trendPage;
+    const curvePage = !this.state.curveLoading && !this.state.curveError ? this.state.curvePage : null;
     return Object.freeze({
+      schemaVersion: 2,
+      ...(curvePage ? { mediaCurve: Object.freeze({ start: curvePage.bounds.start, count: curvePage.bounds.limit, metric: this.state.curveMetric }) } : {}),
       sessionId: this.state.session!.sessionId, selectedTagId: this.state.selectedTag?.id ?? null,
       detailRequestId: this.detailRequest?.requestId ?? null, hexRequestId: this.hexRequest?.requestId ?? null,
       summaryRequestId: this.summaryRequest?.requestId ?? null,
@@ -720,6 +727,20 @@ export class Controller {
       this.detailBusy = false;
       this.ensureDetail();
     }
+  }
+  selectMP3Frame(index: number | null): void {
+    const frames = mp3FrameSelection(this.state.detail);
+    if (this.disposed || this.state.summaryRunning || this.detailBusy || !this.detailPaused || !this.detailRequest ||
+        this.state.detailState !== 'ready' || !frames || frames.selected === index ||
+        !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (index !== null && (!Number.isInteger(index) || !frames.selectable.includes(index))) return;
+    if (this.nextReadID === 18446744073709551615n) { this.update({ detailError: 'id_exhausted' }); return; }
+    this.clearHex();
+    const { sessionId, tagId } = this.detailRequest;
+    this.detailRequest = { sessionId, tagId, requestId: (++this.nextReadID).toString(), ...(index === null ? {} : { mp3FrameIndex: index }) };
+    this.detailPhase = 'start'; this.detailPaused = false; this.detailPolls = 0;
+    this.update({ detailState: 'loading', detailError: null, detailRetry: '' });
+    this.ensureDetail();
   }
   continueAVCContext(): void {
     const progress = avcReplayProgress(this.state.detail);

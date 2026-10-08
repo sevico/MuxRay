@@ -1,3 +1,4 @@
+import { MP3FramePanel, KeyframeEvidencePanel } from './CodecDetailPanel';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { TagTrendPanel } from './TagTrendPanel';
 import { Controller, PAGE_SIZE } from './controller';
@@ -139,7 +140,7 @@ export function App({ controller }: { controller: Controller }) {
             <button disabled={!canPage || !bounds || view.loading || unsigned(bounds.next) >= unsigned(bounds.total) || !!isClosing} onClick={() => bounds && controller.select(view.tab, bounds.next)}>下一页</button>
           </div></div>}
         </section>
-        {view.selectedTag && <DetailPanel view={view} onRetry={() => controller.retryDetail()} onContinue={() => controller.continueAVCContext()} onLocate={selection => controller.showHex(selection)} />}
+        {view.selectedTag && <DetailPanel view={view} onRetry={() => controller.retryDetail()} onContinue={() => controller.continueAVCContext()} onSelectMP3={index => controller.selectMP3Frame(index)} onLocate={selection => controller.showHex(selection)} />}
         </div>
         <HexPanel view={view} controller={controller} disabled={!canPage || !!isClosing} message={fault} />
       </>}
@@ -156,7 +157,7 @@ function TagTable({ rows, selectedId, disabled, onSelect, onLocate }: { rows: Ta
   </tr>)}</tbody></table>;
 }
 
-function DetailPanel({ view, onRetry, onContinue, onLocate }: { view: ViewState; onRetry: () => void; onContinue: () => void; onLocate: (selection: HexSelection) => void }) {
+function DetailPanel({ view, onRetry, onContinue, onSelectMP3, onLocate }: { view: ViewState; onRetry: () => void; onContinue: () => void; onSelectMP3: (index: number | null) => void; onLocate: (selection: HexSelection) => void }) {
   const detail = view.detail;
   const kind = detail?.kind === 'amf0ScriptData' ? 'AMF0 Script Data' : detail?.kind === 'aacAudio' ? 'AAC Audio' : detail?.kind === 'avcVideo' ? 'AVC Video' : detail?.kind === 'mp3Audio' ? 'MP3 Audio' : 'Tag 详情';
   const busy = ['loading', 'pending', 'recovering'].includes(view.detailState);
@@ -176,6 +177,8 @@ function DetailPanel({ view, onRetry, onContinue, onLocate }: { view: ViewState;
         <p className="detail-note">MP3 在当前 Tag 内检查帧边界、VBR 声明、side-info 和头部 CRC，并显示主数据回指范围。范围覆盖不代表 bit-reservoir 或音频解码有效；Tag 之前的数据依赖保持未知。</p>
         <p className="detail-note">free-format 的码率和帧长未知；派生字段不标注单一原始位置，以“—”显示。</p>
       </>}
+      <MP3FramePanel detail={detail} disabled={busy || view.detailState !== 'ready' || view.summaryRunning || view.sourceChanged} onSelect={onSelectMP3} />
+      <KeyframeEvidencePanel detail={detail} disabled={busy || view.detailState !== 'ready' || view.summaryRunning || view.sourceChanged} onLocate={onLocate} />
       {!detail.complete && <p className="detail-note problem">保留可解析的字段；请结合下方详情诊断检查未完成部分。</p>}
       {detail.truncated && <p className="detail-note">部分内容因截断或展示上限而省略；显示的值是有限预览。</p>}
       <div className="detail-table-area"><table className="detail-fields"><thead><tr><th>字段</th><th>类型</th><th>值 / 预览</th><th>byte : bit</th><th>位长</th></tr></thead><tbody>{detailRows(detail.fields).map(({ field, depth }) => <tr key={field.id}>

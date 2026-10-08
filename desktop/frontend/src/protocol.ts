@@ -50,7 +50,7 @@ export interface TagTrendPage {
 }
 export interface DiagnosticPage { sessionId: string; bounds: Bounds; diagnostics: Diagnostic[] }
 export interface PageResponse<P> { apiVersion: number; page: P | null; error: Fault | null }
-export interface DetailRequest { sessionId: string; requestId: string; tagId: string }
+export interface DetailRequest { sessionId: string; requestId: string; tagId: string; mp3FrameIndex?: number }
 export interface DetailQuery { sessionId: string; requestId: string }
 export interface DetailField { id: string; parentId: string; name: string; type: string; value: string; span: Span | null }
 export type DetailKind = 'amf0ScriptData' | 'aacAudio' | 'avcVideo' | 'mp3Audio';
@@ -107,6 +107,8 @@ export interface SnapshotTrend {
   metric: 'dts' | 'delta' | 'size'; gapThreshold: string;
 }
 export interface SnapshotRequest {
+  schemaVersion?: 1 | 2;
+  mediaCurve?: { start: string; count: number; metric: 'audio' | 'video' | 'mp3' | 'gopAverage' | 'gopMax' };
   sessionId: string; selectedTagId: string | null; detailRequestId: string | null;
   hexRequestId: string | null; summaryRequestId: string | null;
   summaryPage: { kind: SummaryKind; start: string; count: number } | null;

@@ -38,8 +38,21 @@ libglib2.0-bin at-spi2-core python3-pyatspi python3-xlib python3-jsonschema`。
 
 本入口要求**容器索引完整**。用户文件的详情可含部分解析或语法诊断，原始结果
 保留在导出中；默认 generated 样本还要求详情完整。样本只是确定性结构数据，
-不是可播放录制媒体。此 smoke 不请求媒体概览或趋势，也不覆盖 partial 索引、
+不是可播放录制媒体。默认 smoke 不请求媒体概览或趋势，也不覆盖 partial 索引、
 受控取消、长期资源稳定性或真实录制媒体的解码质量。
+
+`--media-curves audio|video|mp3|gopAverage|gopMax` 会先分析媒体并加载对应指标，
+导出的诊断快照 v2 保留当前最多 64 点的曲线页。`--mp3-browse` 要求所选 MP3 Tag
+至少有四帧可选，依次选择帧 0、1、2，保存 `mp3-frame-2.json`，再选择末个可选帧
+并保存最终快照。每个索引都由界面显示确认；编解码器专用入口还会独立核对
+side-info 原始位、同 Tag 依赖、H.264 观察和曲线聚合，见
+[编解码器回归说明](../codec-regression/README.md)。
+`--avc-evidence` 会依次点击所选 H.264 Tag 的声明及可定位 NAL/slice 证据按钮，
+保存初末快照及逐按钮的可访问 UI 树，核对 Hex 选择的 byte/bit/位长、源字节和高亮。
+
+`snapshot_check.py` 根据 `schemaVersion` 分别校验 v1/v2，拒绝未知版本。
+v2 额外检查曲线的 Summary 身份、页范围、数值计算及未知值；源字节核对仍覆盖
+所选 Tag、Hex 和趋势。曲线与媒体源的独立聚合对照由编解码器专用入口完成。
 
 每轮自动启动独立 D-Bus 和 Xvfb，固定 `GSETTINGS_BACKEND=memory`，隔离 XDG
 config/data/cache/state/runtime 和临时目录，启用的辅助功能只影响本轮私有会话。

@@ -24,6 +24,8 @@ CONTRACTS = (
     ("docs/schemas/flv-mp3-tag-detail-v2.schema.json", "testdata/golden/flv-mp3-detail-truncated-v2.json"),
     ("docs/schemas/desktop-diagnostic-snapshot-v1.schema.json", "testdata/golden/desktop-diagnostic-snapshot-minimal-v1.json"),
     ("docs/schemas/desktop-diagnostic-snapshot-v1.schema.json", "testdata/golden/desktop-diagnostic-snapshot-full-v1.json"),
+    ("docs/schemas/desktop-diagnostic-snapshot-v2.schema.json", "testdata/golden/desktop-diagnostic-snapshot-minimal-v2.json"),
+    ("docs/schemas/desktop-diagnostic-snapshot-v2.schema.json", "testdata/golden/desktop-diagnostic-snapshot-full-v2.json"),
     ("docs/schemas/flv-tag-page-v1.schema.json", "testdata/golden/flv-tag-page-v1.json"),
     ("docs/schemas/flv-tag-page-v1.schema.json", "testdata/golden/flv-tag-page-empty-v1.json"),
     ("docs/schemas/flv-tag-page-v1.schema.json", "testdata/golden/flv-tag-page-partial-v1.json"),
@@ -168,6 +170,63 @@ def validate_desktop_snapshot_edge_cases(validator: Draft202012Validator) -> Non
     require_invalid(validator, extra, "closed snapshot envelope")
     for name in ("minimal", "full"):
         path = ROOT / f"testdata/golden/desktop-diagnostic-snapshot-{name}-v1.json"
+        if path.stat().st_size > 2 << 20:
+            raise SystemExit(f"{path}: snapshot exceeds 2 MiB")
+
+
+def validate_desktop_snapshot_v2_edge_cases(validator: Draft202012Validator) -> None:
+    full = load_json("testdata/golden/desktop-diagnostic-snapshot-full-v2.json")
+    minimal = load_json("testdata/golden/desktop-diagnostic-snapshot-minimal-v2.json")
+    page = full["mediaCurvePage"]["page"]
+    mutations = (
+        ("v2 identity", ["schemaVersion"], 1),
+        ("v2 selection identity", ["selection", "schemaVersion"], 1),
+        ("curve selection metric", ["selection", "mediaCurve", "metric"], "gop"),
+        ("curve selection count", ["selection", "mediaCurve", "count"], 65),
+        ("positive curve selection count", ["selection", "mediaCurve", "count"], 0),
+        ("curve start is exact string", ["selection", "mediaCurve", "start"], 9007199254740993),
+        ("curve start is canonical", ["selection", "mediaCurve", "start"], "01"),
+        ("retained curve source identity required", ["selection", "summaryRequestId"], None),
+        ("retained curve requires summary", ["summary"], None),
+        ("curve request ID is nonzero", ["mediaCurvePage", "requestId"], "0"),
+        ("curve page limit", ["mediaCurvePage", "page", "bounds", "limit"], 65),
+        ("curve source windows are 256 Tags", ["mediaCurvePage", "page", "windowTags"], 512),
+        ("curve point limit", ["mediaCurvePage", "page", "points"], page["points"] * 65),
+        ("curve point coordinate is exact", ["mediaCurvePage", "page", "points", 0, "index"], 0),
+        ("curve Tag coordinate overflow", ["mediaCurvePage", "page", "points", 0, "startTag"], "18446744073709551616"),
+        ("rate is exact string", ["mediaCurvePage", "page", "points", 0, "mp3", "bitsPerSecond"], 0),
+        ("known rate source must be known", ["mediaCurvePage", "page", "points", 0, "mp3", "tagId"], None),
+        ("known rate needs a positive interval", ["mediaCurvePage", "page", "points", 0, "mp3", "coveredIntervalMs"], "0"),
+        ("unknown rate has no invented source", ["mediaCurvePage", "page", "points", 0, "video", "tagId"], "0"),
+        ("unknown GOP has no invented duration", ["mediaCurvePage", "page", "points", 0, "gop", "maxDurationMs"], "0"),
+        ("capture does not publish failed curve response", ["mediaCurvePage", "error"], {"code": "stale_request", "message": "stale"}),
+    )
+    for label, path, value in mutations:
+        changed = deepcopy(full)
+        parent = changed
+        for key in path[:-1]:
+            parent = parent[key]
+        parent[path[-1]] = value
+        require_invalid(validator, changed, label)
+    missing = deepcopy(minimal)
+    del missing["mediaCurvePage"]
+    require_invalid(validator, missing, "v2 always publishes explicit curve availability")
+    missing = deepcopy(minimal)
+    missing["omitted"] = [o for o in missing["omitted"] if o["section"] != "mediaCurvePage"]
+    require_invalid(validator, missing, "missing curve requires an omission reason")
+    duplicate = deepcopy(minimal)
+    duplicate["omitted"].append({"section": "mediaCurvePage", "reason": "not_requested"})
+    require_invalid(validator, duplicate, "curve omission is unique")
+    misleading = deepcopy(full)
+    misleading["omitted"].append({"section": "mediaCurvePage", "reason": "not_requested"})
+    require_invalid(validator, misleading, "present curve cannot be omitted")
+    injected = deepcopy(full)
+    injected["selection"]["mediaCurve"]["points"] = page["points"]
+    require_invalid(validator, injected, "curve selection cannot carry client report data")
+    v1 = Draft202012Validator(load_json("docs/schemas/desktop-diagnostic-snapshot-v1.schema.json"))
+    require_invalid(v1, full, "v1 does not silently accept v2 snapshot members")
+    for name in ("minimal", "full"):
+        path = ROOT / f"testdata/golden/desktop-diagnostic-snapshot-{name}-v2.json"
         if path.stat().st_size > 2 << 20:
             raise SystemExit(f"{path}: snapshot exceeds 2 MiB")
 
@@ -1666,6 +1725,7 @@ def main() -> None:
     media_summary_validator = None
     media_summary_v2_validator = None
     desktop_snapshot_validator = None
+    desktop_snapshot_v2_validator = None
     for schema_path, instance_path in CONTRACTS:
         schema = load_json(schema_path)
         Draft202012Validator.check_schema(schema)
@@ -1688,6 +1748,8 @@ def main() -> None:
             media_summary_v2_validator = validator
         if schema_path == "docs/schemas/desktop-diagnostic-snapshot-v1.schema.json":
             desktop_snapshot_validator = validator
+        if schema_path == "docs/schemas/desktop-diagnostic-snapshot-v2.schema.json":
+            desktop_snapshot_v2_validator = validator
 
     if tag_page_validator is None:
         raise SystemExit("tag page schema was not validated")
@@ -1721,6 +1783,10 @@ def main() -> None:
         raise SystemExit("desktop snapshot schema was not validated")
     validate_desktop_snapshot_edge_cases(desktop_snapshot_validator)
     print("validated desktop snapshot identity, exact coordinates, bounded sections, omissions, and local observations")
+    if desktop_snapshot_v2_validator is None:
+        raise SystemExit("desktop snapshot v2 schema was not validated")
+    validate_desktop_snapshot_v2_edge_cases(desktop_snapshot_v2_validator)
+    print("validated desktop snapshot v2 retained curve identity, exact values, bounds, nulls, and version isolation")
 
 
 if __name__ == "__main__":

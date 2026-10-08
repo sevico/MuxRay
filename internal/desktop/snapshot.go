@@ -23,6 +23,7 @@ const (
 // SnapshotRequest describes a view, not caller-supplied report data. Optional
 // IDs name completed results already retained by this exact document.
 type SnapshotRequest struct {
+	SchemaVersion    uint8                       `json:"schemaVersion,omitempty"`
 	SessionID        string                      `json:"sessionId"`
 	SelectedTagID    *string                     `json:"selectedTagId"`
 	DetailRequestID  *string                     `json:"detailRequestId"`
@@ -30,6 +31,7 @@ type SnapshotRequest struct {
 	SummaryRequestID *string                     `json:"summaryRequestId"`
 	SummaryPage      *SnapshotSummaryPageRequest `json:"summaryPage"`
 	Trend            *SnapshotTrendRequest       `json:"trend"`
+	MediaCurve       *SnapshotMediaCurveRequest  `json:"mediaCurve,omitempty"`
 }
 
 type SnapshotSummaryPageRequest struct {
@@ -89,6 +91,7 @@ type DiagnosticSnapshot struct {
 	Trend           *TagTrendPage        `json:"trend"`
 	TrendIssues     []SnapshotTrendIssue `json:"trendIssues"`
 	Omitted         []SnapshotOmission   `json:"omitted"`
+	MediaCurvePage  *MediaCurveResponse  `json:"mediaCurvePage,omitempty"`
 }
 
 type SnapshotProducer struct {
@@ -103,12 +106,14 @@ type SnapshotTrendIssue struct {
 }
 
 type SnapshotScope struct {
-	Kind                string `json:"kind"`
-	SourceValidation    string `json:"sourceValidation"`
-	ScanDiagnostics     string `json:"scanDiagnostics"`
-	Summary             string `json:"summary"`
-	Trend               string `json:"trend"`
-	TrendInterpretation string `json:"trendInterpretation"`
+	Kind                     string `json:"kind"`
+	SourceValidation         string `json:"sourceValidation"`
+	ScanDiagnostics          string `json:"scanDiagnostics"`
+	Summary                  string `json:"summary"`
+	Trend                    string `json:"trend"`
+	TrendInterpretation      string `json:"trendInterpretation"`
+	MediaCurve               string `json:"mediaCurve,omitempty"`
+	MediaCurveInterpretation string `json:"mediaCurveInterpretation,omitempty"`
 }
 
 // CaptureSnapshot runs only bounded in-memory queries. Holding the slot lock
@@ -120,6 +125,13 @@ type SnapshotScope struct {
 func (a *App) CaptureSnapshot(request SnapshotRequest) (SnapshotCapture, *Fault) {
 	if !validSnapshotRequest(request) {
 		return SnapshotCapture{}, fault(CodeInvalidArgument)
+	}
+	version := uint8(1)
+	if request.SchemaVersion == 2 {
+		version = 2
+	} else {
+		// An explicitly selected v1 keeps the original selection JSON shape.
+		request.SchemaVersion = 0
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -152,7 +164,7 @@ func (a *App) CaptureSnapshot(request SnapshotRequest) (SnapshotCapture, *Fault)
 		}
 	}
 	report := DiagnosticSnapshot{
-		SchemaVersion: 1, DocumentType: "desktopDiagnosticSnapshot", FileName: filepath.Base(e.sourcePath),
+		SchemaVersion: version, DocumentType: "desktopDiagnosticSnapshot", FileName: filepath.Base(e.sourcePath),
 		CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), Producer: SnapshotProducer{Name: "MuxRay", Version: "0.1.0-dev"},
 		Scope: SnapshotScope{Kind: "bounded_desktop_snapshot", SourceValidation: "existing_change_latch_only",
 			ScanDiagnostics: "first_100_retained", Summary: "ready_overview_and_requested_event_page",
@@ -185,6 +197,11 @@ func (a *App) CaptureSnapshot(request SnapshotRequest) (SnapshotCapture, *Fault)
 	a.captureDetail(e, &report, omit)
 	a.captureHex(e, &report, omit)
 	a.captureSummary(e, &report, omit)
+	if version == 2 {
+		report.Scope.MediaCurve = "requested_retained_summary_curve_page"
+		report.Scope.MediaCurveInterpretation = "codec_payload_rate_and_declared_gop_not_transport_rate_or_decodability"
+		a.captureMediaCurve(e, &report, omit)
+	}
 	if request.Trend == nil {
 		omit("trend", "not_requested")
 	} else {
@@ -221,7 +238,10 @@ func (a *App) CaptureSnapshot(request SnapshotRequest) (SnapshotCapture, *Fault)
 }
 
 func validSnapshotRequest(q SnapshotRequest) bool {
-	if q.SessionID == "" || len(q.SessionID) > 64 {
+	if q.SessionID == "" || len(q.SessionID) > 64 || q.SchemaVersion > 2 {
+		return false
+	}
+	if q.MediaCurve != nil && (q.SchemaVersion != 2 || !validSnapshotMediaCurve(*q.MediaCurve)) {
 		return false
 	}
 	for _, id := range []*string{q.SelectedTagID, q.DetailRequestID, q.HexRequestID, q.SummaryRequestID} {

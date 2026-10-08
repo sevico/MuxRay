@@ -132,9 +132,9 @@ jobs:
         run: |
           go test -race -tags webkit2_41 -count=1 ./...
           go vet -tags webkit2_41 ./...
-      - name: Linux smoke helper tests
-        working-directory: .
-        run: /usr/bin/python3 -B -m unittest discover -s tools/desktop-native -p linux_smoke_test.py -v
+      - name: Linux smoke and snapshot helper tests
+        working-directory: tools/desktop-native
+        run: /usr/bin/python3 -B -m unittest linux_smoke_test snapshot_check_test -v
       - name: Codec regression tool tests
         working-directory: .
         run: /usr/bin/python3 -B -m unittest discover -s tools/codec-regression -p '*_test.py' -v
@@ -161,7 +161,10 @@ jobs:
         run: /usr/bin/python3 -B tools/codec-regression/verify_side_info.py --input-dir "$PWD/.cache/linux-codec-regression/side-info-samples" --cli "$PWD/.cache/linux-codec-regression/muxray" --output-dir "$PWD/.cache/linux-codec-regression/cli-side-info"
       - name: Native MP3 side-info and long AVC context continuation
         working-directory: .
-        run: /usr/bin/python3 -B tools/codec-regression/native_context_side.py --input-dir "$PWD/.cache/linux-codec-regression/samples" --side-info-dir "$PWD/.cache/linux-codec-regression/side-info-samples" --binary "$PWD/desktop/build/bin/MuxRay" --output-dir "$PWD/.cache/linux-codec-regression/native-context-side"
+        run: /usr/bin/python3 -B tools/codec-regression/native_context_side.py --input-dir "$PWD/.cache/linux-codec-regression/samples" --side-info-dir "$PWD/.cache/linux-codec-regression/side-info-samples" --binary "$PWD/desktop/build/bin/MuxRay" --timeout-seconds 420 --output-dir "$PWD/.cache/linux-codec-regression/native-context-side"
+      - name: Native MP3 frame browsing, H264 evidence and snapshot v2 curves
+        working-directory: .
+        run: /usr/bin/python3 -B tools/codec-regression/native_browse_evidence.py --input-dir "$PWD/.cache/linux-codec-regression/samples" --side-info-dir "$PWD/.cache/linux-codec-regression/side-info-samples" --binary "$PWD/desktop/build/bin/MuxRay" --cli "$PWD/.cache/linux-codec-regression/muxray" --output-dir "$PWD/.cache/linux-codec-regression/native-browse-evidence"
       - name: Preserve codec regression evidence
         if: always()
         uses: actions/upload-artifact@v4

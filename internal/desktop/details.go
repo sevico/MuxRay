@@ -21,9 +21,10 @@ const (
 )
 
 type DetailRequest struct {
-	SessionID string `json:"sessionId"`
-	RequestID string `json:"requestId"`
-	TagID     string `json:"tagId"`
+	SessionID     string  `json:"sessionId"`
+	RequestID     string  `json:"requestId"`
+	TagID         string  `json:"tagId"`
+	MP3FrameIndex *uint32 `json:"mp3FrameIndex,omitempty"`
 }
 
 type DetailQuery struct {
@@ -44,6 +45,10 @@ type DetailResponse struct {
 type detailSession interface {
 	StartDetail(uint64, uint64) (document.DetailResult, error)
 	GetDetail(uint64) (document.DetailResult, error)
+}
+
+type mp3FrameDetailSession interface {
+	StartDetailWithMP3Frame(uint64, uint64, *uint32) (document.DetailResult, error)
 }
 
 // detailSource captures only the current, open document. The owner rechecks
@@ -86,7 +91,7 @@ func detailResponse(sessionID, requestID, tagID string) DetailResponse {
 }
 
 // StartDetail admits a monotonically numbered selection. Repeating an admitted
-// ID/tag returns its current outcome; it never creates another parsing task.
+// ID/tag/frame returns its current outcome; it never creates another parsing task.
 func (b *Bindings) StartDetail(request DetailRequest) DetailResponse {
 	response := detailResponse(request.SessionID, request.RequestID, request.TagID)
 	id, validID := parseStart(request.RequestID)
@@ -100,7 +105,18 @@ func (b *Bindings) StartDetail(request DetailRequest) DetailResponse {
 		response.Error = failure
 		return response
 	}
-	result, err := owner.StartDetail(id, tagID)
+	var result document.DetailResult
+	var err error
+	if request.MP3FrameIndex != nil {
+		selector, ok := owner.(mp3FrameDetailSession)
+		if !ok {
+			response.Error = fault(CodeInvalidArgument)
+			return response
+		}
+		result, err = selector.StartDetailWithMP3Frame(id, tagID, request.MP3FrameIndex)
+	} else {
+		result, err = owner.StartDetail(id, tagID)
+	}
 	return mapDetailResult(response, result, err)
 }
 

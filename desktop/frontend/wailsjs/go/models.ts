@@ -18,6 +18,7 @@ export namespace desktop {
 	    sessionId: string;
 	    requestId: string;
 	    tagId: string;
+	    mp3FrameIndex?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new DetailRequest(source);
@@ -28,6 +29,7 @@ export namespace desktop {
 	        this.sessionId = source["sessionId"];
 	        this.requestId = source["requestId"];
 	        this.tagId = source["tagId"];
+	        this.mp3FrameIndex = source["mp3FrameIndex"];
 	    }
 	}
 	export class Fault {
@@ -867,6 +869,22 @@ export namespace desktop {
 		}
 	}
 	
+	export class SnapshotMediaCurveRequest {
+	    start: string;
+	    count: number;
+	    metric: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SnapshotMediaCurveRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.start = source["start"];
+	        this.count = source["count"];
+	        this.metric = source["metric"];
+	    }
+	}
 	export class SnapshotTrendRequest {
 	    start: string;
 	    count: number;
@@ -904,6 +922,7 @@ export namespace desktop {
 	    }
 	}
 	export class SnapshotRequest {
+	    schemaVersion?: number;
 	    sessionId: string;
 	    selectedTagId?: string;
 	    detailRequestId?: string;
@@ -911,6 +930,7 @@ export namespace desktop {
 	    summaryRequestId?: string;
 	    summaryPage?: SnapshotSummaryPageRequest;
 	    trend?: SnapshotTrendRequest;
+	    mediaCurve?: SnapshotMediaCurveRequest;
 	
 	    static createFrom(source: any = {}) {
 	        return new SnapshotRequest(source);
@@ -918,6 +938,7 @@ export namespace desktop {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.schemaVersion = source["schemaVersion"];
 	        this.sessionId = source["sessionId"];
 	        this.selectedTagId = source["selectedTagId"];
 	        this.detailRequestId = source["detailRequestId"];
@@ -925,6 +946,7 @@ export namespace desktop {
 	        this.summaryRequestId = source["summaryRequestId"];
 	        this.summaryPage = this.convertValues(source["summaryPage"], SnapshotSummaryPageRequest);
 	        this.trend = this.convertValues(source["trend"], SnapshotTrendRequest);
+	        this.mediaCurve = this.convertValues(source["mediaCurve"], SnapshotMediaCurveRequest);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

@@ -28,6 +28,13 @@ class LinuxSmokeTest(unittest.TestCase):
         args = smoke.arguments(self.argv + ['--source', str(source)])
         self.assertEqual(args.tag, 0)
 
+    def test_avc_evidence_is_explicit_and_preserves_other_defaults(self):
+        self.assertFalse(smoke.arguments(self.argv).avc_evidence)
+        args = smoke.arguments(self.argv + ['--avc-evidence', '--media-curves', 'video'])
+        self.assertTrue(args.avc_evidence)
+        self.assertEqual(args.media_curves, 'video')
+        self.assertFalse(args.mp3_browse)
+
     def test_rejects_invalid_inputs_before_launch(self):
         invalid = [
             ['--tag', '-1'], ['--tag', '1000000'], ['--tag', 'abc'],
@@ -47,6 +54,17 @@ class LinuxSmokeTest(unittest.TestCase):
     def test_replay_parameters_are_bounded_and_explicit(self):
         args = smoke.arguments(self.argv + ['--tag', '20002', '--continue-context', '2', '--revisit-tag', '8193'])
         self.assertEqual((args.tag, args.continue_context, args.revisit_tag), (20002, 2, 8193))
+
+    def test_codec_browsing_and_curve_metric_are_explicit(self):
+        defaults = smoke.arguments(self.argv)
+        self.assertFalse(defaults.mp3_browse)
+        self.assertIsNone(defaults.media_curves)
+        for metric in ('audio', 'video', 'mp3', 'gopAverage', 'gopMax'):
+            args = smoke.arguments(self.argv + ['--mp3-browse', '--media-curves', metric])
+            self.assertTrue(args.mp3_browse)
+            self.assertEqual(args.media_curves, metric)
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            smoke.arguments(self.argv + ['--media-curves', 'gop'])
 
     def test_source_limit_is_checked_without_reading_large_file(self):
         source = self.root / 'large.flv'
@@ -113,7 +131,6 @@ class LinuxSmokeTest(unittest.TestCase):
         altered = copy.deepcopy(report)
         altered['detail']['detail']['complete'] = False
         smoke.validate_export(altered, 4, False)
-
 
 if __name__ == '__main__':
     unittest.main()

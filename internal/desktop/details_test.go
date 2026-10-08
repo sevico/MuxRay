@@ -79,11 +79,11 @@ func TestDetailAPIIdentityAndExactIntegers(t *testing.T) {
 	if duplicate := b.StartDetail(request); duplicate.Error != nil || duplicate.State != "ready" || duplicate.Detail.Fields[0].Value == "changed" {
 		t.Fatalf("duplicate: %+v", duplicate)
 	}
-	checkFault(t, b.StartDetail(DetailRequest{id, request.RequestID, "1"}).Error, CodeInvalidArgument)
-	checkFault(t, b.StartDetail(DetailRequest{id, "9007199254740992", "0"}).Error, CodeStaleRequest)
+	checkFault(t, b.StartDetail(DetailRequest{SessionID: id, RequestID: request.RequestID, TagID: "1"}).Error, CodeInvalidArgument)
+	checkFault(t, b.StartDetail(DetailRequest{SessionID: id, RequestID: "9007199254740992", TagID: "0"}).Error, CodeStaleRequest)
 	checkFault(t, b.GetDetail(DetailQuery{id, "9007199254740992"}).Error, CodeStaleRequest)
 	checkFault(t, b.GetDetail(DetailQuery{id, "18446744073709551615"}).Error, CodeDetailNotFound)
-	if next := b.StartDetail(DetailRequest{id, "18446744073709551615", "1"}); next.Error != nil {
+	if next := b.StartDetail(DetailRequest{SessionID: id, RequestID: "18446744073709551615", TagID: "1"}); next.Error != nil {
 		t.Fatal(next.Error)
 	}
 	ready = finishDetail(t, b, id, "18446744073709551615")
@@ -100,8 +100,8 @@ func TestDetailAPIIdentityAndExactIntegers(t *testing.T) {
 	newID := b.OpenFile(OpenRequest{Path: path}).Session.SessionID
 	finishReal(t, app, newID)
 	checkFault(t, b.GetDetail(DetailQuery{id, "18446744073709551615"}).Error, CodeSessionNotFound)
-	checkFault(t, b.StartDetail(DetailRequest{id, "1", "0"}).Error, CodeSessionNotFound)
-	if current := b.StartDetail(DetailRequest{newID, "1", "0"}); current.Error != nil {
+	checkFault(t, b.StartDetail(DetailRequest{SessionID: id, RequestID: "1", TagID: "0"}).Error, CodeSessionNotFound)
+	if current := b.StartDetail(DetailRequest{SessionID: newID, RequestID: "1", TagID: "0"}); current.Error != nil {
 		t.Fatalf("new document did not reset ledger: %+v", current)
 	}
 	if current := finishDetail(t, b, newID, "1"); current.Error != nil || current.SessionID != newID {
@@ -117,15 +117,15 @@ func TestDetailAPIValidationAndErrors(t *testing.T) {
 	id := b.OpenFile(OpenRequest{Path: path}).Session.SessionID
 	finishReal(t, app, id)
 	for _, invalid := range []string{"", "0", "00", "01", "-1", "+1", " 1", "1.0", "18446744073709551616", strings.Repeat("1", 10000)} {
-		checkFault(t, b.StartDetail(DetailRequest{id, invalid, "0"}).Error, CodeInvalidArgument)
+		checkFault(t, b.StartDetail(DetailRequest{SessionID: id, RequestID: invalid, TagID: "0"}).Error, CodeInvalidArgument)
 		checkFault(t, b.GetDetail(DetailQuery{id, invalid}).Error, CodeInvalidArgument)
 	}
 	for _, invalid := range []string{"", "00", "-1", "1.0", "18446744073709551616"} {
-		checkFault(t, b.StartDetail(DetailRequest{id, "1", invalid}).Error, CodeInvalidArgument)
+		checkFault(t, b.StartDetail(DetailRequest{SessionID: id, RequestID: "1", TagID: invalid}).Error, CodeInvalidArgument)
 	}
-	checkFault(t, b.StartDetail(DetailRequest{id, "1", "2"}).Error, CodeTagNotFound)
-	checkFault(t, b.StartDetail(DetailRequest{id, "1", "18446744073709551615"}).Error, CodeTagNotFound)
-	checkFault(t, b.StartDetail(DetailRequest{"stale", "1", "0"}).Error, CodeSessionNotFound)
+	checkFault(t, b.StartDetail(DetailRequest{SessionID: id, RequestID: "1", TagID: "2"}).Error, CodeTagNotFound)
+	checkFault(t, b.StartDetail(DetailRequest{SessionID: id, RequestID: "1", TagID: "18446744073709551615"}).Error, CodeTagNotFound)
+	checkFault(t, b.StartDetail(DetailRequest{SessionID: "stale", RequestID: "1", TagID: "0"}).Error, CodeSessionNotFound)
 	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatal(err)
@@ -133,7 +133,7 @@ func TestDetailAPIValidationAndErrors(t *testing.T) {
 	if err := os.Chtimes(path, info.ModTime(), info.ModTime().Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	b.StartDetail(DetailRequest{id, "1", "0"})
+	b.StartDetail(DetailRequest{SessionID: id, RequestID: "1", TagID: "0"})
 	changed := finishDetail(t, b, id, "1")
 	checkFault(t, changed.Error, CodeSourceChanged)
 	if changed.Detail != nil || changed.SessionID != id || changed.RequestID != "1" || changed.TagID != "0" {
@@ -174,7 +174,7 @@ func TestCanceledOpeningPublishesClosedRealDocument(t *testing.T) {
 	if closed.Error != nil || !closed.Session.Closed {
 		t.Fatalf("late document closure lost: %+v", closed)
 	}
-	checkFault(t, b.StartDetail(DetailRequest{id, "1", "0"}).Error, CodeSessionClosed)
+	checkFault(t, b.StartDetail(DetailRequest{SessionID: id, RequestID: "1", TagID: "0"}).Error, CodeSessionClosed)
 	closeReal(t, app)
 	if final := b.GetSession(id); !final.Session.Terminal || !final.Session.Closed {
 		t.Fatalf("late document did not release slot: %+v", final)

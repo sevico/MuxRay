@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Controller, REPLY_TIMEOUT_MS } from '../src/controller.ts';
 import type { Scheduler } from '../src/controller.ts';
-import type { API, MediaCurvePage, MediaCurveRequest, MediaCurveResponse, Session, Tag } from '../src/protocol.ts';
+import type { API, MediaCurvePage, MediaCurveRequest, MediaCurveResponse, SaveRequest, SaveResponse, Session, Tag } from '../src/protocol.ts';
 import { CURVE_PAGE_SIZE, curveDomain, curveTag, curveValue, curveY, validateMediaCurvePage } from '../src/media-curves.ts';
 import { mediaCurveResponse } from '../src/normalize.ts';
 import { overview } from './summary-fixture.ts';
@@ -175,4 +175,30 @@ test('pending, canceled and failed reanalysis clear old curves and never admit c
     assert.equal(controller.getSnapshot().summaryState, 'failed'); assert.equal(controller.getSnapshot().summaryError, code);
     controller.loadMediaCurves(); await settle(); assert.equal(requests.length, 1); controller.dispose();
   }
+});
+
+
+test('snapshot v2 freezes the visible curve page and metric without issuing another curve query', async () => {
+  const saving = deferred<SaveResponse>(), saves: SaveRequest[] = [];
+  const { controller, requests } = setup({ saveSnapshot: request => { saves.push(request); return saving.promise; } });
+  await ready(controller); controller.loadMediaCurves('64'); await settle(); controller.setCurveMetric('gopMax');
+  const saved = controller.saveSnapshot();
+  assert.equal(saves[0].snapshot.schemaVersion, 2);
+  assert.deepEqual(saves[0].snapshot.mediaCurve, { start: '64', count: 64, metric: 'gopMax' });
+  assert.equal(saves[0].snapshot.summaryRequestId, '1'); assert.equal(requests.length, 1);
+  assert.equal(Object.isFrozen(saves[0].snapshot.mediaCurve), true);
+  controller.setCurveMetric('video'); controller.pageMediaCurves('next'); await settle();
+  assert.deepEqual(saves[0].snapshot.mediaCurve, { start: '64', count: 64, metric: 'gopMax' });
+  saving.resolve({ apiVersion: 1, requestId: saves[0].requestId, pending: false, canceled: false, fileName: 'curves.json', bytesWritten: '1000', error: null });
+  await saved; controller.dispose();
+});
+test('snapshot v2 omits curve selection while a replacement page is pending or summary was replaced', async () => {
+  const pending = deferred<MediaCurveResponse>(), saves: SaveRequest[] = [];
+  let calls = 0;
+  const { controller } = setup({ mediaCurves: request => ++calls === 1 ? Promise.resolve(curves(request)) : pending.promise,
+    saveSnapshot: async request => { saves.push(request); return { apiVersion: 1, requestId: request.requestId, pending: false, canceled: false, fileName: 'page.json', bytesWritten: '1000', error: null }; } });
+  await ready(controller); controller.loadMediaCurves(); await settle(); controller.pageMediaCurves('next');
+  await controller.saveSnapshot(); assert.equal(saves[0].snapshot.mediaCurve, undefined);
+  controller.startSummary(); await settle(); await controller.saveSnapshot();
+  assert.equal(saves[1].snapshot.mediaCurve, undefined); controller.dispose();
 });

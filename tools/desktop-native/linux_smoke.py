@@ -29,6 +29,9 @@ def arguments(argv=None):
     parser.add_argument('--tag', type=int, help='supported detail Tag; default generated=4, supplied source=0')
     parser.add_argument('--continue-context', type=int, default=0, help='explicit AVC parameter replay actions, 0 through 4; export every stage')
     parser.add_argument('--revisit-tag', type=int, help='after replay, visit an earlier Tag then return to the selected Tag')
+    parser.add_argument('--mp3-browse', action='store_true', help='select frame 2 then last selectable frame, exporting each')
+    parser.add_argument('--avc-evidence', action='store_true', help='click AVC declaration/NAL/slice source buttons and save each Hex selection UI')
+    parser.add_argument('--media-curves', choices=['audio', 'video', 'mp3', 'gopAverage', 'gopMax'], help='analyze media and load the current curve page before details')
     parser.add_argument('--max-source-bytes', type=int, default=MIN_SOURCE_LIMIT, help='16 MiB default; at most 1 GiB')
     parser.add_argument('--timeout-seconds', type=int, default=180, help='whole session deadline, 30–600 seconds; cleanup gets up to 10 more')
     parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
@@ -314,7 +317,50 @@ def run_worker(args):
         # A broad '部分结果' match also occurs in the still-scanning placeholder.
         wait_text('容器索引完整', 90)
         focus('MuxRay · 码流透镜')
+        if args.media_curves:
+            click('分析媒体')
+            wait(lambda: find('push button', '查看媒体曲线').getState().contains(pyatspi.STATE_ENABLED), 'media summary ready', 90)
+            click('查看媒体曲线')
+            wait_text(' · 本页 ')
+            metric = {'audio': '音频码率', 'video': '视频码率', 'mp3': 'MP3 码率', 'gopAverage': 'GOP 平均时长', 'gopMax': 'GOP 最长时长'}[args.media_curves]
+            click(metric, 'toggle button')
         select_tag(args.tag)
+        if args.mp3_browse:
+            wait_text('当前显示前两帧预览')
+            for index in range(3):
+                click('下一 MP3 帧')
+                wait_text(f'当前展开 MP3 帧 {index} ·')
+            _, checked = export_snapshot('mp3-frame-2.json', args.tag)
+            result['mp3Stages'] = [{'file': 'mp3-frame-2.json', 'snapshotCheck': checked}]
+            click('末个可选 MP3 帧')
+            wait(lambda: not any('当前展开 MP3 帧 2 ·' in name or '当前展开 MP3 帧 2 ·' in node_text(node) for node, _, _, name in rows()), 'last MP3 frame ready')
+            wait_text('当前展开 MP3 帧 ')
+
+        if args.avc_evidence:
+            initial, checked = export_snapshot('avc-evidence-initial.json', args.tag)
+            result['avcEvidenceInitial'] = {'file': 'avc-evidence-initial.json', 'snapshotCheck': checked}
+            fields = initial['detail']['detail']['fields']
+            roots = [field for field in fields if field['name'] == 'Keyframe evidence']
+            require(len(roots) == 1, 'AVC evidence root is unavailable')
+            targets = [field for field in fields if field['parentId'] == roots[0]['id'] and field['span'] is not None and
+                       (field['name'] in ('declaredFrameType', 'evidenceNALType', 'evidenceIDRNALType') or field['name'].startswith('evidenceSliceType'))]
+            require(3 <= len(targets) <= 8, 'AVC evidence source buttons missing or unbounded')
+            result['avcEvidenceStages'] = []
+            for field in targets:
+                name, span = field['name'], field['span']
+                button = {'declaredFrameType': '定位 FLV 帧类型', 'evidenceNALType': '定位 NAL 头证据', 'evidenceIDRNALType': '定位 IDR NAL'}.get(name)
+                if button is None:
+                    button = '定位 ' + name.removeprefix('evidenceSliceType') + ' slice'
+                label = 'FLV frameType' if name == 'declaredFrameType' else name
+                text = f'{label} · {span["byteOffset"]} : {span["bitOffset"]} · {span["bitLength"]} bit'
+                click(button)
+                wait_text(text)
+                wait(lambda: any(n == f'查看 byte {span["byteOffset"]} 的位' for _, _, _, n in rows()), 'AVC source Hex bytes')
+                ui = 'avc-' + name + '-ui.json'
+                dump(ui)
+                result['avcEvidenceStages'].append({'field': name, 'button': button, 'span': span, 'selectionText': text,
+                                                   'uiFile': ui, 'uiSHA256': digest(out / ui)})
+
         if args.continue_context:
             snapshot, checked = export_snapshot('context-initial.json', args.tag)
             result['contextStages'] = [{'file': 'context-initial.json', 'snapshotCheck': checked}]
@@ -401,12 +447,19 @@ def launch(args):
                '--output-dir', str(out), '--source', str(args.source), '--tag', str(args.tag),
                '--max-source-bytes', str(args.max_source_bytes), '--timeout-seconds', str(args.timeout_seconds)]
     command.extend(['--continue-context', str(args.continue_context)])
+    if args.mp3_browse:
+        command.append('--mp3-browse')
+    if args.avc_evidence:
+        command.append('--avc-evidence')
+    if args.media_curves:
+        command.extend(['--media-curves', args.media_curves])
     if args.revisit_tag is not None:
         command.extend(['--revisit-tag', str(args.revisit_tag)])
     record = {'binary': str(args.binary), 'binarySHA256': digest(args.binary), 'source': str(args.source),
               'sourceBytes': args.source.stat().st_size, 'origin': 'generated' if generated else 'user-supplied',
               'tag': args.tag, 'maxSourceBytes': args.max_source_bytes, 'timeoutSeconds': args.timeout_seconds,
               'continueContext': args.continue_context, 'revisitTag': args.revisit_tag,
+              'mp3Browse': args.mp3_browse, 'avcEvidence': args.avc_evidence, 'mediaCurves': args.media_curves,
               'argv': command, 'environment': {key: env[key] for key in env if key.startswith('XDG_') or key in
                                             ('GSETTINGS_BACKEND', 'GDK_BACKEND', 'LC_ALL', 'NO_AT_BRIDGE', 'TMPDIR')}}
     save(out, 'run.json', record)
