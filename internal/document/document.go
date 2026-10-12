@@ -13,9 +13,11 @@ import (
 	"time"
 
 	"github.com/sevico/muxray/internal/avccontext"
+	"github.com/sevico/muxray/internal/avcsearch"
 	"github.com/sevico/muxray/internal/detailview"
 	"github.com/sevico/muxray/internal/flv"
 	"github.com/sevico/muxray/internal/mp3"
+	"github.com/sevico/muxray/internal/mp3context"
 	"github.com/sevico/muxray/internal/session"
 	"github.com/sevico/muxray/internal/summaryview"
 )
@@ -48,15 +50,18 @@ const (
 	detailWork workKind = iota
 	hexWork
 	summaryWork
+	avcSearchWork
 )
 
 type work struct {
-	id       uint64
-	kind     workKind
-	tag      flv.TagRecord
-	offset   uint64
-	count    uint32
-	mp3Frame *uint32
+	id            uint64
+	kind          workKind
+	tag           flv.TagRecord
+	offset        uint64
+	count         uint32
+	mp3Frame      *uint32
+	mp3Dependency bool
+	filter        string
 }
 
 // DetailResult is the latest selected request. Its value is copied on return;
@@ -92,6 +97,7 @@ type Document struct {
 	hex            HexResult
 	snapshotDetail DetailResult
 	snapshotHex    HexResult
+	avcSearch      AVCSearchResult
 	summary        SummaryResult
 	summaryReport  *summaryview.Report
 	pending        *work
@@ -152,6 +158,7 @@ func (d *Document) run() {
 			d.hex.Window = nil
 			d.clearSnapshotReadsLocked()
 			d.summary.Overview, d.summaryReport = nil, nil
+			d.avcSearch.Page = nil
 			d.avcParameters.Clear()
 			d.mu.Unlock()
 			// This single worker owns closure. No read or parse remains active.
@@ -186,14 +193,17 @@ func (d *Document) run() {
 		var detail *detailview.Detail
 		var window *HexWindow
 		var summary *summaryview.Report
+		var searchPage *avcsearch.Page
 		var checkpoint *avccontext.ParameterCheckpoint
 		var err error
 		if selected.kind == hexWork {
 			window, err = d.readHex(ctx, selected.offset, selected.count)
 		} else if selected.kind == summaryWork {
 			summary, err = d.readSummary(ctx, selected.id)
+		} else if selected.kind == avcSearchWork {
+			searchPage, err = d.readAVCSearch(ctx, selected.offset, selected.filter)
 		} else {
-			detail, checkpoint, err = d.readDetail(ctx, selected.tag, selected.mp3Frame)
+			detail, checkpoint, err = d.readDetail(ctx, selected.tag, selected.mp3Frame, selected.mp3Dependency)
 		}
 		d.mu.Lock()
 		if err == nil {
@@ -217,6 +227,16 @@ func (d *Document) run() {
 				d.summary.Overview, d.summaryReport = nil, nil
 			} else {
 				d.summary.Overview = &summary.Overview
+			}
+		} else if !d.closed && selected.kind == avcSearchWork && d.avcSearch.RequestID == selected.id {
+			if d.changed {
+				err = ErrSourceChanged
+			} else if d.avcSearch.State == "canceling" {
+				err = context.Canceled
+			}
+			d.avcSearch.State, d.avcSearch.Err, d.avcSearch.Page = "ready", err, searchPage
+			if err != nil {
+				d.avcSearch.State, d.avcSearch.Page = "failed", nil
 			}
 		} else if !d.closed && d.request.id == selected.id {
 			if selected.kind == hexWork {
@@ -259,13 +279,14 @@ func (d *Document) sourceUnchanged() error {
 		d.avcParameters.Clear()
 		d.clearSnapshotReadsLocked()
 		d.invalidateSummaryLocked(ErrSourceChanged)
+		d.invalidateAVCSearchLocked(ErrSourceChanged)
 		d.mu.Unlock()
 		return ErrSourceChanged
 	}
 	return nil
 }
 
-func (d *Document) readDetail(ctx context.Context, tag flv.TagRecord, mp3Frame *uint32) (*detailview.Detail, *avccontext.ParameterCheckpoint, error) {
+func (d *Document) readDetail(ctx context.Context, tag flv.TagRecord, mp3Frame *uint32, mp3Dependency bool) (*detailview.Detail, *avccontext.ParameterCheckpoint, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
@@ -275,7 +296,9 @@ func (d *Document) readDetail(ctx context.Context, tag flv.TagRecord, mp3Frame *
 	var detail *detailview.Detail
 	var checkpoint *avccontext.ParameterCheckpoint
 	var err error
-	if mp3Frame != nil {
+	if mp3Dependency {
+		detail, err = detailview.ParseWithMP3Dependency(ctx, d.source, tag, *mp3Frame, d.scan.Tag, mp3context.Limits{})
+	} else if mp3Frame != nil {
 		detail, err = detailview.ParseWithMP3Frame(ctx, d.source, tag, *mp3Frame)
 	} else if d.parse != nil {
 		detail, err = d.parse(ctx, d.source, tag)
@@ -322,6 +345,17 @@ func (d *Document) StartDetail(id, tagID uint64) (DetailResult, error) {
 // StartDetailWithMP3Frame selects one inspected MP3 frame, or the normal preview
 // when frameIndex is nil. An admitted ID binds both the Tag and frame selection.
 func (d *Document) StartDetailWithMP3Frame(id, tagID uint64, frameIndex *uint32) (DetailResult, error) {
+	return d.StartDetailWithMP3Dependency(id, tagID, frameIndex, false)
+}
+
+// StartDetailWithMP3Dependency explicitly opts in to bounded predecessor reads.
+// Enabling it without a frame index normalizes the request to frame zero.
+func (d *Document) StartDetailWithMP3Dependency(id, tagID uint64, frameIndex *uint32, enabled bool) (DetailResult, error) {
+	if enabled && frameIndex == nil {
+		index := uint32(0)
+		frameIndex = &index
+	}
+
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.closed || d.ctx.Err() != nil {
@@ -334,7 +368,7 @@ func (d *Document) StartDetailWithMP3Frame(id, tagID uint64, frameIndex *uint32)
 		return DetailResult{}, ErrStaleRequest
 	}
 	if id == d.request.id {
-		if d.request.kind != detailWork || tagID != d.request.tag.ID || !sameMP3Frame(d.request.mp3Frame, frameIndex) {
+		if d.request.kind != detailWork || tagID != d.request.tag.ID || !sameMP3Frame(d.request.mp3Frame, frameIndex) || d.request.mp3Dependency != enabled {
 			return DetailResult{}, ErrInvalidRequest
 		}
 		return cloneResult(d.latest), nil
@@ -353,7 +387,7 @@ func (d *Document) StartDetailWithMP3Frame(id, tagID uint64, frameIndex *uint32)
 		index := *frameIndex
 		frameIndex = &index // Do not retain a caller-owned mutable pointer.
 	}
-	d.admitLocked(work{id: id, kind: detailWork, tag: tag, mp3Frame: frameIndex})
+	d.admitLocked(work{id: id, kind: detailWork, tag: tag, mp3Frame: frameIndex, mp3Dependency: enabled})
 	return cloneResult(d.latest), nil
 }
 
@@ -365,6 +399,7 @@ func sameMP3Frame(a, b *uint32) bool {
 // Superseded results are dropped; a caller already holding a copy may keep it.
 func (d *Document) admitLocked(task work) {
 	d.cancelSummaryLocked()
+	d.cancelAVCSearchLocked()
 	d.request = task
 	d.pending = &task
 	d.latest, d.hex = DetailResult{}, HexResult{}
@@ -374,10 +409,12 @@ func (d *Document) admitLocked(task work) {
 	} else if task.kind == detailWork {
 		d.snapshotDetail = DetailResult{}
 		d.latest = DetailResult{RequestID: task.id, TagID: task.tag.ID, State: "pending"}
-	} else {
+	} else if task.kind == summaryWork {
 		d.clearSnapshotReadsLocked()
 		d.summary = SummaryResult{RequestID: task.id, State: "pending", Total: d.scan.Snapshot().Progress.TagCount}
 		d.summaryReport = nil
+	} else if task.kind == avcSearchWork {
+		d.avcSearch = AVCSearchResult{RequestID: task.id, State: "pending"}
 	}
 	if d.activeCancel != nil {
 		d.activeCancel()
@@ -472,6 +509,7 @@ func (d *Document) Close(ctx context.Context) error {
 	d.hex.Window = nil
 	d.clearSnapshotReadsLocked()
 	d.summary.Overview, d.summaryReport = nil, nil
+	d.avcSearch.Page = nil
 	if d.activeCancel != nil {
 		d.activeCancel()
 	}

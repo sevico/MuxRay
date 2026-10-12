@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { Controller, DETAIL_POLL_LIMIT, POLL_MS, REPLY_TIMEOUT_MS } from '../src/controller.ts';
 import type { Scheduler } from '../src/controller.ts';
 import type { API, Detail, DetailRequest, DetailResponse, Session, Tag } from '../src/protocol.ts';
+import { dependencyDetail } from './mp3-dependency-fixture.ts';
+import { mp3Dependency } from '../src/codec-details.ts';
 
 const detail: Detail = { kind: 'amf0ScriptData', complete: true, truncated: false, fields: [], diagnostics: [] };
 const replayDetail: Detail = { kind: 'avcVideo', complete: false, truncated: true, diagnostics: [], fields: [
@@ -32,6 +34,7 @@ function tag(id: string): Tag {
 function setup(overrides: Partial<API> = {}) {
   const clock = new Clock();
   const api: API = {
+    startAVCSearch: async () => { throw Error('unexpected AVC search'); }, avcSearchResult: async () => { throw Error('unexpected AVC search result'); }, cancelAVCSearch: async () => { throw Error('unexpected AVC search cancel'); },
     mediaCurves: async () => { throw Error('unexpected media curves'); },
     saveSnapshot: async () => { throw Error('unexpected save'); }, saveResult: async () => { throw Error('unexpected save confirmation'); },
     tagTrends: async () => { throw Error('unexpected trend query'); },
@@ -268,4 +271,44 @@ test('an MP3 preview request rejects a stale selected-frame result', async () =>
   const { controller } = setup({ startDetail: async request => ready(request, { detail: mp3Detail(2) }) });
   await controller.open(); await settle(); controller.selectTag('0'); await settle();
   assert.equal(controller.getSnapshot().detailError, 'invalid_response'); controller.dispose();
+});
+
+test('MP3 history is opt-in, selects frame zero from preview, and source navigation selects the originating frame', async () => {
+  const starts: DetailRequest[] = [];
+  const { controller } = setup({ startDetail: async request => {
+    starts.push(request);
+    const d = mp3Detail(request.mp3FrameIndex);
+    if (request.mp3Dependency) d.fields.push(...dependencyDetail(request.tagId, request.mp3FrameIndex).fields);
+    return ready(request, { detail: d });
+  } });
+  await controller.open(); await settle(); controller.selectTag('1'); await settle();
+  assert.equal(starts[0].mp3Dependency, undefined);
+  controller.inspectMP3Dependency(); await settle();
+  assert.equal(starts[1].mp3Dependency, true); assert.equal(starts[1].mp3FrameIndex, 0); assert.equal(controller.getSnapshot().detailState, 'ready');
+  const source = mp3Dependency(controller.getSnapshot().detail)!.sources[0];
+  controller.locateMP3Source(source, 'tag'); await settle();
+  assert.equal(starts.at(-1)?.tagId, '0'); assert.equal(starts.at(-1)?.mp3FrameIndex, 0); assert.equal(starts.at(-1)?.mp3Dependency, undefined);
+  controller.dispose();
+});
+test('MP3 history request can publish bounded unknown metadata without an inspectable selected-frame preview', async () => {
+  const { controller } = setup({ startDetail: async request => {
+    if (!request.mp3Dependency) return ready(request, { detail: mp3Detail() });
+    const d = dependencyDetail(request.tagId, request.mp3FrameIndex);
+    d.fields = d.fields.filter(field => field.id === 'dep' || field.parentId === 'dep' && field.type !== 'physical main-data source');
+    const values: Record<string, string> = { dependencyState: 'unknown', dependencyReason: 'coverage_budget', requestedPreviousBytes: 'unknown', resolvedPreviousBytes: '0', missingPreviousBytes: 'unknown', sourceCount: '0' };
+    d.fields[0].value = 'unknown';
+    for (const field of d.fields) if (field.name in values) field.value = values[field.name];
+    return ready(request, { detail: d });
+  } });
+  await controller.open(); await settle(); controller.selectTag('1'); await settle(); controller.inspectMP3Dependency(); await settle();
+  assert.equal(controller.getSnapshot().detailState, 'ready'); assert.equal(mp3Dependency(controller.getSnapshot().detail)?.tagId, '1'); controller.dispose();
+});
+test('MP3 dependency cannot publish a response for the wrong target or navigate a fabricated source range', async () => {
+  const starts: DetailRequest[] = [];
+  const { controller } = setup({ startDetail: async request => {
+    starts.push(request); return ready(request, { detail: request.mp3Dependency ? dependencyDetail('2', request.mp3FrameIndex) : mp3Detail() });
+  } });
+  await controller.open(); await settle(); controller.selectTag('1'); await settle(); controller.inspectMP3Dependency(); await settle();
+  assert.equal(controller.getSnapshot().detailError, 'invalid_response');
+  controller.locateMP3Source(mp3Dependency(dependencyDetail())!.sources[0], 'tag'); await settle(); assert.equal(starts.length, 2); controller.dispose();
 });

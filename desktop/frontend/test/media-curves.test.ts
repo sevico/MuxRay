@@ -33,6 +33,7 @@ function setup(overrides: Partial<API> = {}, indexed = '33000') {
     progress: { sourceSize: '9007199254742000', bytesScanned: '20000', tagCount: indexed, diagnosticCount: 0 } };
   let session = base;
   const api: API = {
+    startAVCSearch: async () => { throw Error('unexpected AVC search'); }, avcSearchResult: async () => { throw Error('unexpected AVC search result'); }, cancelAVCSearch: async () => { throw Error('unexpected AVC search cancel'); },
     open: async requestId => { session = { ...base, sessionId: `s${++opens}` }; return { apiVersion: 1, requestId, pending: false, canceled: false, fileName: 'curves.flv', session, error: null }; },
     openResult: async () => { throw Error('unexpected open'); }, status: async () => ({ apiVersion: 1, session, error: null }), cancel: async () => ({ apiVersion: 1, session, error: null }),
     close: async () => ({ apiVersion: 1, session: { ...session, closed: true }, error: null }),

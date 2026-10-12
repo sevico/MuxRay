@@ -1,5 +1,168 @@
 export namespace desktop {
 	
+	export class AVCSearchRow {
+	    tagId: string;
+	    dts: string;
+	    offset: string;
+	    declaredFrameType?: number;
+	    observedIDR: string;
+	    declarationRelation: string;
+	    reason: string;
+	    span?: detailview.Span;
+	
+	    static createFrom(source: any = {}) {
+	        return new AVCSearchRow(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.tagId = source["tagId"];
+	        this.dts = source["dts"];
+	        this.offset = source["offset"];
+	        this.declaredFrameType = source["declaredFrameType"];
+	        this.observedIDR = source["observedIDR"];
+	        this.declarationRelation = source["declarationRelation"];
+	        this.reason = source["reason"];
+	        this.span = this.convertValues(source["span"], detailview.Span);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AVCSearchPage {
+	    start: string;
+	    next: string;
+	    total: string;
+	    scanned: number;
+	    bytesRead: string;
+	    exhausted: boolean;
+	    scanComplete: boolean;
+	    filter: string;
+	    rows: AVCSearchRow[];
+	
+	    static createFrom(source: any = {}) {
+	        return new AVCSearchPage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.start = source["start"];
+	        this.next = source["next"];
+	        this.total = source["total"];
+	        this.scanned = source["scanned"];
+	        this.bytesRead = source["bytesRead"];
+	        this.exhausted = source["exhausted"];
+	        this.scanComplete = source["scanComplete"];
+	        this.filter = source["filter"];
+	        this.rows = this.convertValues(source["rows"], AVCSearchRow);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AVCSearchRequest {
+	    sessionId: string;
+	    requestId: string;
+	    start: string;
+	    filter: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AVCSearchRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.requestId = source["requestId"];
+	        this.start = source["start"];
+	        this.filter = source["filter"];
+	    }
+	}
+	export class Fault {
+	    code: string;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Fault(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.message = source["message"];
+	    }
+	}
+	export class AVCSearchResponse {
+	    apiVersion: number;
+	    sessionId: string;
+	    requestId: string;
+	    state: string;
+	    page?: AVCSearchPage;
+	    error?: Fault;
+	
+	    static createFrom(source: any = {}) {
+	        return new AVCSearchResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.apiVersion = source["apiVersion"];
+	        this.sessionId = source["sessionId"];
+	        this.requestId = source["requestId"];
+	        this.state = source["state"];
+	        this.page = this.convertValues(source["page"], AVCSearchPage);
+	        this.error = this.convertValues(source["error"], Fault);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class DetailQuery {
 	    sessionId: string;
 	    requestId: string;
@@ -19,6 +182,7 @@ export namespace desktop {
 	    requestId: string;
 	    tagId: string;
 	    mp3FrameIndex?: number;
+	    mp3Dependency?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new DetailRequest(source);
@@ -30,20 +194,7 @@ export namespace desktop {
 	        this.requestId = source["requestId"];
 	        this.tagId = source["tagId"];
 	        this.mp3FrameIndex = source["mp3FrameIndex"];
-	    }
-	}
-	export class Fault {
-	    code: string;
-	    message: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new Fault(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.code = source["code"];
-	        this.message = source["message"];
+	        this.mp3Dependency = source["mp3Dependency"];
 	    }
 	}
 	export class DetailResponse {

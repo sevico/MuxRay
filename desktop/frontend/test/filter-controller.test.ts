@@ -29,6 +29,7 @@ function setup(overrides: Partial<API> = {}, total = '8305') {
   let opens = 0;
   const session = (id = `scan-${opens}`): Session => ({ sessionId: id, state: 'canceled', terminal: true, closed: false, scan: { complete: false, hasErrors: false }, failure: null, progress: { sourceSize: '9007199254742000', bytesScanned: '10000', tagCount: total, diagnosticCount: 0 } });
   const api: API = {
+    startAVCSearch: async () => { throw Error('unexpected AVC search'); }, avcSearchResult: async () => { throw Error('unexpected AVC search result'); }, cancelAVCSearch: async () => { throw Error('unexpected AVC search cancel'); },
     mediaCurves: async () => { throw Error('unexpected media curves'); },
     saveSnapshot: async () => { throw Error('unexpected save'); }, saveResult: async () => { throw Error('unexpected save confirmation'); },
     tagTrends: async () => { throw Error('unexpected trend query'); },

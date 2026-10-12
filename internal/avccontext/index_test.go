@@ -137,3 +137,21 @@ func TestIndexedResolutionMatchesLegacyAndRetainsBudgets(t *testing.T) {
 		t.Fatalf("uncovered resolution: %v", err)
 	}
 }
+
+func TestFramingEventsRetainBarriersWithoutChangingLegacyCandidates(t *testing.T) {
+	data, tags := fixture(t, config(4), nalu(), packet{9, []byte{0x17, 2, 0, 0, 0}}, nalu(), packet{9, []byte{0x12, 1}}, nalu(), packet{0x29, []byte{0x17, 0}}, nalu(), packet{9, []byte{0x17}}, nalu())
+	x := observeFixture(t, data, tags)
+	for _, tc := range []struct{ before, want uint64 }{{2, 0}, {4, 2}, {6, 4}, {8, 6}, {10, 8}} {
+		id, ok, err := x.PreviousFramingEvent(t.Context(), tc.before)
+		if err != nil || !ok || id != tc.want {
+			t.Fatalf("event before%d: %d %t %v", tc.before, id, ok, err)
+		}
+		id, ok, err = x.previous(t.Context(), tc.before)
+		if err != nil || !ok || id != 0 {
+			t.Fatalf("legacy changed: %d %t %v", id, ok, err)
+		}
+	}
+	if len(x.events)*8 != 125000 {
+		t.Fatalf("event memory %d", len(x.events)*8)
+	}
+}

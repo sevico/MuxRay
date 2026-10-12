@@ -36,6 +36,7 @@ function setup(override: Partial<Omit<API, 'open'>> & { open?: (requestId: strin
   const clock = new FakeClock();
   const { open = async () => ({ ...response(snapshot()), fileName: 'sample.flv', canceled: false }), ...rest } = override;
   const api: API = {
+    startAVCSearch: async () => { throw Error('unexpected AVC search'); }, avcSearchResult: async () => { throw Error('unexpected AVC search result'); }, cancelAVCSearch: async () => { throw Error('unexpected AVC search cancel'); },
     mediaCurves: async () => { throw Error('unexpected media curves'); },
     saveSnapshot: async () => { throw Error('unexpected save'); }, saveResult: async () => { throw Error('unexpected save confirmation'); },
     tagTrends: async () => { throw Error('unexpected trend query'); },

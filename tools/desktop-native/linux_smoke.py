@@ -8,6 +8,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import subprocess
@@ -31,6 +32,10 @@ def arguments(argv=None):
     parser.add_argument('--revisit-tag', type=int, help='after replay, visit an earlier Tag then return to the selected Tag')
     parser.add_argument('--mp3-browse', action='store_true', help='select frame 2 then last selectable frame, exporting each')
     parser.add_argument('--avc-evidence', action='store_true', help='click AVC declaration/NAL/slice source buttons and save each Hex selection UI')
+    parser.add_argument('--avc-search', choices=['mismatches', 'unknown', 'all'], help='inspect real bounded AVC search pages and source/detail navigation')
+    parser.add_argument('--avc-search-pages', type=int, default=1, help='maximum explicit AVC search batches, 1 through 16')
+    parser.add_argument('--mp3-history', action='store_true', help='inspect and export bounded MP3 dependency sources and click their source ranges')
+    parser.add_argument('--mp3-frame', type=int, help='select a specific inspected MP3 frame before resolving history, 0 through 63')
     parser.add_argument('--media-curves', choices=['audio', 'video', 'mp3', 'gopAverage', 'gopMax'], help='analyze media and load the current curve page before details')
     parser.add_argument('--max-source-bytes', type=int, default=MIN_SOURCE_LIMIT, help='16 MiB default; at most 1 GiB')
     parser.add_argument('--timeout-seconds', type=int, default=180, help='whole session deadline, 30–600 seconds; cleanup gets up to 10 more')
@@ -50,6 +55,12 @@ def arguments(argv=None):
         parser.error('--continue-context must be between 0 and 4')
     if args.revisit_tag is not None and (not args.continue_context or not 0 <= args.revisit_tag < args.tag):
         parser.error('--revisit-tag requires replay and an earlier nonnegative Tag')
+    if not 1 <= args.avc_search_pages <= 16 or (args.avc_search_pages != 1 and not args.avc_search):
+        parser.error('--avc-search-pages requires search and must be 1 through 16')
+    if args.mp3_frame is not None and (not args.mp3_history or not 0 <= args.mp3_frame < 64):
+        parser.error('--mp3-frame requires history and must be 0 through 63')
+    if args.avc_search and args.mp3_history:
+        parser.error('AVC search and MP3 history are separate native rounds')
     args.binary = args.binary.resolve()
     if not args.binary.is_file() or not os.access(args.binary, os.X_OK):
         parser.error('--binary must be an executable file; build with desktop/build-production.sh first')
@@ -215,7 +226,7 @@ def run_worker(args):
             return ''
 
     def dump(name):
-        save(out, name, [{'depth': depth, 'role': role, 'name': name_, 'text': node_text(node)}
+        save(out, name, [{'depth': depth, 'role': role, 'name': name_, 'description': node.description, 'text': node_text(node)}
                          for node, depth, role, name_ in rows()])
 
     def wait(fn, description, seconds=35):
@@ -244,6 +255,21 @@ def run_worker(args):
     def wait_text(fragment, seconds=35):
         return wait(lambda: any(fragment in name or fragment in node_text(node)
                                 for node, _, _, name in rows()), fragment, seconds)
+
+    def choose(label, index):
+        node = find('combo box', label)
+        # WebKitGTK exposes HTML options as menu items rather than Selection.
+        # Invoke the selected item's native action once; arrow-key changes can
+        # disable the selector while an intermediate detail request is running.
+        pending, items = [node], []
+        while pending:
+            item = pending.pop()
+            if item.getRoleName() == 'menu item':
+                items.append(item)
+            pending.extend(item.getChildAtIndex(i) for i in reversed(range(item.childCount)))
+        require(0 <= index < len(items), 'select option out of range: ' + label)
+        action = items[index].queryAction()
+        require(action.nActions == 1 and action.doAction(0), 'select option action failed: ' + label)
 
     def window(title):
         found = []
@@ -324,7 +350,84 @@ def run_worker(args):
             wait_text(' · 本页 ')
             metric = {'audio': '音频码率', 'video': '视频码率', 'mp3': 'MP3 码率', 'gopAverage': 'GOP 平均时长', 'gopMax': 'GOP 最长时长'}[args.media_curves]
             click(metric, 'toggle button')
+        if args.avc_search:
+            labels = {'mismatches': 0, 'unknown': 1, 'all': 2}
+            if args.avc_search == 'mismatches':
+                click('检索 H.264 证据')
+            else:
+                choose('H.264 证据筛选', labels[args.avc_search])
+            result['avcSearchPages'] = []
+            previous_status = None
+            for index in range(args.avc_search_pages):
+                status = wait(lambda: next((node_text(node) for node, _, _, _ in rows()
+                              if node_text(node).startswith('H.264 检索完成：') and
+                              node_text(node) != previous_status), None), 'AVC search batch ready')
+                name = f'avc-search-{index}.json'
+                dump(name)
+                result['avcSearchPages'].append({'uiFile': name, 'uiSHA256': digest(out / name), 'status': status})
+                next_button = find('push button', '继续检索 H.264')
+                if not next_button.getState().contains(pyatspi.STATE_ENABLED) or index + 1 == args.avc_search_pages:
+                    break
+                previous_status = status
+                click('继续检索 H.264')
+            if len(result['avcSearchPages']) > 1:
+                click('上一批 H.264')
+                previous = result['avcSearchPages'][-2]['status']
+                wait_text(previous)
+                dump('avc-search-previous.json')
+                result['avcSearchPrevious'] = {'uiFile': 'avc-search-previous.json', 'uiSHA256': digest(out / 'avc-search-previous.json'), 'status': previous}
+                click('继续检索 H.264')
+                wait_text(result['avcSearchPages'][-1]['status'])
+            targets = [(name, int(match[1])) for _, _, _, name in rows()
+                       if (match := re.fullmatch(r'定位 H\.264 Tag (\d+) 证据', name))]
+            if targets:
+                button, target = targets[0]
+                click(button)
+                wait_text(f'H.264 Tag {target} 证据 · ')
+                dump('avc-search-source.json')
+                result['avcSearchSource'] = {'tagId': target, 'uiFile': 'avc-search-source.json', 'uiSHA256': digest(out / 'avc-search-source.json')}
+                click(f'从 H.264 检索跳转 Tag {target}')
+                wait_text('详情诊断 (')
+                _, checked = export_snapshot('avc-search-selected.json', target)
+                result['avcSearchSelected'] = {'tagId': target, 'file': 'avc-search-selected.json', 'snapshotCheck': checked}
         select_tag(args.tag)
+        if args.mp3_history:
+            if args.mp3_frame is not None:
+                choose('MP3 帧选择', args.mp3_frame + 1)
+                wait_text(f'当前展开 MP3 帧 {args.mp3_frame} ·')
+            click('定位 MP3 依赖来源')
+            wait_text('MP3 依赖定位完成：')
+            initial, checked = export_snapshot('mp3-history-initial.json', args.tag)
+            result['mp3HistoryInitial'] = {'file': 'mp3-history-initial.json', 'snapshotCheck': checked}
+            fields = initial['detail']['detail']['fields']
+            roots = [f for f in fields if f['name'] == 'MP3 dependency sources']
+            require(len(roots) == 1, 'MP3 dependency root missing')
+            sources = [f for f in fields if f['parentId'] == roots[0]['id'] and f['type'] == 'physical main-data source']
+            require(len(sources) <= 64, 'MP3 source budget exceeded')
+            result['mp3HistorySources'] = []
+            for index, item in enumerate(sources):
+                child = {f['name']: f for f in fields if f['parentId'] == item['id']}
+                tag, frame, span = child['sourceTagId']['value'], child['sourceFrameIndex']['value'], child['sourceSpan']['span']
+                click(f'定位 MP3 来源 Tag {tag} 帧 {frame}')
+                text = f'MP3 来源 Tag {tag} 帧 {frame} · {span["byteOffset"]} : 0 · {span["bitLength"]} bit'
+                wait_text(text)
+                name = f'mp3-history-source-{index}.json'
+                dump(name)
+                result['mp3HistorySources'].append({'tagId': tag, 'frameIndex': frame, 'span': span, 'selectionText': text,
+                                                   'uiFile': name, 'uiSHA256': digest(out / name)})
+            if sources:
+                first = result['mp3HistorySources'][0]
+                click(f'跳转 MP3 来源 Tag {first["tagId"]} 帧 {first["frameIndex"]}')
+                wait_text(f'当前展开 MP3 帧 {first["frameIndex"]} ·')
+                _, checked = export_snapshot('mp3-history-source-detail.json', int(first['tagId']))
+                result['mp3HistorySourceDetail'] = {'file': 'mp3-history-source-detail.json', 'snapshotCheck': checked,
+                                                  'tagId': first['tagId'], 'frameIndex': first['frameIndex']}
+                select_tag(args.tag)
+                if args.mp3_frame is not None:
+                    choose('MP3 帧选择', args.mp3_frame + 1)
+                    wait_text(f'当前展开 MP3 帧 {args.mp3_frame} ·')
+                click('定位 MP3 依赖来源')
+                wait_text('MP3 依赖定位完成：')
         if args.mp3_browse:
             wait_text('当前显示前两帧预览')
             for index in range(3):
@@ -451,6 +554,12 @@ def launch(args):
         command.append('--mp3-browse')
     if args.avc_evidence:
         command.append('--avc-evidence')
+    if args.avc_search:
+        command.extend(['--avc-search', args.avc_search, '--avc-search-pages', str(args.avc_search_pages)])
+    if args.mp3_history:
+        command.append('--mp3-history')
+    if args.mp3_frame is not None:
+        command.extend(['--mp3-frame', str(args.mp3_frame)])
     if args.media_curves:
         command.extend(['--media-curves', args.media_curves])
     if args.revisit_tag is not None:
@@ -460,6 +569,7 @@ def launch(args):
               'tag': args.tag, 'maxSourceBytes': args.max_source_bytes, 'timeoutSeconds': args.timeout_seconds,
               'continueContext': args.continue_context, 'revisitTag': args.revisit_tag,
               'mp3Browse': args.mp3_browse, 'avcEvidence': args.avc_evidence, 'mediaCurves': args.media_curves,
+              'avcSearch': args.avc_search, 'avcSearchPages': args.avc_search_pages, 'mp3History': args.mp3_history, 'mp3Frame': args.mp3_frame,
               'argv': command, 'environment': {key: env[key] for key in env if key.startswith('XDG_') or key in
                                             ('GSETTINGS_BACKEND', 'GDK_BACKEND', 'LC_ALL', 'NO_AT_BRIDGE', 'TMPDIR')}}
     save(out, 'run.json', record)

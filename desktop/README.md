@@ -202,6 +202,13 @@ I slice 不证明 IDR，多 slice 不等同于多个完整图像，声明与观�
 此对照复用解析结果且不增加读取，媒体概览的 GOP 仍使用 FLV 声明，见
 [ADR-026](../docs/decisions/026-desktop-codec-evidence-snapshot-v2.md)。
 
+“H.264 批量证据检索”按 NAL 头筛选声明差异、未知或全部 AVC/未分类视频候选。
+每批最多检查 256 Tag、保留 64 行、读取 1 MiB，每 Tag 最多检查 256 个 NAL 头；
+不读取 slice/参数集正文。结果给出真实 `[start,next)` 游标，可以继续、回看或取消；
+取消后重试当前批次，不跳过未完成范围。只保留当前结果页和最多 64 个历史起点。
+扫描不完整时会明确提示只覆盖已有索引。来源按钮可跳转 Tag 或原始位范围；批量页
+不增加快照章节，可打开所选 Tag 后导出其详细证据。
+
 MP3 深层详情仅支持 `SoundFormat=2`；保留的 `SoundFormat=14` 仍不支持。
 在当前 Tag 内按帧头推导的长度检查至多 64 帧、1 MiB 覆盖范围，仅读取帧头与必要的
 元数据/保护字节，跳过压缩正文。解析首帧 Xing/Info/VBRI 声明，受保护的 Layer III 帧
@@ -221,6 +228,29 @@ side-info 进一步展开 MPEG-1/2/2.5 的 SCFSI、granule/channel、长短块�
 所有已检查帧的边界、CRC、依赖和 VBR 摘要保留，只展开所选帧的 side-info。
 未展开记录继续通过 `sideInfoOmittedFrames` 和展示省略标记提示；截断边界、未知帧长
 和预算外帧不可选。可返回“前两帧预览”，全部已检查帧仍可用 CLI v3 导出。
+
+点击“定位 MP3 依赖来源”会为当前帧显式回溯前序音频 Tag（预览状态选择帧 0）。
+最多回看 512 Tag / 64 音频 Tag，检查每 Tag 64 帧、合计 256 帧；源范围覆盖和实际
+读取分别最多 1 MiB，最多 64 条来源。前序 Tag 必须从头定位到末尾；超过预算不能
+跳过未检查尾部。视频/脚本交错不视为音频中断；配置、编码、流标识变化及损坏均
+保留未知原因。来源表列出 `main_data_begin` 物理回指窗口与当前槽位的 Tag/帧/Span，
+可打开来源帧或高亮 Hex。该字段组随现有诊断 JSON 详情导出，旧 CLI 合同不变。
+不判断 reservoir 剩余容量，不拼接/解码主数据，详见
+[ADR-027](../docs/decisions/027-bounded-codec-search-and-mp3-sources.md)。
+
+跨 Tag / 批量检索的独立样本与 Linux 原生回归：
+
+```bash
+/usr/bin/python3 -B tools/codec-regression/search_history_oracle.py --output-dir .cache/sh-samples
+/usr/bin/python3 -B tools/codec-regression/native_search_history.py \
+  --input-dir .cache/sh-samples --binary /absolute/path/to/MuxRay \
+  --output-dir .cache/sh-native --timeout-seconds 420
+```
+
+从仓库根目录执行，输出目录必须尚不存在；验收期间使用固定的二进制副本。
+生成器需要 FFmpeg/ffprobe，原生环境和已有 smoke 工具相同。默认九轮覆盖 MP3
+合并/拆分/视频交错/音频中断/历史不足，以及 H.264 分页/未知/部分正向证据/缺配置。
+工具对原始位、物理来源范围、页面结果、快照、关闭后文件描述符和正常退出分别校验。
 
 生成编码样本、CRC 结构样本及六轮 Linux 原生结果见
 [深层详情验收](../docs/desktop-codec-details-20261007.md)。

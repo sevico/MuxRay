@@ -4,7 +4,10 @@ import type { CurveMetric } from './media-curves.ts';
 import type { API, Detail, DetailRequest, DetailResponse, DiagnosticPage, HexRequest, HexResponse, HexWindow, PageResponse, PickResponse, Session, SessionResponse, Tag, TagPage } from './protocol.ts';
 import { unsigned } from './numbers.ts';
 import { avcReplayProgress } from './details.ts';
-import { mp3FrameSelection } from './codec-details.ts';
+import { mp3FrameSelection, mp3Dependency } from './codec-details.ts';
+import type { MP3DependencySource } from './codec-details.ts';
+import { avcSearchFilter, validateAVCSearch } from './avc-search.ts';
+import type { AVCSearchFilter, AVCSearchPage, AVCSearchRequest, AVCSearchRow } from './protocol.ts';
 import { HEX_WINDOW_BYTES, validateHexWindow, validateSelection } from './hex.ts';
 import type { HexSelection } from './hex.ts';
 import type { DetailQuery, SummaryKind, SummaryOverview, SummaryPage, SummaryPageRequest, SummaryResponse, SummaryEvent } from './protocol.ts';
@@ -65,6 +68,15 @@ export interface ViewState {
   hexRetry: '' | 'confirm' | 'reload';
   tagJumpError: string | null;
   sourceChanged: boolean;
+  avcSearchPage: AVCSearchPage | null;
+  avcSearchState: '' | 'loading' | 'pending' | 'canceling' | 'recovering' | 'ready' | 'failed';
+  avcSearchRunning: boolean;
+  avcSearchCancelRequested: boolean;
+  avcSearchError: string | null;
+  avcSearchRetry: '' | 'confirm' | 'reload';
+  avcSearchFilter: AVCSearchFilter;
+  avcSearchStart: string;
+  avcSearchPrevious: string | null;
   summary: SummaryOverview | null;
   summaryState: '' | 'loading' | 'pending' | 'canceling' | 'recovering' | 'ready' | 'failed';
   summaryRunning: boolean;
@@ -93,7 +105,7 @@ const scheduler: Scheduler = {
 
 class RequestError extends Error {}
 class ReplyUnconfirmed extends Error {}
-type ReplySlot = 'open' | 'command' | 'status' | 'page' | 'detail' | 'hex' | 'summary' | 'summaryPage' | 'trend' | 'curve' | 'save';
+type ReplySlot = 'open' | 'command' | 'status' | 'page' | 'detail' | 'hex' | 'summary' | 'summaryPage' | 'trend' | 'curve' | 'save' | 'avcSearch';
 function check(response: { apiVersion: number; error: { code: string } | null }): void {
   if (response.apiVersion !== 1) throw new RequestError('incompatible_api');
   if (response.error) throw new RequestError(response.error.code);
@@ -122,8 +134,12 @@ function detailResult(response: DetailResponse, request: DetailRequest): DetailR
   } else if (response.state === 'ready') {
     if (response.error || !response.detail) throw new RequestError('invalid_response');
     const mp3Selection = mp3FrameSelection(response.detail);
+    const dependency = request.mp3Dependency ? mp3Dependency(response.detail) : null;
     if ((mp3Selection && mp3Selection.selected !== (request.mp3FrameIndex ?? null)) ||
-        (request.mp3FrameIndex !== undefined && !mp3Selection)) throw new RequestError('invalid_response');
+        (request.mp3FrameIndex !== undefined && !mp3Selection && !dependency)) throw new RequestError('invalid_response');
+    if (request.mp3Dependency) {
+      if (!dependency || dependency.tagId !== request.tagId || dependency.frameIndex !== (request.mp3FrameIndex ?? 0)) throw new RequestError('invalid_response');
+    }
   } else throw new RequestError('invalid_response');
   return response;
 }
@@ -163,7 +179,7 @@ export class Controller {
   private api: API;
   private clock: Scheduler;
   private listeners = new Set<() => void>();
-  private state: ViewState = { fileName: '', session: null, operation: '', error: null, tab: 'tags', start: '0', page: null, loading: false, tagFilter: null, filteredPage: null, filterError: null, filterPrevious: null, filterHistoryLimited: false, trendPage: null, trendLoading: false, trendError: null, trendStart: '0', trendSelectedId: null, trendMetric: 'dts', trendType: 'all', trendGapThreshold: '1000', saveState: '', savePending: false, saveError: null, saveRetry: false, saveSourceName: '', saveSessionId: null, saveFileName: '', saveBytesWritten: '0', selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '', hex: null, hexSelection: null, hexState: '', hexError: null, hexRetry: '', tagJumpError: null, sourceChanged: false, summary: null, summaryState: '', summaryRunning: false, summaryCancelRequested: false, summaryProcessed: '0', summaryTotal: '0', summaryError: null, summaryRetry: '', summaryKind: 'keyframes', summaryStart: '0', summaryPage: null, summaryPageLoading: false, summaryPageError: null, summaryPrevious: null, curvePage: null, curveLoading: false, curveError: null, curveStart: '0', curveSelectedIndex: null, curveMetric: 'audio' };
+  private state: ViewState = { fileName: '', session: null, operation: '', error: null, tab: 'tags', start: '0', page: null, loading: false, tagFilter: null, filteredPage: null, filterError: null, filterPrevious: null, filterHistoryLimited: false, trendPage: null, trendLoading: false, trendError: null, trendStart: '0', trendSelectedId: null, trendMetric: 'dts', trendType: 'all', trendGapThreshold: '1000', saveState: '', savePending: false, saveError: null, saveRetry: false, saveSourceName: '', saveSessionId: null, saveFileName: '', saveBytesWritten: '0', selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '', hex: null, hexSelection: null, hexState: '', hexError: null, hexRetry: '', tagJumpError: null, sourceChanged: false, avcSearchPage: null, avcSearchState: '', avcSearchRunning: false, avcSearchCancelRequested: false, avcSearchError: null, avcSearchRetry: '', avcSearchFilter: 'mismatches', avcSearchStart: '0', avcSearchPrevious: null, summary: null, summaryState: '', summaryRunning: false, summaryCancelRequested: false, summaryProcessed: '0', summaryTotal: '0', summaryError: null, summaryRetry: '', summaryKind: 'keyframes', summaryStart: '0', summaryPage: null, summaryPageLoading: false, summaryPageError: null, summaryPrevious: null, curvePage: null, curveLoading: false, curveError: null, curveStart: '0', curveSelectedIndex: null, curveMetric: 'audio' };
   private disposed = false;
   private statusVersion = 0;
   private pageVersion = 0;
@@ -178,6 +194,13 @@ export class Controller {
   private stopTimer: (() => void) | null = null;
   private replyStops = new Map<ReplySlot, () => void>();
   private nextReadID = 0n;
+  private avcSearchRequest: AVCSearchRequest | null = null;
+  private avcSearchPhase: 'start' | 'get' | 'cancel' = 'start';
+  private avcSearchBusy = false;
+  private avcSearchPaused = false;
+  private avcSearchPolls = 0;
+  private stopAVCSearchTimer: (() => void) | null = null;
+  private avcSearchHistory: string[] = [];
   private detailRequest: DetailRequest | null = null;
   private detailPhase: 'start' | 'get' = 'start';
   private detailBusy = false;
@@ -185,6 +208,7 @@ export class Controller {
   private detailPolls = 0;
   private stopDetailTimer: (() => void) | null = null;
   private jumpTagId: string | null = null;
+  private jumpMP3Frame: number | undefined;
   private hexRequest: HexRequest | null = null;
   private hexPhase: 'start' | 'get' = 'start';
   private hexBusy = false;
@@ -227,6 +251,7 @@ export class Controller {
     if (session.closed && session.terminal) {
       this.clearTrend();
       this.clearFilter();
+      this.clearAVCSearch();
       this.clearSummary();
       this.clearDetail();
       this.pageVersion++;
@@ -235,11 +260,12 @@ export class Controller {
       this.jumpTagId = null;
       this.update({ session: null, fileName: '', operation: '', page: null, loading: false, start: '0', sourceChanged: false, error: null });
     } else {
-      if (session.closed) { this.clearTrend(); this.clearFilter(); this.clearSummary(); this.clearDetail(); }
+      if (session.closed) { this.clearTrend(); this.clearFilter(); this.clearAVCSearch(); this.clearSummary(); this.clearDetail(); }
       this.update({ session, operation: session.closed ? 'closing' : '' });
       this.ensureDetail();
       this.ensureHex();
       this.ensureSummary();
+      this.ensureAVCSearch();
       this.ensureTrend();
     }
   }
@@ -301,6 +327,7 @@ export class Controller {
       this.update({ trendMetric: 'dts', trendType: 'all', trendGapThreshold: '1000' });
       this.clearTrend();
       this.clearFilter();
+      this.clearAVCSearch();
       this.clearSummary();
       this.clearDetail();
       this.nextReadID = 0n;
@@ -397,6 +424,7 @@ export class Controller {
     if (operation === 'closing') {
       this.clearTrend();
       this.clearFilter();
+      this.clearAVCSearch();
       this.clearSummary();
       this.clearDetail();
       this.pageVersion++;
@@ -466,7 +494,7 @@ export class Controller {
     } finally { this.polling = false; this.schedule(); }
   }
   select(tab: Tab, start = '0'): void {
-    if (this.state.summaryRunning) return;
+    if (this.state.summaryRunning || this.state.avcSearchRunning) return;
     try { unsigned(start); } catch { this.update({ error: 'invalid_argument' }); return; }
     this.clearFilter();
     this.pageVersion++;
@@ -480,7 +508,7 @@ export class Controller {
     this.update({ tagFilter: null, filteredPage: null, filterPrevious: null, filterHistoryLimited: false, filterError: null });
   }
   applyTagFilter(filter: TagFilter): void {
-    if (this.disposed || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     try { validateTagFilter(filter); } catch { this.update({ filterError: 'invalid_filter' }); return; }
     this.filterHistory = [];
     this.pageVersion++; this.jumpTagId = null;
@@ -490,12 +518,12 @@ export class Controller {
     this.ensurePage();
   }
   resetTagFilter(): void {
-    if (this.disposed || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     this.select('tags');
   }
   pageFilteredTags(direction: 'first' | 'previous' | 'next'): void {
     const page = this.state.filteredPage;
-    if (this.disposed || !page || !this.state.tagFilter || this.state.loading || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || !page || !this.state.tagFilter || this.state.loading || (this.state.summaryRunning || this.state.avcSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     let start: string;
     let limited = this.state.filterHistoryLimited;
     if (direction === 'first') { start = '0'; this.filterHistory = []; limited = false; }
@@ -589,12 +617,12 @@ export class Controller {
     }
   }
   selectTrendTag(id: string): void {
-    if (this.disposed || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed || !this.state.trendPage?.points.some(point => point.tagId === id)) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed || !this.state.trendPage?.points.some(point => point.tagId === id)) return;
     this.update({ trendSelectedId: id });
     this.jumpTag(id);
   }
   showTrendHex(id: string, target: 'tag' | 'payload'): void {
-    if (this.disposed || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     const point = this.state.trendPage?.points.find(item => item.tagId === id);
     if (!point || (target !== 'tag' && target !== 'payload')) return;
     if (this.state.selectedTag?.id !== id) this.clearDetail();
@@ -604,7 +632,7 @@ export class Controller {
       label: target === 'tag' ? `Tag ${id} 范围` : `Tag ${id} payload（实际 ${point.availableDataSize} / 声明 ${point.dataSize} byte）` });
   }
   private ensurePage(): void {
-    if (this.disposed || this.paging || this.refreshStatus || this.pollFailed || !this.ready() || this.state.page || this.state.filteredPage || this.state.summaryRunning) return;
+    if (this.disposed || this.paging || this.refreshStatus || this.pollFailed || !this.ready() || this.state.page || this.state.filteredPage || this.state.summaryRunning || this.state.avcSearchRunning) return;
     void this.loadPage();
   }
   private async loadPage(): Promise<void> {
@@ -634,8 +662,8 @@ export class Controller {
       if (!this.disposed && version === this.pageVersion && this.state.session?.sessionId === session.sessionId && this.ready()) {
         this.update({ page: result });
         if (this.jumpTagId && result.tab === 'tags') {
-          const id = this.jumpTagId; this.jumpTagId = null;
-          this.selectTag(id);
+          const id = this.jumpTagId, frame = this.jumpMP3Frame; this.jumpTagId = null; this.jumpMP3Frame = undefined;
+          this.selectTag(id, frame);
         }
       }
     } catch (error) {
@@ -657,15 +685,15 @@ export class Controller {
     this.schedule();
     this.ensurePage();
   }
-  selectTag(tagId: string): void {
-    if (this.disposed || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+  selectTag(tagId: string, mp3FrameIndex?: number): void {
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     const tags = this.state.filteredPage?.tags ?? (this.state.page?.tab === 'tags' ? this.state.page.data.tags : []);
     const tag = tags.find(item => item.id === tagId);
     if (!tag || this.state.selectedTag?.id === tagId) return;
     if (this.nextReadID === 18446744073709551615n) { this.update({ detailError: 'id_exhausted' }); return; }
     this.clearHex();
     this.stopDetailTimer?.(); this.stopDetailTimer = null;
-    this.detailRequest = { sessionId: this.state.session!.sessionId, requestId: (++this.nextReadID).toString(), tagId };
+    this.detailRequest = { sessionId: this.state.session!.sessionId, requestId: (++this.nextReadID).toString(), tagId, ...(mp3FrameIndex === undefined ? {} : { mp3FrameIndex }) };
     this.detailPhase = 'start'; this.detailPaused = false; this.detailPolls = 0;
     this.update({ selectedTag: tag, detail: null, detailState: 'loading', detailError: null, detailRetry: '' });
     // Keep one IPC wait. If an older reply is in flight, coalesce selections
@@ -681,7 +709,7 @@ export class Controller {
     this.update({ selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '' });
   }
   private ensureDetail(): void {
-    if (this.disposed || this.state.summaryRunning || this.detailBusy || this.detailPaused || this.stopDetailTimer || !this.detailRequest || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || this.detailBusy || this.detailPaused || this.stopDetailTimer || !this.detailRequest || !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (this.detailPhase === 'start') void this.loadDetail();
     else this.stopDetailTimer = this.clock.after(() => { this.stopDetailTimer = null; void this.loadDetail(); }, POLL_MS);
   }
@@ -730,7 +758,7 @@ export class Controller {
   }
   selectMP3Frame(index: number | null): void {
     const frames = mp3FrameSelection(this.state.detail);
-    if (this.disposed || this.state.summaryRunning || this.detailBusy || !this.detailPaused || !this.detailRequest ||
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || this.detailBusy || !this.detailPaused || !this.detailRequest ||
         this.state.detailState !== 'ready' || !frames || frames.selected === index ||
         !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (index !== null && (!Number.isInteger(index) || !frames.selectable.includes(index))) return;
@@ -742,9 +770,30 @@ export class Controller {
     this.update({ detailState: 'loading', detailError: null, detailRetry: '' });
     this.ensureDetail();
   }
+  inspectMP3Dependency(): void {
+    const frames = mp3FrameSelection(this.state.detail);
+    if (this.disposed || this.state.summaryRunning || this.state.avcSearchRunning || this.detailBusy || !this.detailPaused ||
+        !this.detailRequest || this.state.detailState !== 'ready' || !frames || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    const index = frames.selected ?? 0;
+    if (!frames.selectable.includes(index)) return;
+    if (this.nextReadID === 18446744073709551615n) { this.update({ detailError: 'id_exhausted' }); return; }
+    this.clearHex();
+    this.detailRequest = { ...this.detailRequest, requestId: (++this.nextReadID).toString(), mp3FrameIndex: index, mp3Dependency: true };
+    this.detailPhase = 'start'; this.detailPaused = false; this.detailPolls = 0;
+    this.update({ detailState: 'loading', detailError: null, detailRetry: '' });
+    this.ensureDetail();
+  }
+  locateMP3Source(source: MP3DependencySource, destination: 'tag' | 'hex'): void {
+    const result = mp3Dependency(this.state.detail);
+    if (this.state.detailState !== 'ready' || !result?.sources.some(item => item.tagId === source.tagId && item.frameIndex === source.frameIndex &&
+        item.current === source.current && item.span.byteOffset === source.span.byteOffset && item.span.bitLength === source.span.bitLength) ||
+        this.state.summaryRunning || this.state.avcSearchRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (destination === 'tag') this.jumpTag(source.tagId, source.frameIndex);
+    else this.showHex({ offset: source.span.byteOffset, bitOffset: 0, bitLength: source.span.bitLength, label: `MP3 来源 Tag ${source.tagId} 帧 ${source.frameIndex}` });
+  }
   continueAVCContext(): void {
     const progress = avcReplayProgress(this.state.detail);
-    if (this.disposed || this.state.summaryRunning || this.detailBusy || !this.detailPaused || !this.detailRequest ||
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || this.detailBusy || !this.detailPaused || !this.detailRequest ||
         this.state.detailState !== 'ready' || !progress?.canContinue || progress.target !== this.detailRequest.tagId ||
         !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (this.nextReadID === 18446744073709551615n) { this.update({ detailError: 'id_exhausted' }); return; }
@@ -755,7 +804,7 @@ export class Controller {
     this.ensureDetail();
   }
   retryDetail(): void {
-    if (this.disposed || this.state.summaryRunning || this.detailBusy || !this.detailPaused || !this.detailRequest || !this.state.detailRetry || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || this.detailBusy || !this.detailPaused || !this.detailRequest || !this.state.detailRetry || !this.ready() || this.refreshStatus || this.pollFailed) return;
     // Unconfirmed work keeps its identity. An explicitly failed read is cached
     // by the host, so only a deliberate new read advances the request number.
     if (this.state.detailRetry === 'reload') {
@@ -767,18 +816,20 @@ export class Controller {
     this.update({ detailState: 'loading', detailError: null, detailRetry: '' });
     this.ensureDetail();
   }
-  jumpTag(text: string): void {
-    if (this.disposed || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+  jumpTag(text: string, mp3FrameIndex?: number): void {
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     try {
       const id = unsigned(text), total = unsigned(this.state.session!.progress!.tagCount);
       if (id >= total) throw new Error('Out of range.');
+      if (mp3FrameIndex !== undefined && (!Number.isInteger(mp3FrameIndex) || mp3FrameIndex < 0 || mp3FrameIndex >= 64)) throw new Error('Invalid frame.');
       this.select('tags', (id / BigInt(PAGE_SIZE) * BigInt(PAGE_SIZE)).toString());
       this.jumpTagId = id.toString();
+      this.jumpMP3Frame = mp3FrameIndex;
       this.update({ tagJumpError: null });
     } catch { this.update({ tagJumpError: 'tag_not_found' }); }
   }
   showHex(selection: HexSelection): void {
-    if (this.disposed || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     try {
       validateSelection(selection);
       if (unsigned(selection.offset) > unsigned(this.state.session!.progress!.sourceSize)) throw new Error('Out of range.');
@@ -803,7 +854,7 @@ export class Controller {
     if (this.state.detailState !== 'ready') this.update({ detailState: 'failed', detailError: 'detail_superseded', detailRetry: 'reload' });
   }
   private requestHex(offset: string, selection: HexSelection | null): void {
-    if (this.disposed || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (this.nextReadID === 18446744073709551615n) { this.update({ hexError: 'id_exhausted' }); return; }
     // A direct byte selection supersedes a Tag jump whose index page is still
     // arriving. Keep that page usable, but do not open its obsolete detail and
@@ -825,6 +876,7 @@ export class Controller {
   private invalidateSource(): void {
     this.clearTrend();
     this.clearFilter();
+    this.clearAVCSearch();
     this.clearSummary();
     this.clearDetail();
     this.pageVersion++; this.jumpTagId = null;
@@ -832,7 +884,7 @@ export class Controller {
     this.update({ sourceChanged: true, error: 'source_changed', page: null, loading: false });
   }
   private ensureHex(): void {
-    if (this.disposed || this.state.summaryRunning || this.hexBusy || this.hexPaused || this.stopHexTimer || !this.hexRequest || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || this.hexBusy || this.hexPaused || this.stopHexTimer || !this.hexRequest || !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (this.hexPhase === 'start') void this.loadHex();
     else this.stopHexTimer = this.clock.after(() => { this.stopHexTimer = null; void this.loadHex(); }, POLL_MS);
   }
@@ -874,7 +926,7 @@ export class Controller {
     } finally { this.hexBusy = false; this.ensureHex(); }
   }
   retryHex(): void {
-    if (this.disposed || this.state.summaryRunning || this.hexBusy || !this.hexPaused || !this.hexRequest || !this.state.hexRetry || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || this.hexBusy || !this.hexPaused || !this.hexRequest || !this.state.hexRetry || !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (this.state.hexRetry === 'reload') {
       if (this.nextReadID === 18446744073709551615n) { this.update({ hexError: 'id_exhausted' }); return; }
       this.hexRequest = { ...this.hexRequest, requestId: (++this.nextReadID).toString() };
@@ -883,8 +935,118 @@ export class Controller {
     this.update({ hexState: 'loading', hexError: null, hexRetry: '' });
     this.ensureHex();
   }
+  startAVCSearch(filter: AVCSearchFilter = this.state.avcSearchFilter): void {
+    if (this.disposed || this.state.summaryRunning || this.state.avcSearchRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    try { avcSearchFilter(filter); } catch { return; }
+    this.avcSearchHistory = [];
+    this.requestAVCSearch('0', filter);
+  }
+  pageAVCSearch(direction: 'previous' | 'next'): void {
+    const page = this.state.avcSearchPage;
+    if (!page || this.state.avcSearchRunning || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    let start: string;
+    if (direction === 'previous') {
+      const previous = this.avcSearchHistory.pop(); if (previous === undefined) return; start = previous;
+    } else {
+      if (page.exhausted) return;
+      this.avcSearchHistory.push(page.start);
+      if (this.avcSearchHistory.length > 64) this.avcSearchHistory.shift();
+      start = page.next;
+    }
+    this.requestAVCSearch(start, page.filter);
+  }
+  private requestAVCSearch(start: string, filter: AVCSearchFilter): void {
+    if (this.nextReadID === 18446744073709551615n) { this.update({ avcSearchError: 'id_exhausted' }); return; }
+    this.clearDetail();
+    this.pageVersion++; this.jumpTagId = null;
+    this.replyStops.get('page')?.();
+    this.avcSearchRequest = { sessionId: this.state.session!.sessionId, requestId: (++this.nextReadID).toString(), start, filter };
+    this.avcSearchPhase = 'start'; this.avcSearchPaused = false; this.avcSearchPolls = 0;
+    this.update({ avcSearchPage: null, avcSearchState: 'loading', avcSearchRunning: true, avcSearchCancelRequested: false,
+      avcSearchError: null, avcSearchRetry: '', avcSearchStart: start, avcSearchFilter: filter, avcSearchPrevious: this.avcSearchHistory.at(-1) ?? null, loading: false });
+    this.ensureAVCSearch();
+  }
+  cancelAVCSearch(): void {
+    if (this.disposed || !this.avcSearchRequest || !this.state.avcSearchRunning || this.state.avcSearchCancelRequested || !this.ready()) return;
+    this.avcSearchRequest = { ...this.avcSearchRequest };
+    this.stopAVCSearchTimer?.(); this.stopAVCSearchTimer = null;
+    this.replyStops.get('avcSearch')?.();
+    this.avcSearchPhase = 'cancel'; this.avcSearchPaused = false; this.avcSearchPolls = 0;
+    this.update({ avcSearchState: 'canceling', avcSearchCancelRequested: true, avcSearchError: null, avcSearchRetry: '' });
+    this.ensureAVCSearch();
+  }
+  retryAVCSearch(): void {
+    if (this.disposed || this.avcSearchBusy || !this.avcSearchPaused || !this.avcSearchRequest || !this.state.avcSearchRetry || !this.ready() || this.state.summaryRunning || this.refreshStatus || this.pollFailed) return;
+    if (this.state.avcSearchRetry === 'reload') { this.requestAVCSearch(this.avcSearchRequest.start, this.avcSearchRequest.filter); return; }
+    this.avcSearchRequest = { ...this.avcSearchRequest };
+    this.avcSearchPhase = this.state.avcSearchCancelRequested ? 'cancel' : this.state.avcSearchError === 'avc_search_not_found' ? 'start' : 'get';
+    this.avcSearchPaused = false; this.avcSearchPolls = 0;
+    this.update({ avcSearchState: this.state.avcSearchCancelRequested ? 'canceling' : 'recovering', avcSearchError: null, avcSearchRetry: '' });
+    this.ensureAVCSearch();
+  }
+  private clearAVCSearch(): void {
+    this.avcSearchRequest = null; this.avcSearchPaused = false; this.avcSearchPolls = 0; this.avcSearchHistory = [];
+    this.stopAVCSearchTimer?.(); this.stopAVCSearchTimer = null;
+    this.replyStops.get('avcSearch')?.();
+    this.update({ avcSearchPage: null, avcSearchState: '', avcSearchRunning: false, avcSearchCancelRequested: false,
+      avcSearchError: null, avcSearchRetry: '', avcSearchStart: '0', avcSearchFilter: 'mismatches', avcSearchPrevious: null });
+  }
+  private ensureAVCSearch(): void {
+    if (this.disposed || this.avcSearchBusy || this.avcSearchPaused || this.stopAVCSearchTimer || !this.avcSearchRequest || !this.state.avcSearchRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.avcSearchPhase !== 'get') void this.loadAVCSearch();
+    else this.stopAVCSearchTimer = this.clock.after(() => { this.stopAVCSearchTimer = null; void this.loadAVCSearch(); }, POLL_MS);
+  }
+  private async loadAVCSearch(): Promise<void> {
+    const request = this.avcSearchRequest;
+    if (!request || this.avcSearchBusy || !this.ready() || this.disposed) return;
+    const current = () => !this.disposed && this.avcSearchRequest === request && this.state.session?.sessionId === request.sessionId && this.ready();
+    const phase = this.avcSearchPhase;
+    this.avcSearchBusy = true;
+    try {
+      const response = await this.awaitReply('avcSearch', () => phase === 'start' ? this.api.startAVCSearch(request) : phase === 'cancel' ? this.api.cancelAVCSearch(request) : this.api.avcSearchResult(request));
+      if (!current()) return;
+      try { validateAVCSearch(response, request, this.state.session!.progress!.tagCount, this.state.session!.progress!.sourceSize); } catch { throw new RequestError('invalid_response'); }
+      if (response.page && response.page.scanComplete !== this.state.session!.scan!.complete) throw new RequestError('invalid_response');
+      if (response.state === 'ready') {
+        this.avcSearchPaused = true;
+        this.update({ avcSearchPage: response.page, avcSearchState: 'ready', avcSearchRunning: false, avcSearchCancelRequested: false, avcSearchError: null, avcSearchRetry: '' });
+        this.ensurePage();
+      } else if (response.state === 'failed') {
+        const code = response.error!.code;
+        if (code === 'source_changed') { this.invalidateSource(); return; }
+        this.avcSearchPaused = true;
+        const uncertain = code === 'avc_search_not_found';
+        this.update({ avcSearchState: 'failed', avcSearchRunning: uncertain, avcSearchCancelRequested: uncertain && this.state.avcSearchCancelRequested,
+          avcSearchError: code, avcSearchRetry: uncertain ? 'confirm' : ['avc_search_failed', 'deadline_exceeded', 'canceled'].includes(code) ? 'reload' : '' });
+        if (!uncertain) this.ensurePage();
+      } else {
+        this.avcSearchPhase = 'get';
+        if (this.state.avcSearchCancelRequested && response.state === 'pending') {
+          this.avcSearchPaused = true;
+          this.update({ avcSearchState: 'canceling', avcSearchError: 'avc_search_cancel_unconfirmed', avcSearchRetry: 'confirm' });
+        } else if (phase === 'get' && ++this.avcSearchPolls >= DETAIL_POLL_LIMIT) {
+          this.avcSearchPaused = true;
+          this.update({ avcSearchState: response.state, avcSearchError: 'avc_search_wait_paused', avcSearchRetry: 'confirm' });
+        } else this.update({ avcSearchState: response.state, avcSearchCancelRequested: response.state === 'canceling' || this.state.avcSearchCancelRequested, avcSearchError: null, avcSearchRetry: '' });
+      }
+    } catch (error) {
+      if (!current()) return;
+      if ((phase === 'start' || phase === 'cancel') && !(error instanceof RequestError)) {
+        this.avcSearchPhase = 'get';
+        this.update({ avcSearchState: this.state.avcSearchCancelRequested ? 'canceling' : 'recovering', avcSearchError: null });
+      } else {
+        this.avcSearchPaused = true;
+        this.update({ avcSearchState: this.state.avcSearchCancelRequested ? 'canceling' : 'failed', avcSearchError: errorCode(error), avcSearchRetry: 'confirm' });
+      }
+    } finally { this.avcSearchBusy = false; this.ensureAVCSearch(); }
+  }
+  locateAVCSearchRow(row: AVCSearchRow, destination: 'tag' | 'hex'): void {
+    if (this.state.avcSearchState !== 'ready' || !this.state.avcSearchPage?.rows.includes(row) || !this.ready()) return;
+    if (destination === 'tag') this.jumpTag(row.tagId);
+    else if (row.span) this.showHex({ offset: row.span.byteOffset, bitOffset: row.span.bitOffset, bitLength: row.span.bitLength, label: `H.264 Tag ${row.tagId} 证据` });
+  }
   startSummary(): void {
-    if (this.disposed || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (this.nextReadID === 18446744073709551615n) { this.update({ summaryError: 'id_exhausted' }); return; }
     this.clearSummary();
     this.clearDetail();
@@ -1124,6 +1286,8 @@ export class Controller {
     this.stopDetailTimer?.(); this.stopDetailTimer = null;
     this.hexRequest = null;
     this.stopHexTimer?.(); this.stopHexTimer = null;
+    this.avcSearchRequest = null;
+    this.stopAVCSearchTimer?.(); this.stopAVCSearchTimer = null;
     this.summaryRequest = null;
     this.summaryPageVersion++; this.curveVersion++;
     this.stopSummaryTimer?.(); this.stopSummaryTimer = null;

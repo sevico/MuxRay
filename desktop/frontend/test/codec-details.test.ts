@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { keyframeEvidence, mp3FrameSelection } from '../src/codec-details.ts';
+import { keyframeEvidence, mp3FrameSelection, mp3Dependency } from '../src/codec-details.ts';
+import { dependencyDetail } from './mp3-dependency-fixture.ts';
 import type { Detail } from '../src/protocol.ts';
 
 function fixture(kind: Detail['kind'], name: string, type: string, values: Record<string, string>): Detail {
@@ -50,4 +51,21 @@ test('H264 rejects duplicate/invalid type sets and unsupported relation values',
   }
   const detail = avc(); detail.fields.find(field => field.name === 'declarationRelation')!.value = 'decodable';
   assert.equal(keyframeEvidence(detail), null);
+});
+
+test('MP3 sources preserve physical ordering, precise spans and target identity', () => {
+  const result = mp3Dependency(dependencyDetail())!;
+  assert.equal(result.tagId, '1'); assert.equal(result.frameIndex, 0); assert.equal(result.requested, '20');
+  assert.deepEqual(result.sources.map(source => [source.tagId, source.current, source.span.byteOffset, source.span.bitLength]), [['0', false, '25', 160], ['1', true, '60', 80]]);
+});
+test('MP3 source projection rejects inconsistent byte counts, targets, overlapping spans and duplicated metadata', () => {
+  const changes: ((d: Detail) => void)[] = [
+    d => d.fields.find(f => f.name === 'resolvedPreviousBytes')!.value = '19',
+    d => d.fields.find(f => f.id === 'span-1')!.span!.byteOffset = '30',
+    d => d.fields.find(f => f.id === 's-1-0')!.value = '2',
+    d => d.fields.find(f => f.id === 's-0-2')!.value = 'true',
+    d => d.fields.push({ ...d.fields.find(f => f.name === 'sourceCount')!, id: 'duplicate' }),
+    d => d.fields.find(f => f.name === 'bytesRead')!.value = '1048577',
+  ];
+  for (const change of changes) { const d = dependencyDetail(); change(d); assert.equal(mp3Dependency(d), null); }
 });

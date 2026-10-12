@@ -1,7 +1,17 @@
 import type { Detail } from './protocol';
 import type { HexSelection } from './hex';
 import { selectionFromSpan } from './hex';
-import { keyframeEvidence, keyframeRelations, mp3FrameSelection } from './codec-details';
+import { keyframeEvidence, keyframeRelations, mp3FrameSelection, mp3Dependency } from './codec-details';
+import type { MP3DependencySource } from './codec-details';
+
+const dependencyReasons: Record<string, string> = {
+  no_backward_reference: '不依赖前序槽位', within_tag: '来源均在当前 Tag 内', across_tags: '已定位跨 Tag 来源', start_of_file: '已到文件起点，历史不足',
+  parameters_changed: 'MPEG 版本、采样率或声道配置改变', stream_changed: 'FLV 音频流标识改变', audio_codec_changed: '音频编码改变',
+  invalid_frame: '帧头或边界不可确认', crc_invalid: 'CRC 未通过', invalid_side_info: 'side-info 无效或不完整', invalid_main_data_length: '主数据声明位数超出窗口',
+  unparsed_audio_suffix: '前序音频 Tag 尾部未解析', unsupported_tag: '遇到无法分类的 Tag', filtered_audio: '音频载荷经过过滤', truncated_audio: '音频载荷截断',
+  audio_header_missing: '缺少音频头', target_unavailable: '目标帧不可用', tag_budget: '前序 Tag 数达到上限', audio_tag_budget: '前序音频 Tag 数达到上限',
+  frame_budget: '帧检查数量达到上限', coverage_budget: '源范围检查预算耗尽', read_budget: '读取字节预算耗尽', source_limit: '来源条目数达到上限',
+};
 
 export function MP3FramePanel({ detail, disabled, onSelect }: { detail: Detail; disabled: boolean; onSelect: (index: number | null) => void }) {
   const frames = mp3FrameSelection(detail);
@@ -20,6 +30,23 @@ export function MP3FramePanel({ detail, disabled, onSelect }: { detail: Detail; 
     </div>
     <p className="detail-note" role="status">{frames.selected === null ? '当前显示前两帧预览' : `当前展开 MP3 帧 ${frames.selected}`} · 已检查 {frames.checked} 个帧头，{frames.selectable.length} 帧可选（索引从 0 开始）。</p>
     <p className="detail-note">仅选择当前预算内已确认边界的帧；依赖分析保留本 Tag 的前序历史。截断、未知帧长和预算外范围仍保留在详情中。</p>
+  </section>;
+}
+
+export function MP3DependencyPanel({ detail, disabled, onInspect, onLocate }: { detail: Detail; disabled: boolean; onInspect: () => void; onLocate: (source: MP3DependencySource, destination: 'tag' | 'hex') => void }) {
+  const frames = mp3FrameSelection(detail), dependency = mp3Dependency(detail);
+  if (!frames && !dependency) return null;
+  return <section className="codec-evidence" aria-label="MP3 跨 Tag 依赖来源">
+    <div className="detail-heading"><h3>MP3 跨 Tag 依赖来源</h3><button disabled={disabled || !frames?.selectable.includes(frames.selected ?? 0)} onClick={onInspect}>定位 MP3 依赖来源</button></div>
+    <p className="detail-note">按当前帧的 main_data_begin 查找前序 MP3 主数据槽；预览状态使用帧 0。只说明物理范围覆盖，不判断剩余 reservoir 容量或音频能否解码。</p>
+    {dependency && <>
+      <p role="status">MP3 依赖定位完成：{dependency.state} · Tag {dependency.tagId} 帧 {dependency.frameIndex} · 回指 {dependency.requested} byte，已定位 {dependency.resolved} byte，未知 {dependency.missing} byte。</p>
+      <p className="detail-note">{dependencyReasons[dependency.reason] ?? dependency.reason} · 检查前序 Tag {dependency.scannedTags} 条，读取 {dependency.bytesRead} byte。视频交错不视为音频中断；损坏、配置切换和预算限制保留未知。</p>
+      <div className="detail-table-area"><table><thead><tr><th>来源 Tag / 帧</th><th>范围类型</th><th>起点 byte</th><th>字节数</th></tr></thead><tbody>{dependency.sources.map(source => <tr key={`${source.tagId}-${source.frameIndex}`}>
+        <td><button className="source-link" disabled={disabled} aria-label={`跳转 MP3 来源 Tag ${source.tagId} 帧 ${source.frameIndex}`} onClick={() => onLocate(source, 'tag')}>Tag {source.tagId} / 帧 {source.frameIndex}</button></td>
+        <td>{source.current ? '当前帧主数据槽' : '声明回溯窗口'}</td><td><button className="source-link" disabled={disabled} aria-label={`定位 MP3 来源 Tag ${source.tagId} 帧 ${source.frameIndex}`} onClick={() => onLocate(source, 'hex')}>{source.span.byteOffset}</button></td><td>{source.span.bitLength / 8}</td>
+      </tr>)}</tbody></table>{!dependency.sources.length && <p className="detail-note">没有可确认的来源范围。</p>}</div>
+    </>}
   </section>;
 }
 

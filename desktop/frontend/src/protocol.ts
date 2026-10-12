@@ -50,8 +50,21 @@ export interface TagTrendPage {
 }
 export interface DiagnosticPage { sessionId: string; bounds: Bounds; diagnostics: Diagnostic[] }
 export interface PageResponse<P> { apiVersion: number; page: P | null; error: Fault | null }
-export interface DetailRequest { sessionId: string; requestId: string; tagId: string; mp3FrameIndex?: number }
+export interface DetailRequest { sessionId: string; requestId: string; tagId: string; mp3FrameIndex?: number; mp3Dependency?: boolean }
 export interface DetailQuery { sessionId: string; requestId: string }
+export type AVCSearchFilter = 'mismatches' | 'unknown' | 'all';
+export interface AVCSearchRequest extends DetailQuery { start: string; filter: AVCSearchFilter }
+export interface AVCSearchRow {
+  tagId: string; dts: string; offset: string; declaredFrameType: number | null;
+  observedIDR: 'yes' | 'no' | 'unknown'; declarationRelation: string; reason: string; span: Span | null;
+}
+export interface AVCSearchPage {
+  start: string; next: string; total: string; scanned: number; bytesRead: string;
+  exhausted: boolean; scanComplete: boolean; filter: AVCSearchFilter; rows: AVCSearchRow[];
+}
+export interface AVCSearchResponse extends DetailQuery {
+  apiVersion: number; state: 'pending' | 'canceling' | 'ready' | 'failed'; page: AVCSearchPage | null; error: Fault | null;
+}
 export interface DetailField { id: string; parentId: string; name: string; type: string; value: string; span: Span | null }
 export type DetailKind = 'amf0ScriptData' | 'aacAudio' | 'avcVideo' | 'mp3Audio';
 export interface Detail { kind: DetailKind; complete: boolean; truncated: boolean; fields: DetailField[]; diagnostics: Diagnostic[] }
@@ -138,6 +151,9 @@ export interface API {
   cancelSummary(request: DetailQuery): Promise<SummaryResponse>;
   summaryEvents(request: SummaryPageRequest): Promise<SummaryPageResponse>;
   mediaCurves(request: MediaCurveRequest): Promise<MediaCurveResponse>;
+  startAVCSearch(request: AVCSearchRequest): Promise<AVCSearchResponse>;
+  avcSearchResult(request: DetailQuery): Promise<AVCSearchResponse>;
+  cancelAVCSearch(request: DetailQuery): Promise<AVCSearchResponse>;
   saveSnapshot(request: SaveRequest): Promise<SaveResponse>;
   saveResult(requestId: string): Promise<SaveResponse>;
 }

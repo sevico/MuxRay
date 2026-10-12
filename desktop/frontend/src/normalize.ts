@@ -5,6 +5,8 @@ import type { DetailKind, DetailResponse, DiagnosticPage, HexResponse, PageRespo
 import { validateTagFilter } from './tag-filter.ts';
 import { validateHexWindow } from './hex.ts';
 import { summaryKind, validateSummaryResponse, validateSummaryPage } from './summary.ts';
+import type { AVCSearchResponse, AVCSearchRow } from './protocol';
+import { avcSearchFilter } from './avc-search.ts';
 
 // Wails v2.14 emits optional TS properties for Go pointers. Normalize both
 // undefined (generated declarations) and null (actual JSON) without unsafe
@@ -113,4 +115,16 @@ export function mediaCurveResponse(value: Awaited<ReturnType<typeof GetMediaCurv
         averageDurationMs: point.gop.averageDurationMs ?? null, tagId: point.gop.tagId ?? null },
     })),
   } : null };
+}
+
+export function avcSearchResponse(value: desktop.AVCSearchResponse): AVCSearchResponse {
+  const state = value.state;
+  if (state !== 'pending' && state !== 'canceling' && state !== 'ready' && state !== 'failed') throw Error('Invalid AVC search state.');
+  return { ...value, state, error: value.error ?? null, page: value.page ? { ...value.page, filter: avcSearchFilter(value.page.filter),
+    rows: value.page.rows.map(row => ({ ...row, declaredFrameType: row.declaredFrameType ?? null, observedIDR: observedIDR(row.observedIDR), span: row.span ?? null })),
+  } : null };
+}
+function observedIDR(value: string): AVCSearchRow['observedIDR'] {
+  if (value === 'yes' || value === 'no' || value === 'unknown') return value;
+  throw Error('Invalid IDR observation.');
 }

@@ -44,6 +44,9 @@ class LinuxSmokeTest(unittest.TestCase):
             ['--binary', str(self.root / 'missing')], ['--source', str(self.root)],
             ['--continue-context', '-1'], ['--continue-context', '5'], ['--revisit-tag', '0'],
             ['--continue-context', '2', '--revisit-tag', '4'],
+            ['--avc-search-pages', '0'], ['--avc-search-pages', '17'], ['--avc-search-pages', '2'],
+            ['--mp3-frame', '0'], ['--mp3-history', '--mp3-frame', '64'],
+            ['--mp3-history', '--mp3-frame', '-1'], ['--avc-search', 'all', '--mp3-history'],
         ]
         for extra in invalid:
             with self.subTest(extra=extra), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as caught:
@@ -54,6 +57,13 @@ class LinuxSmokeTest(unittest.TestCase):
     def test_replay_parameters_are_bounded_and_explicit(self):
         args = smoke.arguments(self.argv + ['--tag', '20002', '--continue-context', '2', '--revisit-tag', '8193'])
         self.assertEqual((args.tag, args.continue_context, args.revisit_tag), (20002, 2, 8193))
+
+    def test_search_and_history_require_explicit_bounded_options(self):
+        args = smoke.arguments(self.argv + ['--avc-search', 'unknown', '--avc-search-pages', '4'])
+        self.assertEqual((args.avc_search, args.avc_search_pages), ('unknown', 4))
+        args = smoke.arguments(self.argv + ['--mp3-history', '--mp3-frame', '26'])
+        self.assertTrue(args.mp3_history)
+        self.assertEqual(args.mp3_frame, 26)
 
     def test_codec_browsing_and_curve_metric_are_explicit(self):
         defaults = smoke.arguments(self.argv)
