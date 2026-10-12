@@ -260,6 +260,8 @@ side-info 进一步展开 MPEG-1/2/2.5 的 SCFSI、granule/channel、长短块�
 九轮已接入独立的 Linux CI job。长文件的 64 批历史边界和受控阻塞读取取消/关闭
 另有独立入口，复现命令与测试构建边界见
 [回归工具说明](../tools/codec-regression/README.md#long-search-and-controlled-native-cancellation)。
+当前固定生产构建、v3 导出、长文件及受控生命周期的实测结果见
+[快照 v3 与生命周期验收](../docs/desktop-snapshot-v3-regression-20261012.md)。
 
 生成编码样本、CRC 结构样本及六轮 Linux 原生结果见
 [深层详情验收](../docs/desktop-codec-details-20261007.md)。
