@@ -12,6 +12,7 @@ The public Draft 2020-12 contracts are:
 - [`flv-media-summary-v2.schema.json`](./flv-media-summary-v2.schema.json) for opt-in AAC/AVC/MP3 `muxray summary --schema-version 2` analysis.
 - [`desktop-diagnostic-snapshot-v1.schema.json`](./desktop-diagnostic-snapshot-v1.schema.json) for bounded desktop diagnostic snapshots saved through the native file dialog.
 - [`desktop-diagnostic-snapshot-v2.schema.json`](./desktop-diagnostic-snapshot-v2.schema.json) adds the currently retained media curve page to an explicitly requested desktop snapshot v2.
+- [`desktop-diagnostic-snapshot-v3.schema.json`](./desktop-diagnostic-snapshot-v3.schema.json) retains v2 sections and adds only the selected current H.264 search page.
 
 Scan and default detail use `schemaVersion: 1`; AVC/MP3 detail may select 2 or 3; media summary explicitly selects 1 or 2
 and defaults to 1. These are independent contracts. The scan report
@@ -32,7 +33,7 @@ document now exists. V2 adds MP3 classification, header observations, and audio
 codec counts under its own closed Schema. See [v2 semantics](../media-summary-v2.md).
 
 Desktop snapshots use `documentType: "desktopDiagnosticSnapshot"` and
-`schemaVersion: 1` or `2`. They preserve the selected, already completed bounded desktop
+`schemaVersion: 1`, `2` or `3`. They preserve the selected, already completed bounded desktop
 results, including explicit coverage and omissions, rather than extending a CLI
 report. They include a source basename, creation timestamp and opaque session/
 request identities, so repeated saves are not byte-identical. Source absolute
@@ -41,7 +42,7 @@ encoded snapshot is at most 2 MiB, with at most 4096 actual Hex bytes, 512 trend
 points and one requested Summary event page of at most 100 entries. Details and
 source-validation limits are defined in [ADR-019](../decisions/019-desktop-diagnostic-snapshot.md).
 
-The desktop UI explicitly selects v2. Its `mediaCurvePage` is a retained
+Snapshot v2 introduces `mediaCurvePage`, a retained
 `MediaCurveResponse` or explicit null with an omission reason. The page is copied
 from the completed Summary identified by `selection.summaryRequestId`, with at
 most 64 points. `selection.mediaCurve` records a canonical decimal `start`,
@@ -52,6 +53,25 @@ stay in the existing bounded detail field tree. Capture performs no source
 reread or reanalysis and retains the whole-report 2 MiB limit. Absent or explicit
 request version 1 preserves the original v1 members and rejects curve selection.
 See [ADR-026](../decisions/026-desktop-codec-evidence-snapshot-v2.md).
+
+The desktop UI now explicitly selects v3. It retains v2 media curves and always
+includes `avcSearchPage`: the current retained ready `AVCSearchResponse`, or null
+with exactly one omission reason. `selection.avcSearch` carries only a positive
+canonical decimal `requestId`, canonical decimal `start`, and `mismatches`,
+`unknown` or `all` filter. The backend checks the exact retained request/page
+identity and copies at most 64 rows from at most 256 scanned Tags; export never
+starts, resumes or repeats a search. The source-order `[start,next)` cursor,
+`total`, `exhausted`, `scanComplete`, byte count, unknown reasons and exact
+source spans remain intact. Exhausting a partial index does not mean the whole
+file was covered. This is bounded NAL-header observation, not a corruption
+finding or proof of decodability. Only this page is saved, not earlier pages or
+a full-file aggregate. V1/v2 remain unchanged and reject `avcSearch` selections;
+the omitted request version still defaults to v1. Source-change, close and the
+2 MiB total budget use the existing snapshot safeguards. Cross-field equality
+and cursor invariants are checked by the producer and regression tools where
+JSON Schema cannot express them portably. See
+[ADR-028](../decisions/028-search-snapshot-v3-and-native-regression.md).
+
 
 ## Opt-in AVC prefix detail v3
 

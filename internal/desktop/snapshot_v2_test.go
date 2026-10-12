@@ -134,7 +134,7 @@ func TestSnapshotV2MinimalAndVersionIsolation(t *testing.T) {
 		snapshotGolden(t, "desktop-diagnostic-snapshot-minimal-v1.json", report)
 	}
 	for _, q := range []SnapshotRequest{
-		{SchemaVersion: 3, SessionID: id},
+		{SchemaVersion: 4, SessionID: id},
 		{SessionID: id, MediaCurve: &SnapshotMediaCurveRequest{"0", 64, "audio"}},
 		{SchemaVersion: 1, SessionID: id, MediaCurve: &SnapshotMediaCurveRequest{"0", 64, "audio"}},
 		{SchemaVersion: 2, SessionID: id, MediaCurve: &SnapshotMediaCurveRequest{"01", 64, "audio"}},

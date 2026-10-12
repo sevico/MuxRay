@@ -1020,6 +1020,22 @@ export namespace desktop {
 		}
 	}
 	
+	export class SnapshotAVCSearchRequest {
+	    requestId: string;
+	    start: string;
+	    filter: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SnapshotAVCSearchRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.requestId = source["requestId"];
+	        this.start = source["start"];
+	        this.filter = source["filter"];
+	    }
+	}
 	export class SnapshotMediaCurveRequest {
 	    start: string;
 	    count: number;
@@ -1082,6 +1098,7 @@ export namespace desktop {
 	    summaryPage?: SnapshotSummaryPageRequest;
 	    trend?: SnapshotTrendRequest;
 	    mediaCurve?: SnapshotMediaCurveRequest;
+	    avcSearch?: SnapshotAVCSearchRequest;
 	
 	    static createFrom(source: any = {}) {
 	        return new SnapshotRequest(source);
@@ -1098,6 +1115,7 @@ export namespace desktop {
 	        this.summaryPage = this.convertValues(source["summaryPage"], SnapshotSummaryPageRequest);
 	        this.trend = this.convertValues(source["trend"], SnapshotTrendRequest);
 	        this.mediaCurve = this.convertValues(source["mediaCurve"], SnapshotMediaCurveRequest);
+	        this.avcSearch = this.convertValues(source["avcSearch"], SnapshotAVCSearchRequest);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

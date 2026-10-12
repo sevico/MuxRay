@@ -79,3 +79,18 @@ func (d *Document) SnapshotSourceInfo() (os.FileInfo, error) {
 	}
 	return d.initial, nil
 }
+
+// SnapshotAVCSearch copies the retained page without probing the source. A
+// completed search survives detail/Hex navigation, while admitting another
+// search replaces it. The shared change latch always takes precedence.
+func (d *Document) SnapshotAVCSearch(id uint64) (AVCSearchResult, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if err := d.snapshotAvailableLocked(); err != nil {
+		return AVCSearchResult{}, err
+	}
+	if err := d.avcSearchIDLocked(id); err != nil {
+		return AVCSearchResult{}, err
+	}
+	return cloneAVCSearch(d.avcSearch), nil
+}

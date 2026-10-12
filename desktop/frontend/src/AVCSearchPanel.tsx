@@ -28,7 +28,7 @@ export function AVCSearchPanel({ view, controller, disabled, message }: { view: 
         <td>{keyframeRelations[row.declarationRelation as keyof typeof keyframeRelations]}<p>IDR：{row.observedIDR}</p></td><td>{reasons[row.reason] ?? row.reason}</td>
         <td>{row.span ? <button className="source-link" disabled={blocked || running} aria-label={`定位 H.264 Tag ${row.tagId} 证据`} title={`${row.span.byteOffset} : ${row.span.bitOffset} · ${row.span.bitLength} bit`} onClick={() => controller.locateAVCSearchRow(row, 'hex')}>{row.span.byteOffset} : {row.span.bitOffset}</button> : '—'}</td>
       </tr>)}</tbody></table>{!page.rows.length && <p className="summary-note">本批范围没有匹配证据。</p>}</div>
-      <div className="pagination"><span>只保留当前批结果；最多回看 64 个批次。检索结果不包含在诊断 JSON 中，可跳转 Tag 后导出其详情。</span><div>
+      <div className="pagination"><span>只保留当前批结果；最多回看 64 个批次。导出诊断 JSON 会包含当前已完成批次的证据和覆盖范围。</span><div>
         <button disabled={blocked || running || view.avcSearchPrevious === null} onClick={() => controller.pageAVCSearch('previous')}>上一批 H.264</button>
         <button disabled={blocked || running || page.exhausted} onClick={() => controller.pageAVCSearch('next')}>继续检索 H.264</button>
       </div></div>

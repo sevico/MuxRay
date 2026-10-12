@@ -1,8 +1,6 @@
 package desktop
 
 import (
-	"encoding/json"
-
 	"github.com/sevico/muxray/internal/analysis"
 )
 
@@ -14,19 +12,6 @@ type SnapshotMediaCurveRequest struct {
 	Start  string `json:"start"`
 	Count  uint32 `json:"count"`
 	Metric string `json:"metric"`
-}
-
-// MarshalJSON keeps every v1 member unchanged while v2 always records an
-// explicit null for an unavailable curve page, accompanied by an omission.
-func (s DiagnosticSnapshot) MarshalJSON() ([]byte, error) {
-	type plain DiagnosticSnapshot
-	if s.SchemaVersion != 2 {
-		return json.Marshal(plain(s))
-	}
-	return json.Marshal(struct {
-		plain
-		MediaCurvePage *MediaCurveResponse `json:"mediaCurvePage"`
-	}{plain(s), s.MediaCurvePage})
 }
 
 func validSnapshotMediaCurve(q SnapshotMediaCurveRequest) bool {

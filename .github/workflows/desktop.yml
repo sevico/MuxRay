@@ -175,3 +175,62 @@ jobs:
             .cache/linux-codec-regression/**/*.log
           include-hidden-files: true
           if-no-files-found: ignore
+
+  linux-search-history:
+    name: Desktop Linux H.264 search and MP3 dependency native regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    env:
+      GOTOOLCHAIN: go1.27.0
+      CGO_ENABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.0'
+          cache: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+      - name: Prepare independent regression evidence
+        run: |
+          mkdir -p .cache/sh-ci
+          git rev-parse HEAD > .cache/sh-ci/source-revision.log
+      - name: Install Linux desktop and native regression dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev dbus-x11 xvfb xauth libglib2.0-bin at-spi2-core python3-pyatspi python3-xlib python3-jsonschema ffmpeg
+      - name: Build and identify the production binary
+        run: |
+          ./desktop/build-production.sh 2>&1 | tee .cache/sh-ci/production-build.log
+          git diff --exit-code -- desktop/frontend/wailsjs/go desktop/go.mod desktop/go.sum
+          sha256sum desktop/build/bin/MuxRay > .cache/sh-ci/binary.sha256
+      - name: Search and dependency regression helper tests
+        working-directory: tools/codec-regression
+        run: /usr/bin/python3 -B -m unittest search_history_oracle_test native_search_history_test -v 2>&1 | tee ../../.cache/sh-ci/tool-tests.log
+      - name: Generate independent search and dependency expectations
+        run: /usr/bin/python3 -B tools/codec-regression/search_history_oracle.py --output-dir "$PWD/.cache/sh-ci/samples" 2>&1 | tee .cache/sh-ci/generation.log
+      - name: Nine native search and dependency rounds in private Xvfb
+        run: /usr/bin/python3 -B tools/codec-regression/native_search_history.py --input-dir "$PWD/.cache/sh-ci/samples" --binary "$PWD/desktop/build/bin/MuxRay" --output-dir "$PWD/.cache/sh-ci/native" --timeout-seconds 420 2>&1 | tee .cache/sh-ci/native.log
+      - name: Verify the tested binary is unchanged
+        if: always()
+        run: |
+          if [[ -f .cache/sh-ci/binary.sha256 ]]; then
+            sha256sum --check .cache/sh-ci/binary.sha256 2>&1 | tee .cache/sh-ci/binary-check.log
+          fi
+      - name: Preserve search and dependency regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-search-history-regression
+          path: |
+            .cache/sh-ci/**/*.json
+            .cache/sh-ci/**/*.log
+            .cache/sh-ci/*.sha256
+          include-hidden-files: true
+          if-no-files-found: ignore

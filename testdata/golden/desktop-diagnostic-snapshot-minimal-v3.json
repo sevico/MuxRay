@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 3,
+  "documentType": "desktopDiagnosticSnapshot",
+  "fileName": "search.flv",
+  "createdAt": "2026-09-29T00:00:00Z",
+  "producer": {
+    "name": "MuxRay",
+    "version": "0.1.0-dev"
+  },
+  "scope": {
+    "kind": "bounded_desktop_snapshot",
+    "sourceValidation": "existing_change_latch_only",
+    "scanDiagnostics": "first_100_retained",
+    "summary": "ready_overview_and_requested_event_page",
+    "trend": "requested_source_order_window",
+    "trendInterpretation": "local_display_rule_not_parser_diagnostic",
+    "mediaCurve": "requested_retained_summary_curve_page",
+    "mediaCurveInterpretation": "codec_payload_rate_and_declared_gop_not_transport_rate_or_decodability",
+    "avcSearch": "requested_retained_current_page_only",
+    "avcSearchInterpretation": "bounded_nal_header_observation_not_corruption_or_decodability_proof"
+  },
+  "session": {
+    "sessionId": "scan-1",
+    "state": "finished",
+    "terminal": true,
+    "closed": false,
+    "progress": {
+      "sourceSize": "115",
+      "bytesScanned": "115",
+      "tagCount": "4",
+      "diagnosticCount": 0
+    },
+    "scan": {
+      "complete": true,
+      "hasErrors": false
+    },
+    "failure": null
+  },
+  "selection": {
+    "schemaVersion": 3,
+    "sessionId": "scan-1",
+    "selectedTagId": null,
+    "detailRequestId": null,
+    "hexRequestId": null,
+    "summaryRequestId": null,
+    "summaryPage": null,
+    "trend": null
+  },
+  "scanDiagnostics": {
+    "sessionId": "scan-1",
+    "bounds": {
+      "start": "0",
+      "limit": 100,
+      "total": "0",
+      "next": "0"
+    },
+    "diagnostics": []
+  },
+  "selectedTag": null,
+  "detail": null,
+  "hex": null,
+  "summary": null,
+  "summaryPage": null,
+  "trend": null,
+  "trendIssues": [],
+  "omitted": [
+    {
+      "section": "selectedTag",
+      "reason": "not_requested"
+    },
+    {
+      "section": "detail",
+      "reason": "not_requested"
+    },
+    {
+      "section": "hex",
+      "reason": "not_requested"
+    },
+    {
+      "section": "summary",
+      "reason": "not_requested"
+    },
+    {
+      "section": "summaryPage",
+      "reason": "summary_unavailable"
+    },
+    {
+      "section": "mediaCurvePage",
+      "reason": "not_requested"
+    },
+    {
+      "section": "avcSearchPage",
+      "reason": "not_requested"
+    },
+    {
+      "section": "trend",
+      "reason": "not_requested"
+    }
+  ],
+  "mediaCurvePage": null,
+  "avcSearchPage": null
+}

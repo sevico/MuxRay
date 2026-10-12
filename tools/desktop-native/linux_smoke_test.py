@@ -38,13 +38,14 @@ class LinuxSmokeTest(unittest.TestCase):
     def test_rejects_invalid_inputs_before_launch(self):
         invalid = [
             ['--tag', '-1'], ['--tag', '1000000'], ['--tag', 'abc'],
-            ['--timeout-seconds', '29'], ['--timeout-seconds', '601'],
+            ['--timeout-seconds', '29'], ['--timeout-seconds', '1801'],
             ['--max-source-bytes', str((16 << 20) - 1)], ['--max-source-bytes', str((1 << 30) + 1)],
             ['--output-dir', 'relative'], ['--output-dir', str(self.root)],
             ['--binary', str(self.root / 'missing')], ['--source', str(self.root)],
             ['--continue-context', '-1'], ['--continue-context', '5'], ['--revisit-tag', '0'],
             ['--continue-context', '2', '--revisit-tag', '4'],
-            ['--avc-search-pages', '0'], ['--avc-search-pages', '17'], ['--avc-search-pages', '2'],
+            ['--avc-search-pages', '0'], ['--avc-search-pages', '97'], ['--avc-search-pages', '2'],
+            ['--avc-search-long'], ['--avc-search-action', 'cancel'], ['--avc-search-gate', '/tmp/unused'],
             ['--mp3-frame', '0'], ['--mp3-history', '--mp3-frame', '64'],
             ['--mp3-history', '--mp3-frame', '-1'], ['--avc-search', 'all', '--mp3-history'],
         ]
@@ -61,6 +62,9 @@ class LinuxSmokeTest(unittest.TestCase):
     def test_search_and_history_require_explicit_bounded_options(self):
         args = smoke.arguments(self.argv + ['--avc-search', 'unknown', '--avc-search-pages', '4'])
         self.assertEqual((args.avc_search, args.avc_search_pages), ('unknown', 4))
+        long = smoke.arguments(self.argv + ['--avc-search', 'mismatches', '--avc-search-pages', '96', '--avc-search-long', '--timeout-seconds', '1800'])
+        self.assertTrue(long.avc_search_long)
+        self.assertEqual(long.avc_search_pages, 96)
         args = smoke.arguments(self.argv + ['--mp3-history', '--mp3-frame', '26'])
         self.assertTrue(args.mp3_history)
         self.assertEqual(args.mp3_frame, 26)

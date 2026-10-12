@@ -33,20 +33,23 @@ def arguments(argv=None):
     parser.add_argument('--mp3-browse', action='store_true', help='select frame 2 then last selectable frame, exporting each')
     parser.add_argument('--avc-evidence', action='store_true', help='click AVC declaration/NAL/slice source buttons and save each Hex selection UI')
     parser.add_argument('--avc-search', choices=['mismatches', 'unknown', 'all'], help='inspect real bounded AVC search pages and source/detail navigation')
-    parser.add_argument('--avc-search-pages', type=int, default=1, help='maximum explicit AVC search batches, 1 through 16')
+    parser.add_argument('--avc-search-pages', type=int, default=1, help='maximum explicit AVC search batches, 1 through 96')
+    parser.add_argument('--avc-search-long', action='store_true', help='export only last page and check the complete 64-entry back-history boundary')
+    parser.add_argument('--avc-search-gate', type=Path, help='explicit controlled overlay build directory; requires --avc-search-action')
+    parser.add_argument('--avc-search-action', choices=['cancel', 'close'], help='native action while the controlled first source read is blocked')
     parser.add_argument('--mp3-history', action='store_true', help='inspect and export bounded MP3 dependency sources and click their source ranges')
     parser.add_argument('--mp3-frame', type=int, help='select a specific inspected MP3 frame before resolving history, 0 through 63')
     parser.add_argument('--media-curves', choices=['audio', 'video', 'mp3', 'gopAverage', 'gopMax'], help='analyze media and load the current curve page before details')
     parser.add_argument('--max-source-bytes', type=int, default=MIN_SOURCE_LIMIT, help='16 MiB default; at most 1 GiB')
-    parser.add_argument('--timeout-seconds', type=int, default=180, help='whole session deadline, 30–600 seconds; cleanup gets up to 10 more')
+    parser.add_argument('--timeout-seconds', type=int, default=180, help='whole session deadline, 30–1800 seconds; cleanup gets up to 10 more')
     parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     if not args.output_dir.is_absolute():
         parser.error('--output-dir must be absolute')
     if not MIN_SOURCE_LIMIT <= args.max_source_bytes <= MAX_SOURCE_LIMIT:
         parser.error('--max-source-bytes must be between 16777216 and 1073741824')
-    if not 30 <= args.timeout_seconds <= 600:
-        parser.error('--timeout-seconds must be between 30 and 600')
+    if not 30 <= args.timeout_seconds <= 1800:
+        parser.error('--timeout-seconds must be between 30 and 1800')
     if args.tag is None:
         args.tag = 0 if args.source else 4
     if not 0 <= args.tag < 1_000_000:
@@ -55,8 +58,17 @@ def arguments(argv=None):
         parser.error('--continue-context must be between 0 and 4')
     if args.revisit_tag is not None and (not args.continue_context or not 0 <= args.revisit_tag < args.tag):
         parser.error('--revisit-tag requires replay and an earlier nonnegative Tag')
-    if not 1 <= args.avc_search_pages <= 16 or (args.avc_search_pages != 1 and not args.avc_search):
-        parser.error('--avc-search-pages requires search and must be 1 through 16')
+    if not 1 <= args.avc_search_pages <= 96 or (args.avc_search_pages != 1 and not args.avc_search):
+        parser.error('--avc-search-pages requires search and must be 1 through 96')
+    if args.avc_search_long and (not args.avc_search or args.avc_search_pages <= 64):
+        parser.error('--avc-search-long requires more than 64 search pages')
+    if bool(args.avc_search_gate) != bool(args.avc_search_action) or (args.avc_search_gate and not args.avc_search):
+        parser.error('controlled search requires gate directory, action and search')
+    if args.avc_search_gate:
+        from avc_search_gate import validate_build
+        validate_build(args.avc_search_gate, args.binary)
+        if not args.worker and (args.avc_search_gate / 'entered.json').exists():
+            parser.error('controlled gate has already run; prepare a fresh build directory')
     if args.mp3_frame is not None and (not args.mp3_history or not 0 <= args.mp3_frame < 64):
         parser.error('--mp3-frame requires history and must be 0 through 63')
     if args.avc_search and args.mp3_history:
@@ -201,10 +213,13 @@ def run_worker(args):
     require(executable_hash == record['binarySHA256'], 'running executable differs from recorded binary')
     save(out, 'app-process.json', {**known[app.pid], 'executableSHA256': executable_hash})
 
-    def rows():
-        desktop = pyatspi.Registry.getDesktop(0)
-        stack = [desktop.getChildAtIndex(i) for i in range(desktop.childCount)]
-        stack = [(node, 0) for node in stack if node.get_process_id() == app.pid]
+    def rows(root=None):
+        if root is None:
+            desktop = pyatspi.Registry.getDesktop(0)
+            stack = [desktop.getChildAtIndex(i) for i in range(desktop.childCount)]
+            stack = [(node, 0) for node in stack if node.get_process_id() == app.pid]
+        else:
+            stack = [(root, 0)]
         visited = 0
         while stack:
             node, depth = stack.pop()
@@ -225,9 +240,16 @@ def run_worker(args):
         except Exception:
             return ''
 
-    def dump(name):
+    search_root = [None]
+
+    def search_rows():
+        if search_root[0] is None:
+            search_root[0] = find('landmark', 'H.264 批量证据检索')
+        return rows(search_root[0])
+
+    def dump(name, search_only=False):
         save(out, name, [{'depth': depth, 'role': role, 'name': name_, 'description': node.description, 'text': node_text(node)}
-                         for node, depth, role, name_ in rows()])
+                         for node, depth, role, name_ in (search_rows() if search_only else rows())])
 
     def wait(fn, description, seconds=35):
         deadline = time.monotonic() + seconds
@@ -241,7 +263,8 @@ def run_worker(args):
         raise RuntimeError('native UI timeout: ' + description)
 
     def find(role, name, depth=None):
-        matches = wait(lambda: [node for node, d, r, n in rows()
+        scan = search_rows if args.avc_search_long and role == 'push button' and name in ('继续检索 H.264', '上一批 H.264') else rows
+        matches = wait(lambda: [node for node, d, r, n in scan()
                                 if r == role and n == name and (depth is None or d == depth)], f'{role}: {name}')
         require(len(matches) == 1, f'ambiguous accessible target {role}: {name}')
         return matches[0]
@@ -255,6 +278,10 @@ def run_worker(args):
     def wait_text(fragment, seconds=35):
         return wait(lambda: any(fragment in name or fragment in node_text(node)
                                 for node, _, _, name in rows()), fragment, seconds)
+
+    def wait_search_text(fragment):
+        return wait(lambda: any(fragment in name or fragment in node_text(node) for node, _, _, name in
+                               (search_rows() if args.avc_search_long else rows())), fragment)
 
     def choose(label, index):
         node = find('combo box', label)
@@ -316,9 +343,10 @@ def run_worker(args):
         click(f'查看 Tag {tag} 详情', 'toggle button')
         wait_text('详情诊断 (')
 
-    def export_snapshot(name, tag):
-        click(f'查看 Tag {tag} 原始字节')
-        wait(lambda: any(name_.startswith('查看 byte ') for _, _, _, name_ in rows()), 'Hex bytes')
+    def export_snapshot(name, tag=None):
+        if tag is not None:
+            click(f'查看 Tag {tag} 原始字节')
+            wait(lambda: any(name_.startswith('查看 byte ') for _, _, _, name_ in rows()), 'Hex bytes')
         path = out / name
         click('导出诊断 JSON')
         find('push button', 'Save')
@@ -326,13 +354,14 @@ def run_worker(args):
         click('Save')
         wait_text('已保存 ' + name)
         snapshot = json.loads(path.read_text())
-        validate_export(snapshot, tag, record['origin'] == 'generated')
+        if tag is not None:
+            validate_export(snapshot, tag, record['origin'] == 'generated')
         checked = check_snapshot(path, source, args.max_source_bytes)
         require(checked['sourceSHA256'] == before_hash, 'source changed during native flow')
         return snapshot, checked
 
-    result = {'passed': False, 'pid': app.pid}
-    try:
+    def open_source():
+        search_root[0] = None
         wait_text('从一个文件开始')
         click('打开 FLV 文件')
         find('push button', 'Cancel')
@@ -343,6 +372,17 @@ def run_worker(args):
         # A broad '部分结果' match also occurs in the still-scanning placeholder.
         wait_text('容器索引完整', 90)
         focus('MuxRay · 码流透镜')
+
+    def start_search():
+        labels = {'mismatches': 0, 'unknown': 1, 'all': 2}
+        if args.avc_search == 'mismatches':
+            click('检索 H.264 证据')
+        else:
+            choose('H.264 证据筛选', labels[args.avc_search])
+
+    result = {'passed': False, 'pid': app.pid}
+    try:
+        open_source()
         if args.media_curves:
             click('分析媒体')
             wait(lambda: find('push button', '查看媒体曲线').getState().contains(pyatspi.STATE_ENABLED), 'media summary ready', 90)
@@ -351,33 +391,103 @@ def run_worker(args):
             metric = {'audio': '音频码率', 'video': '视频码率', 'mp3': 'MP3 码率', 'gopAverage': 'GOP 平均时长', 'gopMax': 'GOP 最长时长'}[args.media_curves]
             click(metric, 'toggle button')
         if args.avc_search:
-            labels = {'mismatches': 0, 'unknown': 1, 'all': 2}
-            if args.avc_search == 'mismatches':
-                click('检索 H.264 证据')
-            else:
-                choose('H.264 证据筛选', labels[args.avc_search])
+            start_search()
+            if args.avc_search_gate:
+                from avc_search_gate import receipt, release
+                gate = args.avc_search_gate
+                require(source == Path(json.loads((gate / 'build-plan.json').read_text())['source']), 'controlled gate requires its copied source')
+                wait(lambda: (gate / 'entered.json').is_file(), 'controlled actual source read entered')
+                entered = receipt(gate, 'entered.json', app.pid)
+                require(entered['bytes'] > 0 and entered['offset'] >= 0, 'gate lacks an actual read range')
+                wait_text('正在从 Tag 0 检查本批证据…')
+                dump('avc-gate-pending.json')
+                gate_record = {'entered': entered, 'pendingUI': 'avc-gate-pending.json',
+                               'pendingUISHA256': digest(out / 'avc-gate-pending.json'), 'action': args.avc_search_action}
+                gate_record['fdsBeforeAction'] = source_fds(observe(app.pid, known), source)
+                require(gate_record['fdsBeforeAction'], 'gate did not retain source ownership')
+                click('取消 H.264 检索' if args.avc_search_action == 'cancel' else '关闭文件')
+                wait(lambda: (gate / 'context-canceled.json').is_file(), 'native command canceled the active worker')
+                canceled = receipt(gate, 'context-canceled.json', app.pid)
+                require(canceled['contextError'] == 'context canceled', 'deadline expiration is not native cancellation')
+                wait_text('正在确认 H.264 检索取消…' if args.avc_search_action == 'cancel' else '正在释放当前文件；底层 I/O 结束后才能打开下一个文件。')
+                dump('avc-gate-command.json')
+                gate_record.update(canceled=canceled, commandUI='avc-gate-command.json',
+                                   commandUISHA256=digest(out / 'avc-gate-command.json'))
+                if args.avc_search_action == 'close':
+                    gate_record['openDisabledBeforeRelease'] = not find('push button', '打开 FLV 文件').getState().contains(pyatspi.STATE_ENABLED)
+                    require(gate_record['openDisabledBeforeRelease'], 'closed source admitted another open while read was blocked')
+                gate_record['fdsBeforeRelease'] = source_fds(observe(app.pid, known), source)
+                require(gate_record['fdsBeforeRelease'], 'source was closed while its read was blocked')
+                require(not (gate / 'released.json').exists(), 'read finished before native action was observed')
+                release(gate, app.pid)
+                wait(lambda: (gate / 'released.json').is_file(), 'controlled read released')
+                gate_record['released'] = receipt(gate, 'released.json', app.pid)
+                require(gate_record['released']['contextError'] == 'context canceled' and not (gate / 'timed-out.json').exists(), 'controlled release was a deadline or safety timeout')
+                if args.avc_search_action == 'cancel':
+                    wait(lambda: find('push button', '重试当前 H.264 批次').getState().contains(pyatspi.STATE_ENABLED) and
+                         not find('push button', '取消 H.264 检索').getState().contains(pyatspi.STATE_ENABLED), 'canceled search exposes retry and disables cancel')
+                    require(not any('正在确认 H.264 检索取消' in node_text(node) or 'H.264 检索完成：' in node_text(node) for node, _, _, _ in rows()), 'canceled search retained running/ready UI')
+                    dump('avc-gate-canceled.json')
+                    gate_record['terminalUI'] = 'avc-gate-canceled.json'
+                    gate_record['terminalUISHA256'] = digest(out / 'avc-gate-canceled.json')
+                    snapshot, checked = export_snapshot('avc-gate-canceled-snapshot.json')
+                    require(snapshot['avcSearchPage'] is None and any(item['section'] == 'avcSearchPage' for item in snapshot['omitted']), 'canceled search leaked a ready page into snapshot')
+                    gate_record['canceledSnapshot'] = checked
+                    click('重试当前 H.264 批次')
+                else:
+                    wait_text('从一个文件开始')
+                    wait(lambda: not source_fds(observe(app.pid, known), source), 'closed gated source FD release')
+                    gate_record['fdsAfterGatedClose'] = source_fds(observe(app.pid, known), source)
+                    dump('avc-gate-closed.json')
+                    gate_record['terminalUI'] = 'avc-gate-closed.json'
+                    gate_record['terminalUISHA256'] = digest(out / 'avc-gate-closed.json')
+                    open_source()
+                    start_search()
+                result['avcSearchGate'] = gate_record
             result['avcSearchPages'] = []
             previous_status = None
             for index in range(args.avc_search_pages):
-                status = wait(lambda: next((node_text(node) for node, _, _, _ in rows()
+                status = wait(lambda: next((node_text(node) for node, _, _, _ in (search_rows() if args.avc_search_long else rows())
                               if node_text(node).startswith('H.264 检索完成：') and
                               node_text(node) != previous_status), None), 'AVC search batch ready')
                 name = f'avc-search-{index}.json'
-                dump(name)
-                result['avcSearchPages'].append({'uiFile': name, 'uiSHA256': digest(out / name), 'status': status})
+                dump(name, search_only=args.avc_search_long)
+                stage = {'uiFile': name, 'uiSHA256': digest(out / name), 'status': status}
+                if not args.avc_search_long or '已到当前索引末尾。' in status:
+                    snapshot_name = f'avc-page-{index}.json'
+                    _, checked = export_snapshot(snapshot_name)
+                    stage.update(file=snapshot_name, snapshotCheck=checked)
+                result['avcSearchPages'].append(stage)
                 next_button = find('push button', '继续检索 H.264')
                 if not next_button.getState().contains(pyatspi.STATE_ENABLED) or index + 1 == args.avc_search_pages:
                     break
                 previous_status = status
                 click('继续检索 H.264')
+            if args.avc_search_long:
+                pages = result['avcSearchPages']
+                require(len(pages) > 64 and '已到当前索引末尾。' in pages[-1]['status'], 'long search must reach the end beyond 64 pages')
+                result['avcSearchHistory'] = []
+                for back in range(1, 65):
+                    click('上一批 H.264')
+                    previous = pages[-back - 1]['status']
+                    wait_search_text(previous)
+                    name = f'avc-history-{back}.json'
+                    dump(name, search_only=True)
+                    result['avcSearchHistory'].append({'status': previous, 'uiFile': name, 'uiSHA256': digest(out / name)})
+                require(not find('push button', '上一批 H.264').getState().contains(pyatspi.STATE_ENABLED), 'search retained more than 64 history entries')
+                result['avcSearchHistoryBounded'] = True
+                # Return to the final page by explicit forward work, observing every cursor.
+                for previous in pages[-64:]:
+                    click('继续检索 H.264')
+                    wait_search_text(previous['status'])
             if len(result['avcSearchPages']) > 1:
                 click('上一批 H.264')
                 previous = result['avcSearchPages'][-2]['status']
-                wait_text(previous)
-                dump('avc-search-previous.json')
+                wait_search_text(previous)
+                dump('avc-search-previous.json', search_only=args.avc_search_long)
                 result['avcSearchPrevious'] = {'uiFile': 'avc-search-previous.json', 'uiSHA256': digest(out / 'avc-search-previous.json'), 'status': previous}
                 click('继续检索 H.264')
-                wait_text(result['avcSearchPages'][-1]['status'])
+                wait_search_text(result['avcSearchPages'][-1]['status'])
             targets = [(name, int(match[1])) for _, _, _, name in rows()
                        if (match := re.fullmatch(r'定位 H\.264 Tag (\d+) 证据', name))]
             if targets:
@@ -556,6 +666,10 @@ def launch(args):
         command.append('--avc-evidence')
     if args.avc_search:
         command.extend(['--avc-search', args.avc_search, '--avc-search-pages', str(args.avc_search_pages)])
+    if args.avc_search_long:
+        command.append('--avc-search-long')
+    if args.avc_search_gate:
+        command.extend(['--avc-search-gate', str(args.avc_search_gate), '--avc-search-action', args.avc_search_action])
     if args.mp3_history:
         command.append('--mp3-history')
     if args.mp3_frame is not None:
@@ -569,7 +683,8 @@ def launch(args):
               'tag': args.tag, 'maxSourceBytes': args.max_source_bytes, 'timeoutSeconds': args.timeout_seconds,
               'continueContext': args.continue_context, 'revisitTag': args.revisit_tag,
               'mp3Browse': args.mp3_browse, 'avcEvidence': args.avc_evidence, 'mediaCurves': args.media_curves,
-              'avcSearch': args.avc_search, 'avcSearchPages': args.avc_search_pages, 'mp3History': args.mp3_history, 'mp3Frame': args.mp3_frame,
+              'avcSearch': args.avc_search, 'avcSearchPages': args.avc_search_pages, 'avcSearchLong': args.avc_search_long,
+              'avcSearchGate': str(args.avc_search_gate) if args.avc_search_gate else None, 'avcSearchAction': args.avc_search_action, 'mp3History': args.mp3_history, 'mp3Frame': args.mp3_frame,
               'argv': command, 'environment': {key: env[key] for key in env if key.startswith('XDG_') or key in
                                             ('GSETTINGS_BACKEND', 'GDK_BACKEND', 'LC_ALL', 'NO_AT_BRIDGE', 'TMPDIR')}}
     save(out, 'run.json', record)

@@ -167,7 +167,7 @@ def curve_oracle(source):
 
 
 def verify_curve(snapshot, source, cli, metric):
-    require(snapshot['schemaVersion'] == 2 and snapshot['selection']['schemaVersion'] == 2, 'native export did not use snapshot v2')
+    require(snapshot['schemaVersion'] in (2, 3) and snapshot['selection']['schemaVersion'] == snapshot['schemaVersion'], 'native export did not preserve curve-compatible snapshot version')
     selected, response = snapshot['selection'], snapshot['mediaCurvePage']
     require(selected['mediaCurve'] == {'start': '0', 'count': 64, 'metric': metric}, 'snapshot did not retain current curve selection')
     require(response and response['error'] is None and response['apiVersion'] == 1 and response['sessionId'] == selected['sessionId'] and response['requestId'] == selected['summaryRequestId'], 'curve response identity differs')

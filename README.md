@@ -15,7 +15,7 @@ MuxRay 是一个面向 FLV 和音视频码流的跨平台诊断工具。项目�
 - 媒体概览 v2 桌面视图：可取消分析、精确时间/码率指标、有界事件分页与 Tag/Hex 联动；
 - 分页媒体曲线：每 256 个源 Tag 聚合音频/视频/MP3 码率与声明 GOP 时长，覆盖全部已索引窗口并可定位 Tag/Hex；
 - 有界 Tag 趋势窗口：原始 DTS、声明/实际载荷、同类型及 Stream ID 前驱时间差，异常观察项可定位详情与 Hex；
-- 桌面诊断快照 JSON v2 导出：冻结已有有界详情、Hex、概览、趋势及当前媒体曲线页，通过原生保存对话框写出并恢复丢失的保存回复；
+- 桌面诊断快照 JSON v3 导出：冻结已有有界详情、Hex、概览、趋势、当前媒体曲线页及 H.264 检索页，通过原生保存对话框写出并恢复丢失的保存回复；
 - AVC 桌面有界配置候选索引、长媒体前置配置定位、NAL 长度来源、SPS/PPS 摘要与准确源位置；
 - 按 Tag、资源有界的通用详情分发；
 - AMF0 ScriptData 详情解析；
@@ -112,12 +112,14 @@ Go 应用层新增 `internal/session.Open`：一个会话拥有一个后台扫�
 [`ADR-018`](docs/decisions/018-bounded-tag-trends.md)，验证见
 [`趋势验证记录`](docs/desktop-trends-20260927.md)。
 
-桌面导出采用独立的 `desktopDiagnosticSnapshot` v2 格式，只保存当前已载入的有界
-证据，包括选中编解码器详情与最多 64 点的当前媒体曲线页，总量仍不超过 2 MiB。
+桌面导出采用独立的 `desktopDiagnosticSnapshot` v3 格式，只保存当前已载入的有界
+证据，包括选中编解码器详情、最多 64 点的当前媒体曲线页及最多 64 行的当前 H.264
+检索页，总量仍不超过 2 MiB；v1/v2 合同保持兼容。
 快照明确标记部分覆盖、曲线选择和省略原因，不重读源文件或补跑分析；显式 v1 与
 未指定版本的请求保持原 v1 形状。原生保存支持结果恢复及源文件保护。设计见
 [`ADR-019`](docs/decisions/019-desktop-diagnostic-snapshot.md) 与
-[`ADR-026`](docs/decisions/026-desktop-codec-evidence-snapshot-v2.md)，既有保存与
+[`ADR-026`](docs/decisions/026-desktop-codec-evidence-snapshot-v2.md) 和
+[`ADR-028`](docs/decisions/028-search-snapshot-v3-and-native-regression.md)，既有保存与
 恢复结果见 [`诊断快照验收记录`](docs/desktop-snapshot-20260929.md)。
 真实语料、40 分钟生成 AVC/AAC、原生导出与资源观测的范围和证据见
 [`桌面语料回归记录`](docs/desktop-corpus-20260930.md)。

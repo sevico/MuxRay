@@ -111,6 +111,10 @@ func (b *Bindings) avcSearchOperation(q AVCSearchRequest, op string) AVCSearchRe
 	default:
 		result, err = owner.GetAVCSearch(id)
 	}
+	return mapAVCSearchResult(response, result, err)
+}
+
+func mapAVCSearchResult(response AVCSearchResponse, result document.AVCSearchResult, err error) AVCSearchResponse {
 	if err != nil {
 		response.Error = avcSearchFailure(err)
 		return response

@@ -349,9 +349,11 @@ export class Controller {
     const summaryPage = this.state.summaryPage;
     const trendPage = this.state.trendPage;
     const curvePage = !this.state.curveLoading && !this.state.curveError ? this.state.curvePage : null;
+    const searchPage = this.state.avcSearchState === 'ready' && !this.state.avcSearchRunning ? this.state.avcSearchPage : null;
     return Object.freeze({
-      schemaVersion: 2,
+      schemaVersion: 3,
       ...(curvePage ? { mediaCurve: Object.freeze({ start: curvePage.bounds.start, count: curvePage.bounds.limit, metric: this.state.curveMetric }) } : {}),
+      ...(searchPage && this.avcSearchRequest ? { avcSearch: Object.freeze({ requestId: this.avcSearchRequest.requestId, start: searchPage.start, filter: searchPage.filter }) } : {}),
       sessionId: this.state.session!.sessionId, selectedTagId: this.state.selectedTag?.id ?? null,
       detailRequestId: this.detailRequest?.requestId ?? null, hexRequestId: this.hexRequest?.requestId ?? null,
       summaryRequestId: this.summaryRequest?.requestId ?? null,

@@ -128,6 +128,41 @@ def verify_avc_page(ui, status, oracle, filter_name):
     return {'start': start, 'next': end, 'scanned': scanned, 'rows': count, 'bytesRead': read}
 
 
+def verify_search_snapshot_file(path, checked, source):
+    require(checked['schemaValid'] and checked['sha256'] == digest(path) and
+            checked['sourceSHA256'] == hashlib.sha256(source).hexdigest(), 'search snapshot/source identity differs from native validation')
+    snapshot = json.loads(path.read_text())
+    require(snapshot.get('avcSearchPage') is not None and
+            checked['avcSearchRowsMatchingSource'] == len(snapshot['avcSearchPage']['page']['rows']), 'search snapshot source checks are missing')
+    return snapshot
+
+
+def verify_avc_snapshot(snapshot, page, oracle, filter_name):
+    require(snapshot['schemaVersion'] == snapshot['selection']['schemaVersion'] == 3, 'search export did not use snapshot v3')
+    response = snapshot['avcSearchPage']
+    require(response is not None and response['state'] == 'ready' and response['error'] is None, 'search export omitted the completed page')
+    query = snapshot['selection']['avcSearch']
+    require(query == {'requestId': response['requestId'], 'start': str(page['start']), 'filter': filter_name} and
+            response['sessionId'] == snapshot['session']['sessionId'], 'search snapshot request/selection differs')
+    actual = response['page']
+    require(actual['start'] == str(page['start']) and actual['next'] == str(page['next']) and
+            actual['total'] == str(oracle['indexedTags']) and actual['scanned'] == page['scanned'] and
+            actual['bytesRead'] == str(page['bytesRead']) and actual['scanComplete'] and actual['filter'] == filter_name and
+            actual['exhausted'] == (page['next'] == oracle['indexedTags']), 'search snapshot coverage differs from observed UI')
+    wanted = [r for r in oracle['rows'] if page['start'] <= r['tagId'] < page['next'] and
+              (filter_name == 'all' or filter_name == 'unknown' and r['observedIDR'] == 'unknown' or
+               filter_name == 'mismatches' and r['declarationRelation'] in ('keyframe_without_idr', 'inter_with_idr'))]
+    require(len(actual['rows']) == len(wanted), 'search snapshot row count differs from raw-byte oracle')
+    reasons = {'': 'complete', 'unusable_header': 'unclassified_header', 'invalid_nal_boundary': 'invalid_framing',
+               'truncated_length': 'invalid_framing', 'missing_configuration': 'missing_configuration'}
+    for got, want in zip(actual['rows'], wanted):
+        expected = {name: str(want[name]) for name in ('tagId', 'offset', 'dts')}
+        expected.update({name: want[name] for name in ('declaredFrameType', 'observedIDR', 'declarationRelation')})
+        expected.update(reason=reasons[want['reason']], span=native_span(want['evidenceSpan']))
+        require(got == expected, 'search snapshot row differs from raw-byte oracle: Tag ' + str(want['tagId']))
+    return len(wanted)
+
+
 def verify_search(directory, oracle, source, filter_name):
     native = json.loads((directory / 'native-result.json').read_text())
     pages, end = [], 0
@@ -136,7 +171,17 @@ def verify_search(directory, oracle, source, filter_name):
         require(page['start'] == end, 'AVC search continuation skipped or repeated indexed Tags')
         end = page['next']
         pages.append(page)
+        if 'file' in stage:
+            snapshot = verify_search_snapshot_file(directory / stage['file'], stage['snapshotCheck'], source)
+            verify_avc_snapshot(snapshot, page, oracle, filter_name)
+        else:
+            require(native.get('avcSearchHistoryBounded'), 'ordinary search page lacks its v3 export')
     require(end == oracle['indexedTags'], 'native search stopped before the full fixture was inspected')
+    if native.get('avcSearchHistoryBounded'):
+        require(len(pages) > 64 and len(native['avcSearchHistory']) == 64, 'long search did not cover the history budget')
+        for index, stage in enumerate(native['avcSearchHistory'], 1):
+            require(verify_avc_page(read_ui(directory, stage), stage['status'], oracle, filter_name) == pages[-index - 1], 'history rewind differs from original page')
+        require('file' in native['avcSearchPages'][-1], 'long search lacks its final v3 page export')
     if len(pages) > 1:
         stage = native['avcSearchPrevious']
         require(verify_avc_page(read_ui(directory, stage), stage['status'], oracle, filter_name) == pages[-2], 'previous batch differs from the original page')
@@ -147,7 +192,8 @@ def verify_search(directory, oracle, source, filter_name):
         selected = native['avcSearchSelected']
         snapshot = verify_saved_snapshot(directory / selected['file'], selected['snapshotCheck'], source)
         require(snapshot['selectedTag']['id'] == str(want['tagId']), 'AVC row did not navigate to its Tag')
-    return {'pages': pages, 'filter': filter_name, 'exhausted': True}
+    return {'pages': pages, 'filter': filter_name, 'exhausted': True, 'snapshotVersion': 3,
+            'exportedPages': sum('file' in stage for stage in native['avcSearchPages']), 'historyRewinds': len(native.get('avcSearchHistory', []))}
 
 
 def run(args, commands):
@@ -162,6 +208,9 @@ def run(args, commands):
     for name, filter_name in [('pagination', 'mismatches'), ('unknown', 'unknown'), ('idr-partial', 'all'), ('missing-config', 'unknown')]:
         case = expected['avcCases'][name]
         cases.append(('avc-' + name, case, case['rows'][0], filter_name))
+    if args.long:
+        case = expected['avcCases']['long-pagination']
+        cases.append(('avc-long-pagination', case, case['rows'][0], 'mismatches'))
     for name, case, target, filter_name in cases:
         if args.case and name not in args.case:
             continue
@@ -171,7 +220,9 @@ def run(args, commands):
                 '--output-dir', directory, '--source', source_path, '--tag', str(target['tagId']),
                 '--timeout-seconds', str(args.timeout_seconds)]
         if filter_name:
-            argv += ['--avc-search', filter_name, '--avc-search-pages', '16']
+            argv += ['--avc-search', filter_name, '--avc-search-pages', '96' if name == 'avc-long-pagination' else '16']
+            if name == 'avc-long-pagination':
+                argv += ['--avc-search-long']
         else:
             argv += ['--mp3-history', '--mp3-frame', str(target['frameIndex'])]
         commands.run(name, argv, timeout=args.timeout_seconds + 30)
@@ -208,13 +259,16 @@ def arguments(argv=None):
     parser.add_argument('--binary', type=executable, required=True)
     parser.add_argument('--output-dir', type=new_directory, required=True)
     parser.add_argument('--timeout-seconds', type=int, default=300)
-    parser.add_argument('--case', action='append', choices=CASES, help='rerun selected rounds in a new evidence directory; default all nine')
+    parser.add_argument('--case', action='append', choices=CASES + ['avc-long-pagination'], help='rerun selected rounds in a new evidence directory; default all nine')
+    parser.add_argument('--long', action='store_true', help='add the separate >64-page production-binary acceptance round')
     args = parser.parse_args(argv)
+    if args.case and 'avc-long-pagination' in args.case and not args.long:
+        parser.error('--case avc-long-pagination requires --long')
     args.input_dir = args.input_dir.resolve()
     if not (args.input_dir / 'expectations.json').is_file():
         parser.error('--input-dir must contain generated expectations.json')
-    if not 30 <= args.timeout_seconds <= 600:
-        parser.error('--timeout-seconds must be 30 through 600')
+    if not 30 <= args.timeout_seconds <= 1800:
+        parser.error('--timeout-seconds must be 30 through 1800')
     return args
 
 

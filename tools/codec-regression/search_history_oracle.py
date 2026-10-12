@@ -216,12 +216,15 @@ def generate(args, commands):
                 'idr-partial': positive_partial,
                 'missing-config': [r for r in original if not (r[0] == 9 and r[1][1] == 0)],
                 'pagination': [(kind, body, dts + repetition * 1600) for repetition in range(24)
-                               for kind, body, dts in mutated]}
+                               for kind, body, dts in mutated],
+                'long-pagination': [(kind, body, dts + repetition * 1600) for repetition in range(520)
+                                    for kind, body, dts in mutated]}
     for name, items in variants.items():
         filename = 'avc-' + name + '.flv'
         data = make_flv(items)
         (out / filename).write_bytes(data)
         expected['avcCases'][name] = {'file': filename, **avc_headers(data)}
+    require(64 * 256 < expected['avcCases']['long-pagination']['indexedTags'] <= 96 * 256, 'long fixture must exceed 64 bounded pages')
     expected['naturalNonIDRITagIds'] = non_idr_i
     expected['naturalNonIDRIFields'] = [{'tagId': block['tagId'], 'nalHeaderSpan': source_span(block['offset'], 5, 3),
                                        'sliceType': field} for block in trace['traceBlocks']

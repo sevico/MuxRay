@@ -93,14 +93,14 @@ def check_snapshot(report_path, source_path=None, max_source_bytes=MAX_FIXTURE):
     raw = report_path.read_bytes()
     report = json.loads(raw.decode("utf-8"))
     version = report.get("schemaVersion")
-    if type(version) is not int or version not in (1, 2):
+    if type(version) is not int or version not in (1, 2, 3):
         raise ValueError("Unsupported snapshot version")
     schema = json.loads((ROOT / f"docs/schemas/desktop-diagnostic-snapshot-v{version}.schema.json").read_text(encoding="utf-8"))
     Draft202012Validator(schema, format_checker=Draft202012Validator.FORMAT_CHECKER).validate(report)
     session_id = report["session"]["sessionId"]
     if report["selection"]["sessionId"] != session_id:
         raise ValueError("Selection belongs to a different session")
-    sections = ("mediaCurvePage",) if version == 2 else ()
+    sections = (("mediaCurvePage",) if version >= 2 else ()) + (("avcSearchPage",) if version >= 3 else ())
     for name in ("scanDiagnostics", "detail", "hex", "summary", "summaryPage", "trend") + sections:
         section = report[name]
         if section is not None and section["sessionId"] != session_id:
@@ -124,14 +124,44 @@ def check_snapshot(report_path, source_path=None, max_source_bytes=MAX_FIXTURE):
                 or offset > size or length != min(section["count"], size - offset)
                 or window["eof"] != (offset + length == size)):
             raise ValueError("Hex window does not match its requested coverage")
-    if version == 2 and report["mediaCurvePage"] is not None:
+    if version >= 2 and report["mediaCurvePage"] is not None:
         check_curve_page(report)
+    if version >= 3 and report["avcSearchPage"] is not None:
+        check_avc_search_page(report)
     result = {"report": report_path.name, "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(),
               "fileName": report["fileName"], "scanComplete": report["session"]["scan"]["complete"],
               "omitted": report["omitted"], "schemaValid": True}
     if source_path is not None:
         result.update(check_source(report, source_path, max_source_bytes))
     return result
+
+
+def check_avc_search_page(report):
+    response, query = report["avcSearchPage"], report["selection"].get("avcSearch")
+    if not query or response["requestId"] != query["requestId"] or response["state"] != "ready" or response["error"] is not None:
+        raise ValueError("AVC search request identity or ready state mismatch")
+    page = response["page"]
+    start, end, total = (int(page[key]) for key in ("start", "next", "total"))
+    if (page["start"] != query["start"] or page["filter"] != query["filter"] or
+            total != int(report["session"]["progress"]["tagCount"]) or
+            page["scanComplete"] != report["session"]["scan"]["complete"] or
+            not 0 <= start <= end <= total or (end == start and end != total) or
+            page["scanned"] != end - start or end - start > 256 or
+            page["exhausted"] != (end == total) or int(page["bytesRead"]) > 1048576 or len(page["rows"]) > 64):
+        raise ValueError("AVC search coverage or read budget mismatch")
+    previous = start - 1
+    for row in page["rows"]:
+        tag = int(row["tagId"])
+        if not previous < tag < end:
+            raise ValueError("AVC search rows repeat, reorder or exceed coverage")
+        previous = tag
+        declared, observed = row["declaredFrameType"], row["observedIDR"]
+        relation = ("undetermined" if declared is None else "other_declaration" if declared not in (1, 2) else "undetermined" if observed == "unknown" else
+                    ("keyframe_" if declared == 1 else "inter_") + ("with_idr" if observed == "yes" else "without_idr"))
+        if (row["declarationRelation"] != relation or (observed == "unknown" and not row["reason"]) or
+                page["filter"] == "unknown" and observed != "unknown" or
+                page["filter"] == "mismatches" and relation not in ("keyframe_without_idr", "inter_with_idr")):
+            raise ValueError("AVC search evidence relation or filter mismatch")
 
 
 def check_curve_page(report):
@@ -189,6 +219,8 @@ def check_source(report, source_path, max_source_bytes):
             tagged.append((int(report["selectedTag"]["id"]), report["selectedTag"]))
         if report["trend"] is not None:
             tagged.extend((int(point["tagId"]), point) for point in report["trend"]["points"])
+        search_rows = ((report.get("avcSearchPage") or {}).get("page") or {}).get("rows", [])
+        tagged.extend((int(row["tagId"]), row) for row in search_rows)
         offsets = fixture_tag_offsets(source, {tag_id for tag_id, _ in tagged})
         indexed = int(report["session"]["progress"]["tagCount"])
         for tag_id, tag in tagged:
@@ -209,6 +241,23 @@ def check_source(report, source_path, max_source_bytes):
             for point in report["trend"]["points"]:
                 verify_tag(source, int(point["offset"]), point["typeCode"], int(point["dts"]), point["streamId"], point["dataSize"], point["availableDataSize"])
             result["trendPointsMatchingSource"] = len(report["trend"]["points"])
+        for row in search_rows:
+            offset = int(row["offset"])
+            header = source[offset:offset + 11]
+            dts = int.from_bytes(header[4:7], "big") | header[7] << 24
+            if header[0] & 31 != 9 or dts != int(row["dts"]):
+                raise ValueError("AVC search Tag type or DTS differs from source")
+            declared = int.from_bytes(header[1:4], "big")
+            span = row["span"]
+            if span is not None:
+                begin = int(span["byteOffset"]) * 8 + span["bitOffset"]
+                end = begin + int(span["bitLength"])
+                if not (offset + 11) * 8 <= begin < end <= min(offset + 11 + declared, len(source)) * 8:
+                    raise ValueError("AVC search source span exceeds its Tag payload")
+            if declared and row["declaredFrameType"] is not None and source[offset + 11:offset + 12][0] >> 4 != row["declaredFrameType"]:
+                raise ValueError("AVC search declaration differs from source")
+        if report.get("avcSearchPage") is not None:
+            result["avcSearchRowsMatchingSource"] = len(search_rows)
         result["sourceSHA256"] = source.digest()
     return result
 

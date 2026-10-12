@@ -106,10 +106,10 @@ class SnapshotCheckTests(unittest.TestCase):
                     checker.check_snapshot(self.report_path)
 
     def test_snapshot_versions_and_omissions_remain_distinct(self):
-        for name in ("minimal-v1", "minimal-v2", "full-v1", "full-v2"):
+        for name in ("minimal-v1", "minimal-v2", "full-v1", "full-v2", "minimal-v3", "full-v3"):
             path = checker.ROOT / f"testdata/golden/desktop-diagnostic-snapshot-{name}.json"
             self.assertTrue(checker.check_snapshot(path)["schemaValid"])
-        for version in (0, 3, True, "2"):
+        for version in (0, 4, True, "2"):
             report = self.v2_report()
             report["schemaVersion"] = version
             self.report_path.write_text(json.dumps(report), encoding="utf-8")
@@ -120,6 +120,38 @@ class SnapshotCheckTests(unittest.TestCase):
         self.report_path.write_text(json.dumps(report), encoding="utf-8")
         with self.assertRaises((ValueError, ValidationError)):
             checker.check_snapshot(self.report_path)
+
+    def v3_report(self):
+        return json.loads((checker.ROOT / "testdata/golden/desktop-diagnostic-snapshot-full-v3.json").read_text())
+
+    def test_v3_unknown_null_declaration_is_a_valid_bounded_observation(self):
+        report = self.v3_report()
+        row = report["avcSearchPage"]["page"]["rows"][0]
+        row.update(declaredFrameType=None, observedIDR="unknown", declarationRelation="undetermined", reason="filtered", span=None)
+        report["avcSearchPage"]["page"]["filter"] = "all"
+        report["selection"]["avcSearch"]["filter"] = "all"
+        checker.check_avc_search_page(report)
+
+    def test_v3_search_rejects_forged_identity_bounds_filters_and_spans(self):
+        mutations = {
+            "session": lambda r: r["avcSearchPage"].update(sessionId="other"),
+            "request": lambda r: r["avcSearchPage"].update(requestId="1"),
+            "start": lambda r: r["avcSearchPage"]["page"].update(start="1"),
+            "total": lambda r: r["avcSearchPage"]["page"].update(total="900"),
+            "scanned": lambda r: r["avcSearchPage"]["page"].update(scanned=0),
+            "read_budget": lambda r: r["avcSearchPage"]["page"].update(bytesRead="1048577"),
+            "filter": lambda r: r["selection"]["avcSearch"].update(filter="unknown"),
+            "row_order": lambda r: r["avcSearchPage"]["page"]["rows"].append(r["avcSearchPage"]["page"]["rows"][0]),
+            "relation": lambda r: r["avcSearchPage"]["page"]["rows"][0].update(declarationRelation="undetermined"),
+            "exhausted": lambda r: r["avcSearchPage"]["page"].update(exhausted=False),
+            "omission": lambda r: r.update(avcSearchPage=None),
+        }
+        for name, mutate in mutations.items():
+            report = self.v3_report()
+            mutate(report)
+            self.report_path.write_text(json.dumps(report))
+            with self.subTest(name=name), self.assertRaises((ValueError, ValidationError)):
+                checker.check_snapshot(self.report_path)
 
     def test_v2_gop_extrema_must_occur_in_the_retained_intervals(self):
         report = self.v2_report()

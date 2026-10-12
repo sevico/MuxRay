@@ -171,7 +171,7 @@ the expected byte offset, bit offset and bit length, and its Hex bytes must matc
 the original source. `--avc-evidence-only` reruns these two rounds when a prior
 MP3 round already supplies the browsing evidence.
 
-Every round first loads the media summary and its current curve page. The v2
+Every round first loads the media summary and its current curve page. The v2/v3
 snapshot must retain the selected metric, summary request identity, complete
 page bounds and values. These small fixtures fit one 256-Tag window; independent
 FLV framing, media payload sizes and monotonic DTS values supply bitrate and
@@ -187,3 +187,81 @@ source-linked Hex, schema validation, FD release, normal application exit and
 isolated-harness cleanup. Failures retain their logs and snapshots in the new
 output directory. Its no-GUI mutation tests are included in the existing
 `python3 -B -m unittest discover -s tools/codec-regression -p '*_test.py'` command.
+
+## H.264 batch search and MP3 dependency sources
+
+After building the production desktop, generate separate inputs and run all
+nine native rounds:
+
+```sh
+/usr/bin/python3 -B tools/codec-regression/search_history_oracle.py \
+  --output-dir "$PWD/.cache/sh-run/samples"
+/usr/bin/python3 -B tools/codec-regression/native_search_history.py \
+  --input-dir "$PWD/.cache/sh-run/samples" \
+  --binary "$PWD/desktop/build/bin/MuxRay" \
+  --output-dir "$PWD/.cache/sh-run/native" --timeout-seconds 420
+```
+
+The five MP3 rounds compare a merged stream, split Tags, intervening video/script
+Tags, an audio barrier and missing history. They verify the physical dependency
+window against original source bytes, click every source range in Hex and open
+the source Tag/frame. The four H.264 rounds cover pagination, unknown evidence,
+observed IDR with partial coverage and missing configuration. They compare every
+result row and each current-page v3 export with an independent byte oracle,
+revisit the previous page and check source/Tag navigation. The search results describe the inspected range; they do
+not assert independent decodability or reconstruct MP3 reservoir consumption.
+
+The independent `linux-search-history` job in
+[`desktop.yml`](../../.github/workflows/desktop.yml) builds its own production
+binary and generates these samples afresh, without extending the existing Linux
+codec job. It runs the helper unit tests and all nine cases, checks the binary's
+SHA-256 before and after acceptance, and uploads JSON/log/hash evidence even on
+failure. Each case has a 420-second limit; the 90-minute job budget includes all
+nine case limits, dependency installation and the production build. The native
+wrapper also checks binary/source identity and the usual unchanged-source, FD
+release, normal-exit and isolated-harness cleanup assertions in every round.
+Use a new, short output directory for each local run. Optional repeated
+`--case` arguments rerun selected cases; CI deliberately omits them so all nine
+rounds run.
+
+## Long search and controlled native cancellation
+
+The same generator also writes a repeated-segment structural sample exceeding
+64 batches. Run it separately with the fixed production binary:
+
+```sh
+/usr/bin/python3 -B tools/codec-regression/native_search_history.py \
+  --input-dir "$PWD/.cache/sh-run/samples" \
+  --binary "$PWD/desktop/build/bin/MuxRay" \
+  --output-dir "$PWD/.cache/sh-run/long" --long \
+  --case avc-long-pagination --timeout-seconds 1800
+```
+
+This traverses every batch, rewinds the full 64-entry history, checks that older
+history is unavailable, and returns forward to the end. It preserves per-page
+UI evidence and exports the last page in v3. Repeated segments are a bounded
+index/navigation fixture, not an uninterrupted recording or decode-success claim.
+
+For a deterministic real-UI cancel/close test, build a **separate acceptance
+executable** using a new directory outside the repository:
+
+```sh
+/usr/bin/python3 -B tools/desktop-native/avc_search_gate.py \
+  --repository "$PWD" --source "$PWD/.cache/sh-run/samples/avc-declarations.flv" \
+  --output-dir /tmp/muxray-avc-cancel-001
+/usr/bin/python3 -B tools/codec-regression/native_search_lifecycle.py \
+  --input-dir "$PWD/.cache/sh-run/samples" \
+  --gate-dir /tmp/muxray-avc-cancel-001 --action cancel \
+  --output-dir "$PWD/.cache/sh-run/cancel" --timeout-seconds 420
+```
+
+Use another fresh build/evidence directory and `--action close` for
+the close/reopen case. The overlay gates the first actual search ReadAt, with a
+60-second safety release, and extends the search deadline to 90 seconds. The
+production source and executable are unchanged. Hash-bound build plans and
+PID/run/token receipts establish actual read entry, `context canceled` before
+release, retained source ownership while blocked, and successful recovery or
+close/reopen after release. Deadline or safety expiration fails acceptance.
+Both flows finish with source-preservation, FD-release and normal-exit checks.
+These controlled results are distinct from production latency measurements;
+all runs use private D-Bus/Xvfb and memory-only GSettings.

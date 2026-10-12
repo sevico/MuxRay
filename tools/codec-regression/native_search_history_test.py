@@ -3,7 +3,7 @@
 import copy
 import unittest
 
-from native_search_history import RELATIONS, table_rows, verify_avc_page, verify_hex_ui, verify_mp3
+from native_search_history import RELATIONS, table_rows, verify_avc_page, verify_avc_snapshot, verify_hex_ui, verify_mp3
 from native_context_side import native_span
 from search_history_oracle import avc_headers, make_flv, mp3_history
 from search_history_oracle_test import CONFIG, frame, nal_packet
@@ -106,6 +106,36 @@ class NativeHistoryTests(unittest.TestCase):
             actual[0]['text'] = text
             with self.subTest(mode=mode), self.assertRaises(RuntimeError):
                 verify_avc_page(actual, text, oracle, filter_name)
+
+    def test_avc_v3_snapshot_must_match_raw_oracle_not_only_the_visible_table(self):
+        source = make_flv([(9, CONFIG, 0), (9, nal_packet([b'\x65\x80'], 2), 40)])
+        oracle = avc_headers(source)
+        ui, status = avc_ui(oracle)
+        page = verify_avc_page(ui, status, oracle, 'mismatches')
+        want = oracle['rows'][0]
+        row = {name: str(want[name]) for name in ('tagId', 'offset', 'dts')}
+        row.update({name: want[name] for name in ('declaredFrameType', 'observedIDR', 'declarationRelation')})
+        row.update(reason='complete', span=native_span(want['evidenceSpan']))
+        snapshot = {'schemaVersion': 3, 'session': {'sessionId': 'one'},
+                    'selection': {'schemaVersion': 3, 'avcSearch': {'requestId': '9007199254740993', 'start': '0', 'filter': 'mismatches'}},
+                    'avcSearchPage': {'state': 'ready', 'error': None, 'sessionId': 'one', 'requestId': '9007199254740993',
+                                      'page': {'start': '0', 'next': '2', 'total': '2', 'scanned': 2, 'bytesRead': '20',
+                                               'scanComplete': True, 'filter': 'mismatches', 'exhausted': True, 'rows': [row]}}}
+        self.assertEqual(verify_avc_snapshot(snapshot, page, oracle, 'mismatches'), 1)
+        for mode in ('version', 'request', 'filter', 'total', 'read', 'row', 'reason', 'empty', 'span'):
+            actual = copy.deepcopy(snapshot)
+            response = actual['avcSearchPage']
+            if mode == 'version': actual['schemaVersion'] = 2
+            elif mode == 'request': response['requestId'] = '9007199254740992'
+            elif mode == 'filter': response['page']['filter'] = 'all'
+            elif mode == 'total': response['page']['total'] = '3'
+            elif mode == 'read': response['page']['bytesRead'] = '19'
+            elif mode == 'row': response['page']['rows'][0]['offset'] = '0'
+            elif mode == 'reason': response['page']['rows'][0]['reason'] = 'missing_configuration'
+            elif mode == 'empty': response['page']['rows'] = []
+            else: response['page']['rows'][0]['span']['byteOffset'] = '0'
+            with self.subTest(mode=mode), self.assertRaises(RuntimeError):
+                verify_avc_snapshot(actual, page, oracle, 'mismatches')
 
     def test_source_hex_click_requires_original_bit_values_and_highlighting(self):
         source = b'\x65'

@@ -12,6 +12,8 @@ from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parent.parent
 CONTRACTS = (
+    ("docs/schemas/desktop-diagnostic-snapshot-v3.schema.json", "testdata/golden/desktop-diagnostic-snapshot-minimal-v3.json"),
+    ("docs/schemas/desktop-diagnostic-snapshot-v3.schema.json", "testdata/golden/desktop-diagnostic-snapshot-full-v3.json"),
     ("docs/schemas/flv-mp3-tag-detail-v3.schema.json", "testdata/golden/flv-mp3-side-info-v3.json"),
     ("docs/schemas/flv-mp3-tag-detail-v3.schema.json", "testdata/golden/flv-mp3-side-info-truncated-v3.json"),
     ("docs/schemas/flv-mp3-tag-detail-v3.schema.json", "testdata/golden/flv-mp3-side-info-before-tag-v3.json"),
@@ -230,6 +232,84 @@ def validate_desktop_snapshot_v2_edge_cases(validator: Draft202012Validator) -> 
         if path.stat().st_size > 2 << 20:
             raise SystemExit(f"{path}: snapshot exceeds 2 MiB")
 
+
+
+def validate_desktop_snapshot_v3_edge_cases(validator: Draft202012Validator) -> None:
+    full = load_json("testdata/golden/desktop-diagnostic-snapshot-full-v3.json")
+    minimal = load_json("testdata/golden/desktop-diagnostic-snapshot-minimal-v3.json")
+    page = full["avcSearchPage"]["page"]
+    mutations = (
+        (["schemaVersion"], 2),
+        (["selection", "schemaVersion"], 2),
+        (["selection", "avcSearch", "requestId"], "0"),
+        (["selection", "avcSearch", "start"], "01"),
+        (["selection", "avcSearch", "start"], "18446744073709551616"),
+        (["selection", "avcSearch", "filter"], "idr"),
+        (["selection", "avcSearch", "rows"], page["rows"]),
+        (["selection", "avcSearch"], None),
+        (["avcSearchPage", "state"], "pending"),
+        (["avcSearchPage", "error"], {"code": "stale_request", "message": "stale"}),
+        (["avcSearchPage", "requestId"], "0"),
+        (["avcSearchPage", "page", "scanned"], 257),
+        (["avcSearchPage", "page", "bytesRead"], "1048577"),
+        (["avcSearchPage", "page", "bytesRead"], "01"),
+        (["avcSearchPage", "page", "start"], 9007199254740993),
+        (["avcSearchPage", "page", "rows"], [page["rows"][0]] * 65),
+        (["avcSearchPage", "page", "rows", 0, "observedIDR"], "decodable"),
+        (["avcSearchPage", "page", "rows", 0, "declarationRelation"], "inter_without_idr"),
+        (["avcSearchPage", "page", "rows", 0, "reason"], "corruption"),
+        (["avcSearchPage", "page", "rows", 0, "span"], None),
+        (["avcSearchPage", "page", "rows", 0, "span", "bitOffset"], 8),
+        (["avcSearchPage", "page", "rows", 0, "span", "bitLength"], 8),
+        (["avcSearchPage", "page", "rows", 0, "span", "byteOffset"], "18446744073709551616"),
+        (["avcSearchPage", "page", "rows", 0, "declaredFrameType"], 16),
+        (["avcSearchPage", "page", "rows", 1, "reason"], "invalid_framing"),
+        (["avcSearchPage", "page", "filter"], "unknown"),
+        (["avcSearchPage", "page", "rows", 2, "declarationRelation"], "inter_without_idr"),
+    )
+    for path, value in mutations:
+        changed = deepcopy(full)
+        target = changed
+        for key in path[:-1]:
+            target = target[key]
+        target[path[-1]] = value
+        require_invalid(validator, changed, "snapshot v3 closed/bounded evidence: " + str(path))
+    for name in ("avcSearchPage", "mediaCurvePage"):
+        changed = deepcopy(minimal)
+        del changed[name]
+        require_invalid(validator, changed, "v3 explicit availability: " + name)
+        changed = deepcopy(minimal)
+        changed["omitted"] = [item for item in changed["omitted"] if item["section"] != name]
+        require_invalid(validator, changed, "v3 omission required: " + name)
+        changed = deepcopy(minimal)
+        changed["omitted"].append({"section": name, "reason": "not_requested"})
+        require_invalid(validator, changed, "v3 omission unique: " + name)
+        changed = deepcopy(full)
+        changed["omitted"].append({"section": name, "reason": "not_requested"})
+        require_invalid(validator, changed, "v3 cannot omit present section: " + name)
+    for version in (1, 2):
+        old = Draft202012Validator(load_json(f"docs/schemas/desktop-diagnostic-snapshot-v{version}.schema.json"))
+        require_invalid(old, full, f"v{version} rejects v3")
+        changed = deepcopy(full)
+        changed["schemaVersion"] = version
+        changed["selection"]["schemaVersion"] = version
+        require_invalid(old, changed, f"v3 members cannot masquerade as v{version}")
+        previous = load_json(f"testdata/golden/desktop-diagnostic-snapshot-full-v{version}.json")
+        require_invalid(validator, previous, f"v3 rejects unversioned v{version} members")
+    partial = deepcopy(full)
+    page = partial["avcSearchPage"]["page"]
+    page.update(scanComplete=False, filter="unknown", rows=[page["rows"][2]])
+    partial["selection"]["avcSearch"]["filter"] = "unknown"
+    require_valid(validator, partial, "v3 partial coverage and unknown reason preserved")
+    page.update(start=page["total"], next=page["total"], scanned=0, bytesRead="0", rows=[])
+    require_valid(validator, partial, "v3 empty page remains explicit without claiming full coverage")
+    for amount in (0, 999999, 1000000, 1040000, 1048000, 1048575, 1048576):
+        page["bytesRead"] = str(amount)
+        require_valid(validator, partial, "v3 exact byte budget: " + str(amount))
+    for name in ("minimal", "full"):
+        path = ROOT / f"testdata/golden/desktop-diagnostic-snapshot-{name}-v3.json"
+        if path.stat().st_size > 2 << 20:
+            raise SystemExit(f"{path}: snapshot exceeds 2 MiB")
 
 def validate_media_summary_edge_cases(validator: Draft202012Validator) -> None:
     summary = load_json("testdata/golden/flv-media-summary-v1.json")
@@ -1726,6 +1806,7 @@ def main() -> None:
     media_summary_v2_validator = None
     desktop_snapshot_validator = None
     desktop_snapshot_v2_validator = None
+    desktop_snapshot_v3_validator = None
     for schema_path, instance_path in CONTRACTS:
         schema = load_json(schema_path)
         Draft202012Validator.check_schema(schema)
@@ -1750,6 +1831,8 @@ def main() -> None:
             desktop_snapshot_validator = validator
         if schema_path == "docs/schemas/desktop-diagnostic-snapshot-v2.schema.json":
             desktop_snapshot_v2_validator = validator
+        if schema_path == "docs/schemas/desktop-diagnostic-snapshot-v3.schema.json":
+            desktop_snapshot_v3_validator = validator
 
     if tag_page_validator is None:
         raise SystemExit("tag page schema was not validated")
@@ -1787,6 +1870,10 @@ def main() -> None:
         raise SystemExit("desktop snapshot v2 schema was not validated")
     validate_desktop_snapshot_v2_edge_cases(desktop_snapshot_v2_validator)
     print("validated desktop snapshot v2 retained curve identity, exact values, bounds, nulls, and version isolation")
+    if desktop_snapshot_v3_validator is None:
+        raise SystemExit("desktop snapshot v3 schema was not validated")
+    validate_desktop_snapshot_v3_edge_cases(desktop_snapshot_v3_validator)
+    print("validated desktop snapshot v3 retained search identity, bounded evidence, unknown reasons, omissions and version isolation")
 
 
 if __name__ == "__main__":

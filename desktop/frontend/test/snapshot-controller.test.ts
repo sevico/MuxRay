@@ -59,7 +59,7 @@ test('saving is explicit and freezes request IDs, visible pages and applied tren
   controller.startSummary(); await settle(); controller.selectTag('0'); await settle(); controller.jumpHex('13'); await settle(); controller.loadTagTrends(); await settle();
   controller.setTrendOptions({ trendMetric: 'delta', trendType: 'audio', trendGapThreshold: '20' });
   const saving = controller.saveSnapshot(); await controller.saveSnapshot(); assert.equal(calls, 1);
-  assert.deepEqual(captured.snapshot, { schemaVersion: 2, sessionId: 'scan-1', selectedTagId: '0', detailRequestId: '2', hexRequestId: '3', summaryRequestId: '1', summaryPage: { kind: 'keyframes', start: '0', count: 100 }, trend: { start: '0', count: 256, type: 'audio', metric: 'delta', gapThreshold: '20' } });
+  assert.deepEqual(captured.snapshot, { schemaVersion: 3, sessionId: 'scan-1', selectedTagId: '0', detailRequestId: '2', hexRequestId: '3', summaryRequestId: '1', summaryPage: { kind: 'keyframes', start: '0', count: 100 }, trend: { start: '0', count: 256, type: 'audio', metric: 'delta', gapThreshold: '20' } });
   controller.selectTag('1'); controller.selectSummaryKind('mp3'); controller.setTrendOptions({ trendMetric: 'size', trendType: 'video', trendGapThreshold: '500' }); await settle();
   assert.equal(captured.snapshot.selectedTagId, '0'); assert.equal(captured.snapshot.summaryPage?.kind, 'keyframes'); assert.equal(captured.snapshot.trend?.metric, 'delta');
   assert.equal(Object.isFrozen(captured.snapshot), true); assert.equal(Object.isFrozen(captured.snapshot.trend), true);
@@ -68,7 +68,7 @@ test('saving is explicit and freezes request IDs, visible pages and applied tren
 test('unloaded sections stay absent while pending read IDs can be marked omitted by the host', async () => {
   const { controller, saves } = setup({ startDetail: async request => ({ apiVersion: 1, ...request, state: 'pending', error: null, detail: null }) });
   await controller.open(); await settle(); await controller.saveSnapshot();
-  assert.deepEqual(saves[0].snapshot, { schemaVersion: 2, sessionId: 'scan-1', selectedTagId: null, detailRequestId: null, hexRequestId: null, summaryRequestId: null, summaryPage: null, trend: null });
+  assert.deepEqual(saves[0].snapshot, { schemaVersion: 3, sessionId: 'scan-1', selectedTagId: null, detailRequestId: null, hexRequestId: null, summaryRequestId: null, summaryPage: null, trend: null });
   controller.selectTag('0'); await settle(); await controller.saveSnapshot(); assert.equal(saves[1].snapshot.detailRequestId, '1'); assert.equal(saves[1].snapshot.selectedTagId, '0'); controller.dispose();
 });
 test('a lost initial save reply confirms the original request without repeating dialog or write', async () => {

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Controller, POLL_MS, REPLY_TIMEOUT_MS } from '../src/controller.ts';
 import type { Scheduler } from '../src/controller.ts';
-import type { API, AVCSearchRequest, AVCSearchResponse, Session, Tag } from '../src/protocol.ts';
+import type { API, AVCSearchRequest, AVCSearchResponse, SaveRequest, SaveResponse, Session, Tag } from '../src/protocol.ts';
 import { validateAVCSearch } from '../src/avc-search.ts';
 
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(yes => { resolve = yes; }); return { promise, resolve }; }
@@ -103,4 +103,60 @@ test('page validation rejects unbound cursors, over-budget work, duplicates and 
   const mutations: ((r: AVCSearchResponse) => void)[] = [r => r.page!.next = '0', r => r.page!.bytesRead = '1048577', r => r.page!.rows.push(r.page!.rows[0]),
     r => r.page!.rows[0].span!.byteOffset = '10000', r => r.page!.filter = 'all', r => r.page!.rows[0].declarationRelation = 'undetermined', r => r.page!.exhausted = true];
   for (const mutate of mutations) { const r = ready(q); mutate(r); assert.throws(() => validateAVCSearch(r, q, '600', '10000')); }
+});
+
+function saved(requestId: string): SaveResponse {
+  return { apiVersion: 1, requestId, pending: false, canceled: false, fileName: 'evidence.json', bytesWritten: '1024', error: null };
+}
+test('snapshot v3 freezes current search identity through navigation, paging, filter changes and close without another search', async () => {
+  const saving = deferred<SaveResponse>(), saves: SaveRequest[] = [];
+  const { controller, starts } = setup({ saveSnapshot: request => { saves.push(request); return saving.promise; } });
+  await controller.open(); await settle(); controller.startAVCSearch('unknown'); await settle();
+  controller.locateAVCSearchRow(controller.getSnapshot().avcSearchPage!.rows[0], 'hex'); await settle();
+  const waiting = controller.saveSnapshot();
+  assert.equal(saves[0].snapshot.schemaVersion, 3);
+  assert.deepEqual(saves[0].snapshot.avcSearch, { requestId: '1', start: '0', filter: 'unknown' });
+  assert.equal(saves[0].snapshot.hexRequestId, '2'); assert.equal(starts.length, 1);
+  assert.equal(Object.isFrozen(saves[0].snapshot.avcSearch), true);
+  controller.pageAVCSearch('next'); await settle(); controller.startAVCSearch('all'); await settle();
+  await controller.close();
+  assert.deepEqual(saves[0].snapshot.avcSearch, { requestId: '1', start: '0', filter: 'unknown' });
+  saving.resolve(saved(saves[0].requestId)); await waiting; controller.dispose();
+});
+test('snapshot includes a completed empty search page and never sends client result rows', async () => {
+  const saves: SaveRequest[] = [];
+  const { controller } = setup({ startAVCSearch: async q => { const response = ready(q); response.page!.rows = []; return response; },
+    saveSnapshot: async request => { saves.push(request); return saved(request.requestId); } });
+  await controller.open(); await settle(); await controller.saveSnapshot();
+  assert.equal(saves[0].snapshot.avcSearch, undefined);
+  controller.startAVCSearch(); await settle(); await controller.saveSnapshot();
+  assert.deepEqual(saves[1].snapshot.avcSearch, { requestId: '1', start: '0', filter: 'mismatches' });
+  assert.deepEqual(Object.keys(saves[1].snapshot.avcSearch!).sort(), ['filter', 'requestId', 'start']);
+  controller.dispose();
+});
+test('snapshot omits replacement searches while pending, canceling or failed and exports only the completed retry', async () => {
+  const saves: SaveRequest[] = []; let request!: AVCSearchRequest, calls = 0;
+  const { controller, clock } = setup({ startAVCSearch: async q => { request = q; return ++calls === 2 ? pending(q) : ready(q); },
+    cancelAVCSearch: async () => pending(request, 'canceling'), avcSearchResult: async () => failed(request),
+    saveSnapshot: async q => { saves.push(q); return saved(q.requestId); } });
+  await controller.open(); await settle(); controller.startAVCSearch(); await settle();
+  controller.pageAVCSearch('next'); await settle(); await controller.saveSnapshot();
+  controller.cancelAVCSearch(); await settle(); await controller.saveSnapshot();
+  clock.tick(); await settle(); await controller.saveSnapshot();
+  assert.equal(controller.getSnapshot().avcSearchError, 'canceled');
+  assert.ok(saves.every(q => q.snapshot.avcSearch === undefined));
+  controller.retryAVCSearch(); await settle(); await controller.saveSnapshot();
+  assert.deepEqual(saves.at(-1)!.snapshot.avcSearch, { requestId: '3', start: '100', filter: 'mismatches' });
+  controller.dispose();
+});
+test('snapshot after lost search reply uses the confirmed identity and clears it on a new session', async () => {
+  const lost = deferred<AVCSearchResponse>(), saves: SaveRequest[] = []; let request!: AVCSearchRequest;
+  const { controller, clock } = setup({ startAVCSearch: q => { request = q; return lost.promise; }, avcSearchResult: async () => ready(request),
+    saveSnapshot: async q => { saves.push(q); return saved(q.requestId); } });
+  await controller.open(); await settle(); controller.startAVCSearch(); clock.tick(REPLY_TIMEOUT_MS); await settle();
+  await controller.saveSnapshot(); assert.equal(saves[0].snapshot.avcSearch, undefined);
+  clock.tick(); await settle(); await controller.saveSnapshot();
+  assert.deepEqual(saves[1].snapshot.avcSearch, { requestId: '1', start: '0', filter: 'mismatches' });
+  lost.resolve(failed(request)); await settle(); await controller.close(); await controller.open(); await settle();
+  await controller.saveSnapshot(); assert.equal(saves[2].snapshot.avcSearch, undefined); controller.dispose();
 });

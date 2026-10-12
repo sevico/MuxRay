@@ -339,7 +339,7 @@ func TestSnapshotMaximumSectionsAndHardByteBudget(t *testing.T) {
 	cleanupApp(t, app)
 	id := app.Bindings().OpenFile(OpenRequest{Path: "x.flv"}).Session.SessionID
 	waitOpened(t, app)
-	for _, version := range []uint8{0, 2} {
+	for _, version := range []uint8{0, 2, 3} {
 		captured, failure := app.CaptureSnapshot(SnapshotRequest{SchemaVersion: version, SessionID: id, SummaryRequestID: snapshotText("1")})
 		checkFault(t, failure, CodeSnapshotFailed)
 		if captured.Data != nil {

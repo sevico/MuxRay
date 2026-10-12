@@ -179,12 +179,12 @@ test('pending, canceled and failed reanalysis clear old curves and never admit c
 });
 
 
-test('snapshot v2 freezes the visible curve page and metric without issuing another curve query', async () => {
+test('snapshot v3 freezes the visible curve page and metric without issuing another curve query', async () => {
   const saving = deferred<SaveResponse>(), saves: SaveRequest[] = [];
   const { controller, requests } = setup({ saveSnapshot: request => { saves.push(request); return saving.promise; } });
   await ready(controller); controller.loadMediaCurves('64'); await settle(); controller.setCurveMetric('gopMax');
   const saved = controller.saveSnapshot();
-  assert.equal(saves[0].snapshot.schemaVersion, 2);
+  assert.equal(saves[0].snapshot.schemaVersion, 3);
   assert.deepEqual(saves[0].snapshot.mediaCurve, { start: '64', count: 64, metric: 'gopMax' });
   assert.equal(saves[0].snapshot.summaryRequestId, '1'); assert.equal(requests.length, 1);
   assert.equal(Object.isFrozen(saves[0].snapshot.mediaCurve), true);
@@ -193,7 +193,7 @@ test('snapshot v2 freezes the visible curve page and metric without issuing anot
   saving.resolve({ apiVersion: 1, requestId: saves[0].requestId, pending: false, canceled: false, fileName: 'curves.json', bytesWritten: '1000', error: null });
   await saved; controller.dispose();
 });
-test('snapshot v2 omits curve selection while a replacement page is pending or summary was replaced', async () => {
+test('snapshot v3 omits curve selection while a replacement page is pending or summary was replaced', async () => {
   const pending = deferred<MediaCurveResponse>(), saves: SaveRequest[] = [];
   let calls = 0;
   const { controller } = setup({ mediaCurves: request => ++calls === 1 ? Promise.resolve(curves(request)) : pending.promise,

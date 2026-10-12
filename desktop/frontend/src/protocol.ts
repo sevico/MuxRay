@@ -120,8 +120,9 @@ export interface SnapshotTrend {
   metric: 'dts' | 'delta' | 'size'; gapThreshold: string;
 }
 export interface SnapshotRequest {
-  schemaVersion?: 1 | 2;
+  schemaVersion?: 1 | 2 | 3;
   mediaCurve?: { start: string; count: number; metric: 'audio' | 'video' | 'mp3' | 'gopAverage' | 'gopMax' };
+  avcSearch?: { requestId: string; start: string; filter: AVCSearchFilter };
   sessionId: string; selectedTagId: string | null; detailRequestId: string | null;
   hexRequestId: string | null; summaryRequestId: string | null;
   summaryPage: { kind: SummaryKind; start: string; count: number } | null;
