@@ -18,8 +18,10 @@ func runSummary(ctx context.Context, args []string, stdout, stderr io.Writer) in
 	flags := flag.NewFlagSet("muxray summary", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	pretty := flags.Bool("pretty", false, "indent JSON output")
-	schemaVersion := flags.Uint64("schema-version", 1, "summary schema version: 1 (AAC/AVC) or 2 (AAC/AVC/MP3)")
-	maxMP3HeaderEvents := flags.Uint64("max-mp3-header-events", 0, fmt.Sprintf("v2 only: maximum MP3 header events retained (0 uses %d; hard maximum %d)", analysis.DefaultMaxMP3HeaderEvents, analysis.HardMaxMP3HeaderEvents))
+	schemaVersion := flags.Uint64("schema-version", 1, "summary schema version: 1 (AAC/AVC), 2 (MP3 first headers), 3 (MP3 all frames)")
+	maxMP3HeaderEvents := flags.Uint64("max-mp3-header-events", 0, fmt.Sprintf("v2/v3: maximum MP3 first-header events retained (0 uses %d; hard maximum %d)", analysis.DefaultMaxMP3HeaderEvents, analysis.HardMaxMP3HeaderEvents))
+	maxMP3FrameEvents := flags.Uint64("max-mp3-frame-events", 0, fmt.Sprintf("v3: maximum frame events retained (0 uses %d; hard maximum %d)", analysis.DefaultMaxMP3FrameEvents, analysis.HardMaxMP3FrameEvents))
+	maxMP3Frames := flags.Uint64("max-mp3-frames", 0, fmt.Sprintf("v3: maximum frame headers inspected (0 uses %d; hard maximum %d)", analysis.DefaultMaxMP3Frames, analysis.HardMaxMP3Frames))
 	maxTags := flags.Uint64("max-tags", 0, fmt.Sprintf("maximum tags to index (0 uses %d; hard maximum %d)", flv.DefaultMaxTags, flv.HardMaxTags))
 	maxScanDiagnostics := flags.Uint64("max-diagnostics", 0, fmt.Sprintf("maximum scan diagnostics to retain (0 uses %d; range %d-%d)", flv.DefaultMaxDiagnostics, flv.MinDiagnostics, flv.HardMaxDiagnostics))
 	maxKeyframes := flags.Uint64("max-keyframes", 0, fmt.Sprintf("maximum keyframe index entries to retain (0 uses %d; hard maximum %d)", analysis.DefaultMaxKeyframes, analysis.HardMaxKeyframes))
@@ -41,18 +43,29 @@ func runSummary(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		flags.Usage()
 		return exitUsage
 	}
-	if *schemaVersion != 1 && *schemaVersion != 2 {
-		_, _ = fmt.Fprintln(stderr, "muxray: --schema-version must be 1 or 2")
+	if *schemaVersion != 1 && *schemaVersion != 2 && *schemaVersion != 3 {
+		_, _ = fmt.Fprintln(stderr, "muxray: --schema-version must be 1, 2 or 3")
 		return exitUsage
 	}
-	mp3LimitSet := false
+	mp3LimitSet, frameLimitSet := false, false
 	flags.Visit(func(option *flag.Flag) {
+		if option.Name == "max-mp3-frame-events" || option.Name == "max-mp3-frames" {
+			frameLimitSet = true
+		}
 		if option.Name == "max-mp3-header-events" {
 			mp3LimitSet = true
 		}
 	})
-	if mp3LimitSet && *schemaVersion != 2 {
-		_, _ = fmt.Fprintln(stderr, "muxray: --max-mp3-header-events requires --schema-version 2")
+	if mp3LimitSet && *schemaVersion < 2 {
+		_, _ = fmt.Fprintln(stderr, "muxray: --max-mp3-header-events requires --schema-version 2 or 3")
+		return exitUsage
+	}
+	if frameLimitSet && *schemaVersion != 3 {
+		_, _ = fmt.Fprintln(stderr, "muxray: MP3 frame limits require --schema-version 3")
+		return exitUsage
+	}
+	if *maxMP3FrameEvents > uint64(analysis.HardMaxMP3FrameEvents) || *maxMP3Frames > analysis.HardMaxMP3Frames {
+		_, _ = fmt.Fprintln(stderr, "muxray: MP3 frame limits exceed hard maximum")
 		return exitUsage
 	}
 	if *maxMP3HeaderEvents > uint64(analysis.HardMaxMP3HeaderEvents) {
@@ -126,6 +139,24 @@ func runSummary(ctx context.Context, args []string, stdout, stderr io.Writer) in
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "muxray: scan input: %v\n", err)
 		return exitFailure
+	}
+	if *schemaVersion == 3 {
+		summary, err := analysis.AnalyzeV3(ctx, cursor.WithContext(ctx, file), scan, analysis.OptionsV3{
+			OptionsV2:         analysis.OptionsV2{Options: analysisOptions, MaxMP3HeaderEvents: uint32(*maxMP3HeaderEvents)},
+			MaxMP3FrameEvents: uint32(*maxMP3FrameEvents), MaxMP3Frames: *maxMP3Frames,
+		})
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "muxray: analyze input: %v\n", err)
+			return exitFailure
+		}
+		if err := report.WriteMediaSummaryV3JSON(stdout, report.NewMediaSummaryV3(scan, summary), *pretty); err != nil {
+			_, _ = fmt.Fprintf(stderr, "muxray: write media summary: %v\n", err)
+			return exitFailure
+		}
+		if scan.HasErrors() || summary.HasErrors() || !summary.MP3Frames.Complete {
+			return exitDiagnostics
+		}
+		return exitOK
 	}
 	if *schemaVersion == 2 {
 		summary, err := analysis.AnalyzeV2(ctx, cursor.WithContext(ctx, file), scan, analysis.OptionsV2{

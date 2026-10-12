@@ -57,6 +57,9 @@ func parseParameterSetSummary(source io.ReaderAt, span cursor.Span, options Opti
 	case NALUnitTypePictureParameterSet:
 		summary, parseErr := parsePictureParameterSet(source, span, options, budget, diagnostics)
 		complete := summary.Complete && (summary.Deep == nil || summary.Deep.PrefixComplete)
+		if options.ParseFullHeaders {
+			complete = complete && summary.Deep != nil && summary.Deep.Full != nil && summary.Deep.Full.Complete
+		}
 		return header, nil, &summary, complete && !header.ForbiddenZeroBit, parseErr
 	default:
 		return header, nil, nil, !header.ForbiddenZeroBit, nil
@@ -374,7 +377,11 @@ func parsePictureParameterSet(source io.ReaderAt, span cursor.Span, options Opti
 	}
 	result = finishPPS(result, p)
 	if options.ParsePPS && result.Complete {
-		result.Deep = parsePPSDetails(p)
+		if options.ParseFullHeaders {
+			result.Deep = parsePPSFull(p, result.SequenceParameterSetID, options.ParameterSets)
+		} else {
+			result.Deep = parsePPSDetails(p)
+		}
 	}
 	return result, nil
 }

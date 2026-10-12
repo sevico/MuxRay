@@ -164,12 +164,16 @@ func resolveParameters(ctx context.Context, source io.ReaderAt, selected flv.Tag
 				return result, err
 			}
 			options.NALLengthSize = width
+			parseOptions := options
+			if options.AVC.ParseFullHeaders {
+				parseOptions.AVC.ParameterSets = sets
+			}
 			if kind == uint8(flv.AVCPacketTypeSequenceHeader) {
 				result.Configurations++
 			} else {
 				result.NALPackets++
 			}
-			parsed, err := flv.ParseAVCVideo(bounded, tag, options)
+			parsed, err := flv.ParseAVCVideo(bounded, tag, parseOptions)
 			if err != nil {
 				return parameterError(result, err)
 			}

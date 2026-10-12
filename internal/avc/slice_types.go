@@ -8,11 +8,11 @@ type SignedField struct {
 	Span  MappedSpan
 }
 
-// PPSDetails expands only the PPS prefix through
-// redundant_pic_cnt_present_flag. PrefixComplete does not validate optional
-// transform/scaling extensions or rbsp_trailing_bits. Slice groups are
-// explicitly unsupported in this bounded analysis.
+// PPSDetails retains syntax through redundant_pic_cnt_present_flag.
+// PrefixComplete excludes optional extensions and trailing bits; Full is an
+// independently complete opt-in result. Legacy prefix mode rejects FMO.
 type PPSDetails struct {
+	Full                                                                                     *PPSFullDetails
 	NumSliceGroupsMinus1                                                                     *VUIUnsignedField
 	NumRefIdxL0DefaultActiveMinus1, NumRefIdxL1DefaultActiveMinus1                           *VUIUnsignedField
 	WeightedPredFlag                                                                         *VUIBooleanField
@@ -34,9 +34,11 @@ const (
 )
 
 // SliceHeader is the slice_header() prefix through redundant_pic_cnt only.
+// Full optionally expands the remainder with separate counters/completeness.
 // A complete prefix is not a complete slice header or a decoded picture.
 // RBSP covers only inspected bytes, never the entire slice body.
 type SliceHeader struct {
+	Full                                                         *SliceHeaderDetails
 	RBSP                                                         RBSPView
 	FirstMBInSlice, SliceType, PictureParameterSetID             *VUIUnsignedField
 	SliceTypeName                                                string

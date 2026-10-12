@@ -58,7 +58,7 @@ func TestRunSummaryV2VersionIsolationAndExitCodes(t *testing.T) {
 
 func TestRunSummaryV2UsageLimitsAndFailures(t *testing.T) {
 	for _, flags := range [][]string{
-		{"--schema-version", "0"}, {"--schema-version", "3"}, {"--schema-version", "-1"},
+		{"--schema-version", "0"}, {"--schema-version", "4"}, {"--schema-version", "-1"},
 		{"--max-mp3-header-events", "0"}, {"--schema-version", "1", "--max-mp3-header-events", "1"},
 		{"--schema-version", "2", "--max-mp3-header-events", "65537"},
 		{"--schema-version", "2", "--max-mp3-header-events", "4294967296"},

@@ -825,42 +825,6 @@
           "unit": "count"
         },
         {
-          "section": "mp3Headers",
-          "name": "eventCount",
-          "value": "0",
-          "unit": "count"
-        },
-        {
-          "section": "mp3Headers",
-          "name": "validCount",
-          "value": "0",
-          "unit": "count"
-        },
-        {
-          "section": "mp3Headers",
-          "name": "malformedCount",
-          "value": "0",
-          "unit": "count"
-        },
-        {
-          "section": "mp3Headers",
-          "name": "freeFormatCount",
-          "value": "0",
-          "unit": "count"
-        },
-        {
-          "section": "mp3Headers",
-          "name": "parameterChangeCount",
-          "value": "0",
-          "unit": "count"
-        },
-        {
-          "section": "mp3Headers",
-          "name": "bitrateChangeCount",
-          "value": "0",
-          "unit": "count"
-        },
-        {
           "section": "composition",
           "name": "sampleCount",
           "value": "0",
@@ -919,6 +883,120 @@
           "name": "overlapMs",
           "value": null,
           "unit": "ms"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "completeFrameCount",
+          "value": "0",
+          "unit": "frames"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "attemptedHeaderCount",
+          "value": "0",
+          "unit": "headers"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "sampleCount",
+          "value": "0",
+          "unit": "samples"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "frameBytes",
+          "value": "0",
+          "unit": "byte"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "unresolvedBytes",
+          "value": "0",
+          "unit": "byte"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "parameterChangeCount",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "bitrateChangeCount",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "completeTagCount",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "partialTagCount",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "freeFormatCount",
+          "value": "0",
+          "unit": "headers"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "truncatedHeaderCount",
+          "value": "0",
+          "unit": "headers"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "malformedHeaderCount",
+          "value": "0",
+          "unit": "headers"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "truncatedFrameCount",
+          "value": "0",
+          "unit": "frames"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "unsupportedLayerCount",
+          "value": "0",
+          "unit": "headers"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "budgetStoppedTagCount",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "maxFrames",
+          "value": "1000000",
+          "unit": "headers"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "complete",
+          "value": "true",
+          "unit": ""
+        },
+        {
+          "section": "mp3Frames",
+          "name": "scanComplete",
+          "value": "true",
+          "unit": ""
+        },
+        {
+          "section": "mp3Frames",
+          "name": "durationSeconds",
+          "value": "0/1",
+          "unit": "s"
         }
       ],
       "lists": [

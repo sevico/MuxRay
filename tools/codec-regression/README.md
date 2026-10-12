@@ -62,8 +62,8 @@ It does not alter system accessibility settings. `--timeout-seconds` is a
 per-case timeout (default 180, range 30–600). The Linux CI job runs the same entry
 points and uploads JSON/log evidence even after failures.
 The six-case v1/v2 gate stays independent. The default smoke's historical
-two-byte IDR placeholder is replaced locally with a minimal valid ten-bit slice
-prefix; other Tags in that basic fixture remain byte-for-byte unchanged.
+two-byte IDR placeholder is replaced locally with a minimal complete ordinary
+slice header through QP/deblocking fields; other Tags remain byte-for-byte unchanged.
 
 ## Evidence and scope
 
@@ -265,3 +265,102 @@ close/reopen after release. Deadline or safety expiration fails acceptance.
 Both flows finish with source-preservation, FD-release and normal-exit checks.
 These controlled results are distinct from production latency measurements;
 all runs use private D-Bus/Xvfb and memory-only GSettings.
+
+## Native MP3 all-frame summary
+
+After building a fixed production executable, run the full-frame summary UI
+round in a new, short evidence directory:
+
+```sh
+/usr/bin/python3 -B tools/codec-regression/native_full_summary.py \
+  --binary "$PWD/desktop/build/bin/MuxRay" \
+  --output-dir "$PWD/.cache/fn-mp3-001" --timeout-seconds 600
+```
+
+The wrapper authors 300 physical Layer III frames in one FLV Tag. A sampling
+frequency/bitrate change occurs at frame 150; a channel-mode change at frame 270
+lies beyond the 256 retained summary events. Its independent raw-header oracle
+checks that all 300 frames still contribute to counts, changes and exact sample
+seconds. It drives the real Analyze button and MP3 event tab, visits and exports
+all three retained pages (100, 100 and 56 events), and clicks frame 255's source
+button to compare the Hex bytes with the original file. Current-page snapshot
+v3 exports preserve the generic summary and event shapes.
+
+Each round also verifies unchanged source/binary hashes, source FD release,
+normal application exit and isolated-process cleanup. The launcher uses private
+D-Bus/Xvfb and memory-only GSettings. The authored frame bodies are opaque; this
+proves frame-boundary summaries and source navigation, not audio decoding, CRC
+validity or reservoir reconstruction. It deliberately distinguishes the 300
+observed frames from the 256 retained events and the separate 64-frame detail
+inspection limit.
+
+## Native full H.264 headers
+
+Generate the extended fixtures first, then drive a fixed production executable
+through fourteen isolated native rounds. Use short, fresh evidence directories
+so GTK's Unix-domain socket paths remain within the platform limit:
+
+```sh
+/usr/bin/python3 -B tools/codec-regression/full_codec_oracle.py \
+  --output-dir "$PWD/.cache/fh-samples-001"
+/usr/bin/python3 -B tools/codec-regression/native_full_h264.py \
+  --input-dir "$PWD/.cache/fh-samples-001" \
+  --binary "$PWD/desktop/build/bin/MuxRay" \
+  --output-dir "$PWD/.cache/fh-native-001" --timeout-seconds 420
+```
+
+The rounds inspect one PPS scaling-matrix fixture, seven PPS FMO map types
+(0 through 6), five ordinary I/P/B/SP/SI slice headers, and one FMO slice-group
+change cycle. Authored codewords supply an independent oracle for every encoded
+field shown in the PPS prefix/extended and slice prefix/full-header trees,
+including nested reference-list operations, weights, MMCO and scaling lists.
+Checks compare exact values, source bit spans, field hierarchy and the final
+header bit position. The four legacy PPS base identifiers/flags remain derived
+native text; CLI detail v4 separately checks their complete bit mappings.
+
+Each round clicks an actual new tail-field source button (`secondChromaQpIndexOffset`,
+`sliceBetaOffsetDiv2` or `sliceGroupChangeCycle`), preserves the UI and exported
+Hex selection, then exports the final selected-Tag snapshot. The wrapper
+independently rechecks all saved snapshot hashes, schemas and source bytes. It
+also verifies fixed binary/source identities, source FD release, normal exit and
+owned-process cleanup through the existing private D-Bus/Xvfb, memory-only
+GSettings launcher. Syntax fixtures have opaque slice bodies: these rounds prove
+header inspection and source navigation, not decoded pictures, reference-list
+application or reconstructed DPB state.
+
+## Independent full-codec CLI regression
+
+Build a fixed CLI and generate fresh inputs before checking detail v4 and
+summary v3. The generator uses the same FFmpeg prerequisites as the baseline
+codec suite. Keep each run in a new directory to preserve failures and hashes:
+
+```sh
+mkdir -p "$PWD/.cache/fc-run-001"
+GOTOOLCHAIN=go1.27.0 go build -o "$PWD/.cache/fc-run-001/muxray" ./cmd/muxray
+python3 -B tools/codec-regression/full_codec_oracle.py \
+  --output-dir "$PWD/.cache/fc-run-001/samples"
+python3 -B tools/codec-regression/verify_full_codec.py \
+  --input-dir "$PWD/.cache/fc-run-001/samples" \
+  --cli "$PWD/.cache/fc-run-001/muxray" \
+  --output-dir "$PWD/.cache/fc-run-001/cli"
+```
+
+The H.264 checks cover two encoded FFmpeg streams and twelve authored syntax
+fixtures: I/P/B/SP/SI headers, FMO map types 0–6 and PPS scaling lists. FFmpeg
+`trace_headers` and authored codewords independently establish values, exact
+source-bit mappings and the final header bit position. The checker also verifies
+separate prefix/full RBSP read scopes and rejects stale PPS context after an SPS
+dimension change and an 8-bit PPS initial QP outside its valid range. Authored
+slice bodies are opaque; those fixtures establish syntax parsing, not decoding.
+
+The MP3 checks derive physical frame boundaries from raw MPEG header bytes.
+Merged, split and video-interleaved Tags must produce the same complete-frame
+counts and exact sample-duration fractions. Later-frame parameter changes,
+truncated bodies, free-format and invalid headers exercise partial results.
+Separate low frame-attempt and retained-event limits verify that bounded event
+storage does not stop aggregation. Twelve summary invocations compare counters,
+event status/order, source spans and rates with the independent oracle.
+
+Saved results include input, executable, schema and report hashes. These new
+contract checks complement the baseline v1/v2/v3 codec suite and the native UI
+rounds above; run the baseline separately when checking old export contracts.

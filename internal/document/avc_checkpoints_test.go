@@ -23,7 +23,7 @@ func checkpointAVCData(t *testing.T, count int, broken ...int) ([]byte, []int64)
 	for i := 1; i < count; i++ {
 		payloads[i] = []byte{0x27, 1, 0, 0, 0, 0, 0, 0, 1, 9}
 	}
-	payloads[count] = []byte{0x27, 1, 0, 0, 0, 0, 0, 0, 3, 0x65, 0xb8, 0x40}
+	payloads[count] = []byte{0x27, 1, 0, 0, 0, 0, 0, 0, 4, 0x65, 0xb8, 0x40, 0xa8}
 	for _, id := range broken {
 		payloads[id] = []byte{0x17, 0, 0, 0, 0, 1, 66}
 	}

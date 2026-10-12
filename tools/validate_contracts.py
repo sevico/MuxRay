@@ -12,6 +12,12 @@ from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parent.parent
 CONTRACTS = (
+    ("docs/schemas/flv-avc-tag-detail-v4.schema.json", "testdata/golden/flv-avc-detail-v4.json"),
+    ("docs/schemas/flv-avc-tag-detail-v4.schema.json", "testdata/golden/flv-avc-detail-nalu-v4.json"),
+    ("docs/schemas/flv-avc-tag-detail-v4.schema.json", "testdata/golden/flv-avc-detail-truncated-v4.json"),
+    ("docs/schemas/flv-media-summary-v3.schema.json", "testdata/golden/flv-media-summary-v3.json"),
+    ("docs/schemas/flv-media-summary-v3.schema.json", "testdata/golden/flv-media-summary-partial-v3.json"),
+    ("docs/schemas/flv-media-summary-v3.schema.json", "testdata/golden/flv-media-summary-budget-v3.json"),
     ("docs/schemas/desktop-diagnostic-snapshot-v3.schema.json", "testdata/golden/desktop-diagnostic-snapshot-minimal-v3.json"),
     ("docs/schemas/desktop-diagnostic-snapshot-v3.schema.json", "testdata/golden/desktop-diagnostic-snapshot-full-v3.json"),
     ("docs/schemas/flv-mp3-tag-detail-v3.schema.json", "testdata/golden/flv-mp3-side-info-v3.json"),
@@ -1773,6 +1779,47 @@ def validate_mp3_v3_edge_cases() -> None:
         require_invalid(old, valid, f"MP3 v{version} rejects v3")
 
 
+def validate_full_codec_contracts() -> None:
+    avc = Draft202012Validator(load_json("docs/schemas/flv-avc-tag-detail-v4.schema.json"))
+    mp3 = Draft202012Validator(load_json("docs/schemas/flv-media-summary-v3.schema.json"))
+    h = load_json("testdata/golden/flv-avc-detail-nalu-v4.json")
+    m = load_json("testdata/golden/flv-media-summary-v3.json")
+    tail = ["detail", "nalUnitSequence", "nalUnits", 0, "sliceHeaderFull"]
+    frames = ["summary", "mp3Frames"]
+    for validator, original, mutations in (
+        (avc, h, (
+            (["schemaVersion"], 3), (tail + ["extra"], 1),
+            (tail + ["headerBits"], 32769), (tail + ["bytesRead"], 4097),
+            (tail + ["sliceQpDelta", "span", "sourceSpans", 0, "bitOffset"], 8),
+        )),
+        (mp3, m, (
+            (["schemaVersion"], 2), (frames + ["extra"], 1),
+            (frames + ["sampleCount"], 18446744073709551616),
+            (frames + ["durationSeconds", "denominator"], 0),
+            (frames + ["maxFrames"], 16000001), (frames + ["maxEvents"], 65537),
+            (frames + ["events", 0, "status"], "decoded"),
+            (frames + ["events", 0, "sourceSpan", "bitOffset"], 1),
+        )),
+    ):
+        for path, value in mutations:
+            changed = deepcopy(original)
+            parent = changed
+            for key in path[:-1]:
+                parent = parent[key]
+            parent[path[-1]] = value
+            require_invalid(validator, changed, "full codec contract: " + str(path))
+    missing = deepcopy(h)
+    del missing["detail"]["nalUnitSequence"]["nalUnits"][0]["sliceHeaderFull"]["sliceQpDelta"]
+    require_invalid(avc, missing, "complete full header requires QP syntax")
+    for version in (1, 2, 3):
+        old = Draft202012Validator(load_json(f"docs/schemas/flv-avc-tag-detail-v{version}.schema.json"))
+        require_invalid(old, h, "legacy AVC rejects full version")
+    for version in (1, 2):
+        old = Draft202012Validator(load_json(f"docs/schemas/flv-media-summary-v{version}.schema.json"))
+        require_invalid(old, m, "legacy summary rejects full-frame version")
+    print("validated full codec versions, closed syntax, source positions and budgets")
+
+
 def main() -> None:
     manifest_schema = load_json("testdata/manifests/sample-manifest-v1.schema.json")
     Draft202012Validator.check_schema(manifest_schema)
@@ -1794,6 +1841,7 @@ def main() -> None:
     validate_codec_detail_v2_edge_cases()
     validate_avc_v3_edge_cases()
     validate_mp3_v3_edge_cases()
+    validate_full_codec_contracts()
     print("validated MP3 v3 layouts, partial values, source fields, dependency states and version isolation")
     print("validated AVC v3 prefix presence, version isolation, closed fields and budgets")
     print("validated AVC/MP3 detail v2 version isolation, presence, bounds, CRC and VBR shapes")

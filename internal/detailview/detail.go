@@ -82,23 +82,29 @@ func Parse(ctx context.Context, source io.ReaderAt, tag flv.TagRecord) (*Detail,
 // It does not search or read that context source: all reads stay in the selected
 // payload, while context provenance spans describe the earlier configuration.
 func ParseWithAVCContext(ctx context.Context, source io.ReaderAt, tag flv.TagRecord, resolution avccontext.Resolution) (*Detail, error) {
-	return parseWithParameters(ctx, source, tag, resolution, nil, nil)
+	return parseWithParameters(ctx, source, tag, resolution, nil, nil, false)
 }
 
 // ParseWithAVCParameters expands PPS and slice prefixes using a separately
 // bounded replay result. It reads only the selected Tag, not previous payloads.
 func ParseWithAVCParameters(ctx context.Context, source io.ReaderAt, tag flv.TagRecord, resolution avccontext.Resolution, parameters avccontext.ParameterResolution) (*Detail, error) {
-	return parseWithParameters(ctx, source, tag, resolution, &parameters, nil)
+	return parseWithParameters(ctx, source, tag, resolution, &parameters, nil, false)
+}
+
+// ParseWithAVCFullParameters inspects ordinary slice headers and PPS extensions
+// using the separately replayed full-header parameter context.
+func ParseWithAVCFullParameters(ctx context.Context, source io.ReaderAt, tag flv.TagRecord, resolution avccontext.Resolution, parameters avccontext.ParameterResolution) (*Detail, error) {
+	return parseWithParameters(ctx, source, tag, resolution, &parameters, nil, true)
 }
 
 // ParseWithMP3Frame expands one selectable frame within the normal desktop
 // inspection budget. Parsing still starts at the Tag's first frame so physical
 // main-data dependency ranges retain their same-Tag history.
 func ParseWithMP3Frame(ctx context.Context, source io.ReaderAt, tag flv.TagRecord, index uint32) (*Detail, error) {
-	return parseWithParameters(ctx, source, tag, avccontext.Resolution{}, nil, &index)
+	return parseWithParameters(ctx, source, tag, avccontext.Resolution{}, nil, &index, false)
 }
 
-func parseWithParameters(ctx context.Context, source io.ReaderAt, tag flv.TagRecord, resolution avccontext.Resolution, parameters *avccontext.ParameterResolution, mp3Frame *uint32) (*Detail, error) {
+func parseWithParameters(ctx context.Context, source io.ReaderAt, tag flv.TagRecord, resolution avccontext.Resolution, parameters *avccontext.ParameterResolution, mp3Frame *uint32, fullAVC bool) (*Detail, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -126,7 +132,7 @@ func parseWithParameters(ctx context.Context, source io.ReaderAt, tag flv.TagRec
 	}
 	start := tag.Offset + flv.TagHeaderSize
 	reader := contextReader{ctx: ctx, source: source, start: start, end: start + uint64(tag.DataSize)}
-	b := builder{detail: Detail{Fields: []Field{}, Diagnostics: []Diagnostic{}}}
+	b := builder{fullAVC: fullAVC, detail: Detail{Fields: []Field{}, Diagnostics: []Diagnostic{}}}
 	if tag.Type() == flv.TagTypeScript {
 		parsed, err := flv.ParseScriptData(reader, tag, amf0.Options{MaxDepth: 32, MaxNodes: MaxAMFNodes, MaxContainerEntries: MaxAMFNodes, MaxStringBytes: MaxAMFStringBytes, MaxTotalStringBytes: MaxAMFStringBytes, MaxDiagnostics: MaxDiagnostics})
 		if err != nil {
@@ -239,6 +245,7 @@ func (r contextReader) ReadAt(p []byte, off int64) (int, error) {
 }
 
 type builder struct {
+	fullAVC    bool
 	detail     Detail
 	bytes      int
 	fieldsFull bool

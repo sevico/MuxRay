@@ -18,6 +18,9 @@ type Options struct {
 	// ParsePPS for in-band parameter replacements. Both default off.
 	ParsePPS          bool
 	ParseSliceHeaders bool
+	// ParseFullHeaders expands PPS syntax and the remainder of requested slice
+	// headers. ParseSliceHeaders must also be set to inspect slice NAL units.
+	ParseFullHeaders bool
 	// ParameterSets is cloned for each parse; in-band updates never mutate it.
 	ParameterSets    *ParameterSetContext
 	MaxDiagnostics   uint32
@@ -53,7 +56,7 @@ const (
 
 // Normalized applies defaults and rejects values outside package hard limits.
 func (o Options) Normalized() (Options, error) {
-	if o.ParseSliceHeaders {
+	if o.ParseSliceHeaders || o.ParseFullHeaders {
 		o.ParsePPS = true
 	}
 	if o.MaxDiagnostics == 0 {

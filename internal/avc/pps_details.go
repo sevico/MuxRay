@@ -20,6 +20,25 @@ func parsePPSDetails(p *rbspParser) *PPSDetails {
 		p.semanticFatal(d.NumSliceGroupsMinus1.Span, code, message, 0, uint64(d.NumSliceGroupsMinus1.Value))
 		return d
 	}
+	parsePPSCommon(p, d)
+	return d
+}
+
+func (p *rbspParser) signedField() *SignedField {
+	value, span, ok := p.readSE()
+	if !ok {
+		return nil
+	}
+	return &SignedField{Value: value, Span: span}
+}
+
+func (p *rbspParser) checkSigned(field *SignedField, low, high int64, name string) {
+	if field != nil && (field.Value < low || field.Value > high) {
+		p.addAt(field.Span, Diagnostic{Code: CodePPSValueInvalid, Severity: SeverityError, Message: name + " is outside its supported syntax range"})
+	}
+}
+
+func parsePPSCommon(p *rbspParser, d *PPSDetails) {
 	d.NumRefIdxL0DefaultActiveMinus1 = p.vuiUE()
 	d.NumRefIdxL1DefaultActiveMinus1 = p.vuiUE()
 	for _, f := range []*VUIUnsignedField{d.NumRefIdxL0DefaultActiveMinus1, d.NumRefIdxL1DefaultActiveMinus1} {
@@ -43,19 +62,4 @@ func parsePPSDetails(p *rbspParser) *PPSDetails {
 	d.DeblockingFilterControlPresentFlag = p.vuiFlag()
 	d.ConstrainedIntraPredFlag = p.vuiFlag()
 	d.RedundantPicCntPresentFlag = p.vuiFlag()
-	return d
-}
-
-func (p *rbspParser) signedField() *SignedField {
-	value, span, ok := p.readSE()
-	if !ok {
-		return nil
-	}
-	return &SignedField{Value: value, Span: span}
-}
-
-func (p *rbspParser) checkSigned(field *SignedField, low, high int64, name string) {
-	if field != nil && (field.Value < low || field.Value > high) {
-		p.addAt(field.Span, Diagnostic{Code: CodePPSValueInvalid, Severity: SeverityError, Message: name + " is outside its supported syntax range"})
-	}
 }

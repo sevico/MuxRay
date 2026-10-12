@@ -122,6 +122,7 @@ type AVCNALHeaderDetail struct {
 }
 
 type AVCNALUnitDetail struct {
+	SliceHeaderFull      *AVCSliceHeaderDetails   `json:"sliceHeaderFull,omitempty"`
 	SliceHeaderPrefix    *AVCSlicePrefixDetail    `json:"sliceHeaderPrefix,omitempty"`
 	Index                uint32                   `json:"index"`
 	Length               uint32                   `json:"length"`
@@ -228,6 +229,7 @@ type AVCSequenceParameterSet struct {
 }
 
 type AVCPictureParameterSet struct {
+	Full                                  *AVCPPSFullDetails      `json:"full,omitempty"`
 	Prefix                                *AVCPPSPrefixDetail     `json:"prefix,omitempty"`
 	RBSP                                  AVCRBSPViewDetail       `json:"rbsp"`
 	PictureParameterSetID                 *AVCMappedUnsignedField `json:"pictureParameterSetId,omitempty"`

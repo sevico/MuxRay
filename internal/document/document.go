@@ -323,16 +323,16 @@ func (d *Document) parseWithContext(ctx context.Context, source io.ReaderAt, tag
 		return nil, nil, err
 	}
 	d.mu.Lock()
-	checkpoint := d.avcParameters.Lookup(resolution, tag.ID, detailview.DesktopAVCOptions())
+	checkpoint := d.avcParameters.Lookup(resolution, tag.ID, detailview.DesktopFullAVCOptions())
 	preview := d.avcParameters
 	d.mu.Unlock()
-	parameters, checkpoint, err := avccontext.ResolveParameterSegment(ctx, source, tag, d.scan.Tag, resolution, detailview.DesktopAVCOptions(), avccontext.ParameterLimits{}, checkpoint)
+	parameters, checkpoint, err := avccontext.ResolveParameterSegment(ctx, source, tag, d.scan.Tag, resolution, detailview.DesktopFullAVCOptions(), avccontext.ParameterLimits{}, checkpoint)
 	if err != nil {
 		return nil, nil, err
 	}
 	preview.Commit(checkpoint)
 	parameters.CheckpointCount = preview.Count()
-	detail, err := detailview.ParseWithAVCParameters(ctx, source, tag, resolution, parameters)
+	detail, err := detailview.ParseWithAVCFullParameters(ctx, source, tag, resolution, parameters)
 	return detail, checkpoint, err
 }
 

@@ -8,22 +8,34 @@ import (
 	"github.com/sevico/muxray/internal/cursor"
 )
 
-func parseSliceHeader(source io.ReaderAt, span cursor.Span, header NALHeader, context *ParameterSetContext, budget *parseBudget, diagnostics *diagnosticCollector) (*SliceHeader, error) {
+func parseSliceHeader(source io.ReaderAt, span cursor.Span, header NALHeader, context *ParameterSetContext, budget *parseBudget, diagnostics *diagnosticCollector, fullOptions ...bool) (*SliceHeader, error) {
+	full := len(fullOptions) > 0 && fullOptions[0]
 	start, end, err := span.ByteRange()
 	if err != nil {
 		return nil, err
 	}
 	s := &SliceHeader{}
 	p := newRBSPParser(rbspData{valid: true, end: end}, diagnostics)
-	loader := slicePrefixLoader{source: source, position: start + 1, start: start + 1, end: end, budget: budget, p: p}
+	loader := slicePrefixLoader{source: source, position: start + 1, start: start + 1, end: end, budget: budget, p: p, maxBytes: MaxSliceHeaderBytes, maxTotalBytes: MaxSliceHeaderTotalBytes}
+	if full {
+		loader.maxBytes, loader.maxTotalBytes = MaxFullSliceHeaderBytes, MaxFullSliceHeaderTotalBytes
+	}
 	p.ensure = loader.ensure
 	parseSlicePrefix(p, s, header, context)
 	s.SyntaxBits, s.BytesRead = p.bitPosition, uint32(loader.position-loader.start)
-	p.data.view.ByteLength = uint32(len(p.data.bytes))
-	p.data.view.EBSPSpan = cursor.Span{ByteOffset: loader.start, BitLength: s.BytesRead * 8}
-	p.data.view.SourceSegments = sourceSegments(p.data.sourceOffsets)
-	s.RBSP = p.data.view
 	s.PrefixComplete = !p.fatal && !p.invalid && !header.ForbiddenZeroBit
+	s.RBSP = loader.view()
+	if full {
+		s.Full = &SliceHeaderDetails{RBSPBitOffset: p.bitPosition}
+		if s.PrefixComplete {
+			parseSliceRemainder(p, s, header, context)
+		}
+		s.Full.SyntaxBits = p.bitPosition - s.Full.RBSPBitOffset
+		s.Full.HeaderBits = p.bitPosition
+		s.Full.BytesRead = uint32(loader.position - loader.start)
+		s.Full.Complete = s.PrefixComplete && !p.fatal && !p.invalid
+		s.Full.RBSP = loader.view()
+	}
 	return s, loader.err
 }
 
@@ -140,12 +152,13 @@ func parameterNALSpan(view RBSPView) *cursor.Span {
 // slicePrefixLoader de-escapes a byte only when the next requested field
 // needs it. Invalid escaping in opaque slice data cannot invalidate a prefix.
 type slicePrefixLoader struct {
-	source               io.ReaderAt
-	position, start, end uint64
-	zeroCount            int
-	budget               *parseBudget
-	p                    *rbspParser
-	err                  error
+	source                  io.ReaderAt
+	position, start, end    uint64
+	zeroCount               int
+	budget                  *parseBudget
+	p                       *rbspParser
+	err                     error
+	maxBytes, maxTotalBytes uint32
 }
 
 func (l *slicePrefixLoader) ensure(width uint32) bool {
@@ -188,12 +201,15 @@ func (l *slicePrefixLoader) ensure(width uint32) bool {
 }
 
 func (l *slicePrefixLoader) readByte() (byte, uint64, bool) {
+	if l.maxBytes == 0 {
+		l.maxBytes, l.maxTotalBytes = MaxSliceHeaderBytes, MaxSliceHeaderTotalBytes
+	}
 	offset := l.position
 	if offset >= l.end {
 		l.fail(CodeRBSPSyntaxTruncated, "slice header prefix is truncated", offset)
 		return 0, offset, false
 	}
-	if offset-l.start >= uint64(MaxSliceHeaderBytes) || l.budget.sliceBytesRead >= MaxSliceHeaderTotalBytes {
+	if offset-l.start >= uint64(l.maxBytes) || l.budget.sliceBytesRead >= l.maxTotalBytes {
 		l.fail(CodeSliceHeaderBudgetReached, "slice header prefix exceeds the byte-read budget", offset)
 		return 0, offset, false
 	}
@@ -225,4 +241,12 @@ func (l *slicePrefixLoader) fail(code, message string, offset uint64) bool {
 	l.p.diagnostics.add(Diagnostic{Code: code, Severity: SeverityError, Offset: offset, Message: message, RecoveryOffset: number(l.end)})
 	l.p.fatal = true
 	return false
+}
+
+func (l *slicePrefixLoader) view() RBSPView {
+	v := l.p.data.view
+	v.ByteLength = uint32(len(l.p.data.bytes))
+	v.EBSPSpan = cursor.Span{ByteOffset: l.start, BitLength: uint32(l.position-l.start) * 8}
+	v.SourceSegments = sourceSegments(l.p.data.sourceOffsets)
+	return v
 }

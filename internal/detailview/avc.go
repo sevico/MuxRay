@@ -25,9 +25,18 @@ func DesktopAVCOptions() flv.AVCVideoOptions {
 	}}
 }
 
+// DesktopFullAVCOptions enables PPS extension/FMO context for full headers.
+// Framing-only callers keep DesktopAVCOptions and its original read depth.
+func DesktopFullAVCOptions() flv.AVCVideoOptions {
+	options := DesktopAVCOptions()
+	options.AVC.ParseFullHeaders = true
+	return options
+}
+
 func (b *builder) avc(ctx context.Context, source io.ReaderAt, tag flv.TagRecord, resolution avccontext.Resolution, parameters *avccontext.ParameterResolution) error {
 	options := DesktopAVCOptions()
 	options.AVC.ParseVUI = true
+	options.AVC.ParseFullHeaders = b.fullAVC
 	if parameters != nil {
 		options.AVC.ParsePPS, options.AVC.ParseSliceHeaders = true, true
 		options.AVC.ParameterSets = parameters.Context
@@ -121,6 +130,9 @@ func (b *builder) avc(ctx context.Context, source io.ReaderAt, tag flv.TagRecord
 			}
 			if n.SliceHeader != nil {
 				b.avcSlicePrefix(id, n.Index, n.SliceHeader)
+				if n.SliceHeader.Full != nil {
+					b.avcSliceFull(id, n.Index, n.SliceHeader.Full)
+				}
 			}
 		}
 		b.encoded(id, "unparsedNALData", "opaque", "NAL data not interpreted; see diagnostics", s.TrailingSpan)
@@ -240,7 +252,7 @@ func (b *builder) avcUnit(parent, name string, length uint32, lengthSpan, dataSp
 		}
 	}
 	if pps != nil {
-		summary := b.add(id, "PPS summary", "derived from RBSP", "Phase-one identifiers and flags; remaining PPS syntax is not expanded", nil)
+		summary := b.add(id, "PPS summary", "derived from RBSP", "Parameter identifiers and flags; further syntax has separate coverage below", nil)
 		b.add(summary, "summaryComplete", "derived boolean", strconv.FormatBool(pps.Complete), nil)
 		if pps.PictureParameterSetIDSpan.BitLength != 0 {
 			b.add(summary, "pictureParameterSetId", "derived uint32", decimal(uint64(pps.PictureParameterSetID)), nil)
@@ -257,6 +269,9 @@ func (b *builder) avcUnit(parent, name string, length uint32, lengthSpan, dataSp
 		b.rbspSummary(summary, pps.RBSP)
 		if pps.Deep != nil {
 			b.avcPPSPrefix(summary, pps.Deep)
+			if pps.Deep.Full != nil {
+				b.avcPPSFull(summary, pps.Deep.Full)
+			}
 		}
 	}
 	return !b.fieldsFull

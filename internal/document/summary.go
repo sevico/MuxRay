@@ -194,7 +194,7 @@ func (d *Document) readSummary(ctx context.Context, id uint64) (*summaryview.Rep
 	if err != nil {
 		return nil, err
 	}
-	result, curves, err := analysis.AnalyzeV2WithCurves(ctx, cursor.WithContext(ctx, d.source), scan, summaryview.DesktopOptions(), func(progress analysis.Progress) {
+	result, curves, err := analysis.AnalyzeV3WithCurves(ctx, cursor.WithContext(ctx, d.source), scan, summaryview.DesktopOptionsV3(), func(progress analysis.Progress) {
 		d.mu.Lock()
 		defer d.mu.Unlock()
 		if !d.closed && !d.changed && d.summary.RequestID == id && (d.summary.State == "pending" || d.summary.State == "canceling") {
@@ -203,7 +203,7 @@ func (d *Document) readSummary(ctx context.Context, id uint64) (*summaryview.Rep
 	})
 	var report *summaryview.Report
 	if err == nil {
-		report, err = summaryview.Project(scan, result)
+		report, err = summaryview.ProjectV3(scan, result)
 		if err == nil {
 			report.Curves = curves
 		}

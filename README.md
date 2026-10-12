@@ -68,6 +68,8 @@ go run ./cmd/muxray detail --tag 0 --pretty sample.flv
 
 `detail --schema-version 3` 也支持 [MP3 v3 schema](docs/schemas/flv-mp3-tag-detail-v3.schema.json)：解析 MPEG-1/2/2.5 单双声道 side-info，保留每个字段的原始 bit 位置，区分本 Tag 内回溯、需要 Tag 之前数据及未知依赖。它检查主数据槽位的长度关系，不解码 Huffman 或重建 reservoir；缺少 Tag 前历史不算损坏。桌面默认展开前两帧，也可在同一 64 帧 / 1 MiB 检查范围内选择完整边界的帧，只展开所选 side-info，并保留同 Tag 前序依赖历史及省略提示；CLI 保留全部已检查帧。详见 [ADR-025](docs/decisions/025-avc-checkpoints-mp3-side-info.md) 与 [ADR-026](docs/decisions/026-desktop-codec-evidence-snapshot-v2.md)。
 
+`detail --schema-version 4` 支持 AVC 普通 NAL 1/5 的完整 slice 头，包括参考列表修改、加权预测、MMCO、CABAC/QP/QS 与去块滤波字段；PPS 支持有界 FMO 0–6、可选缩放矩阵和尾位。桌面默认使用此深度，字段可定位原始 bit。`summary --schema-version 3` 顺序汇总所有已索引 MP3 帧，提供完整帧数、样本数、精确分数时长、逐帧参数/码率变化和未解析字节；默认检查最多 100 万帧头、独立保留 256 条事件。超限、缺失上下文和损坏均保留部分状态，不代表图像或音频可解码。旧 CLI 版本保持兼容；边界见 [ADR-029](docs/decisions/029-full-codec-headers-and-frame-summary.md)。
+
 桌面 H.264 详情对照所选 Tag 的 FLV 关键帧声明、已观察 IDR NAL 和 slice 类型集合，分别说明 NAL 头与 slice 类型覆盖，并可定位原始声明和代表证据。I slice 不等于 IDR，多 slice 不代表多个完整图像；覆盖不全时不会把未观察到当作不存在。此对照复用已有解析结果，不增加源读取，也不改变 Summary 按声明统计的 GOP。
 
 桌面新增 **H.264 批量证据检索**：按 NAL 头筛选声明差异、未知证据或全部候选，支持继续、取消、回看和 Tag/Hex 定位。每批最多 256 Tag、64 条结果、1 MiB 读取；每 Tag 最多 256 个 NAL 头，不批量解析 slice。**MP3 跨 Tag 依赖来源**可按所选帧显式回溯，列出主数据物理槽位的来源 Tag、帧和范围，支持精确跳转。历史不足、损坏、配置切换和预算耗尽保留未知，不重建 reservoir 或解码音频。范围与合同见 [ADR-027](docs/decisions/027-bounded-codec-search-and-mp3-sources.md)。
@@ -92,11 +94,11 @@ Go 应用层新增 `internal/session.Open`：一个会话拥有一个后台扫�
 
 `internal/desktop` 提供异步打开、状态查询、取消、关闭、Tag/诊断分页及详情和 Hex 启动/查询 DTO。`internal/document` 保留同一只读文件至关闭，扫描和后续读取使用独立取消上下文；详情与 Hex 共用单一读取 worker 和递增请求 ID。应用一次只拥有一个槽位；旧 ID 不能操作新文件，64 位数值通过十进制字符串传输。宿主退出有独立的清理入口，仍保持纯 Go 构建。初始适配层见 [`桌面适配层说明`](docs/desktop-adapter-v1.md)，源生命周期及读取协议见 [`ADR-013`](docs/decisions/013-retained-document-details.md) 和 [`ADR-015`](docs/decisions/015-bounded-desktop-hex.md)。
 
-`desktop/` 是独立 Go 模块，接入 Wails v2.14.0 与 React/TypeScript。界面提供原生文件选择、进度、取消/关闭，以及扫描结束后的 Tag/诊断分页（每页 100 条）和 AMF0/AAC/AVC/MP3 按需详情。Hex 默认读取 512 字节、单次上限 4 KiB，支持字段/诊断源位置和 Tag ID 跳转；截断或未支持编码的原始字节也可独立查看。AVC NAL 长度通过有界候选索引定位最近可用 sequence header，长媒体尾部不再受 8,192 条距离上限影响；每次仍验证原始配置并限制解析与读取预算，缺失或超限时保留包头并明确诊断，不猜测长度。此定位不依赖先前选择或媒体概览；SPS/PPS 摘要和其他派生值不伪造连续源位置。桌面所选详情启用 SPS VUI、PPS/slice 前缀与 MP3 多帧/VBR/头部 CRC/side-info 检查；free-format 不虚构码率或帧长，CRC 结果不代表完整音频有效。根模块不引入 GUI 依赖；Windows 与 Linux 构建、测试和功能边界见 [`桌面开发说明`](desktop/README.md)、[`ADR-011`](docs/decisions/011-minimal-wails-shell.md)、[`ADR-014`](docs/decisions/014-bounded-desktop-avc-context.md) 与 [`ADR-020`](docs/decisions/020-indexed-desktop-avc-context.md)。四类详情联动、大文件、源变化恢复及阻塞关闭的既有实测见 [`Hex 原生验收记录`](docs/desktop-hex-20260913.md)。
+`desktop/` 是独立 Go 模块，接入 Wails v2.14.0 与 React/TypeScript。界面提供原生文件选择、进度、取消/关闭，以及扫描结束后的 Tag/诊断分页（每页 100 条）和 AMF0/AAC/AVC/MP3 按需详情。Hex 默认读取 512 字节、单次上限 4 KiB，支持字段/诊断源位置和 Tag ID 跳转；截断或未支持编码的原始字节也可独立查看。AVC NAL 长度通过有界候选索引定位最近可用 sequence header，长媒体尾部不再受 8,192 条距离上限影响；每次仍验证原始配置并限制解析与读取预算，缺失或超限时保留包头并明确诊断，不猜测长度。此定位不依赖先前选择或媒体概览；SPS/PPS 摘要和其他派生值不伪造连续源位置。桌面所选详情启用 SPS VUI、完整普通 PPS/slice 头与 MP3 多帧/VBR/头部 CRC/side-info 检查；free-format 不虚构码率或帧长，CRC 结果不代表完整音频有效。根模块不引入 GUI 依赖；Windows 与 Linux 构建、测试和功能边界见 [`桌面开发说明`](desktop/README.md)、[`ADR-011`](docs/decisions/011-minimal-wails-shell.md)、[`ADR-014`](docs/decisions/014-bounded-desktop-avc-context.md) 与 [`ADR-020`](docs/decisions/020-indexed-desktop-avc-context.md)。四类详情联动、大文件、源变化恢复及阻塞关闭的既有实测见 [`Hex 原生验收记录`](docs/desktop-hex-20260913.md)。
 
 扫描、详情、汇总和输出共用 Ctrl+C 取消上下文，取消退出码为 `130`，不会伪造文件损坏诊断。取消时 stdout 可能不完整，调用方应丢弃；核心返回的部分索引仍可分页读取。取消是协作式的，不能强制中断已阻塞的底层读取或写入。设计依据见 [`ADR-008`](docs/decisions/008-cancellable-chunked-index.md)。
 
-桌面“媒体概览”按需分析已有索引，沿用 CLI v2 核心与保留的源句柄。它与详情、Hex 共用读取 worker 和请求 ID，使用独立的两分钟协作截止时间；完成的概览可在事件定位后继续查看。取消或读取失败不展示半成品，部分索引的结果明确标记覆盖范围。事件列表分别显示观测总数、保留条数与省略状态，诊断总数无法确定时显示未知。桌面采用固定资源预算，跨入口比对应使用相同预算。设计见 [`ADR-016`](docs/decisions/016-retained-desktop-summary.md)，自动、浏览器及 Windows 原生验收的结果与覆盖范围见 [`Summary 验证记录`](docs/desktop-summary-20260913.md)。
+桌面“媒体概览”按需分析已有索引，使用 CLI v3 核心与保留的源句柄。它与详情、Hex 共用读取 worker 和请求 ID，使用独立的两分钟协作截止时间；完成的概览可在事件定位后继续查看。取消或读取失败不展示半成品，部分索引的结果明确标记覆盖范围。事件列表分别显示观测总数、保留条数与省略状态，诊断总数无法确定时显示未知。桌面采用固定资源预算，跨入口比对应使用相同预算。设计见 [`ADR-016`](docs/decisions/016-retained-desktop-summary.md)，自动、浏览器及 Windows 原生验收的结果与覆盖范围见 [`Summary 验证记录`](docs/desktop-summary-20260913.md)。
 
 首批 8 个小样本与 1/2/10 GiB 实际落盘文件的验证结果见 [`语料与大文件实测`](docs/corpus-baseline-20260905.md)，复现方法见 [`tools/README.md`](tools/README.md)。媒体仅保留本地；公开样本尚未清权，另有一次首次取消延迟离群值待调查，不能据此宣告完整语料或性能验收通过。
 

@@ -9,7 +9,7 @@ import (
 const (
 	MaxParameterCheckpoints = 8
 	// Compact contexts contain only fixed-size objects: 32 SPS, 256 PPS,
-	// 256 two-value PPS prefixes and their original NAL spans. The generous
+	// bounded fixed-value PPS metadata and their original NAL spans. The generous
 	// bound is checked against the reachable Go storage by tests.
 	MaxParameterCheckpointBytes = 512 << 10
 )

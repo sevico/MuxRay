@@ -14,7 +14,7 @@ The public Draft 2020-12 contracts are:
 - [`desktop-diagnostic-snapshot-v2.schema.json`](./desktop-diagnostic-snapshot-v2.schema.json) adds the currently retained media curve page to an explicitly requested desktop snapshot v2.
 - [`desktop-diagnostic-snapshot-v3.schema.json`](./desktop-diagnostic-snapshot-v3.schema.json) retains v2 sections and adds only the selected current H.264 search page.
 
-Scan and default detail use `schemaVersion: 1`; AVC/MP3 detail may select 2 or 3; media summary explicitly selects 1 or 2
+Scan and default detail use `schemaVersion: 1`; AVC detail may select 2, 3 or 4; MP3 detail may select 2 or 3; media summary explicitly selects 1, 2 or 3
 and defaults to 1. These are independent contracts. The scan report
 is selected by the `inspect` command. Detail consumers must select the validator
 using both `documentType` and `schemaVersion`: AMF0 uses
@@ -167,3 +167,15 @@ have their own versioned Schema and validation, independent of the IPC API versi
 - `summary.complete: true` excludes error-severity entries from both `scanDiagnostics` and `analysisDiagnostics`; warnings may still coexist with a complete summary when they do not make classification incomplete.
 
 The constraints between duplicated compact fields—such as `tag.offset == tag.span.byteOffset`, `availableDataSize <= dataSize`, and `scan.bytesScanned <= source.sizeBytes`—are semantic invariants tested by MuxRay even where JSON Schema cannot express them portably.
+
+## Full H.264 headers v4 and MP3 summary v3
+
+[`flv-avc-tag-detail-v4.schema.json`](./flv-avc-tag-detail-v4.schema.json) adds
+PPS `full` and NAL `sliceHeaderFull` for ordinary slice headers and bounded
+PPS extensions/FMO. Prefix and full completeness remain separate.
+[`flv-media-summary-v3.schema.json`](./flv-media-summary-v3.schema.json) adds
+`mp3Frames` with sequential complete-frame counts, per-rate samples, rational
+duration, unresolved bytes and independently bounded source events. Event DTS
+belongs to the FLV Tag. Older CLI identities remain frozen. Desktop generic
+metrics/fields/events carry the new facts within existing snapshot v3 bounds.
+See [ADR-029](../decisions/029-full-codec-headers-and-frame-summary.md).

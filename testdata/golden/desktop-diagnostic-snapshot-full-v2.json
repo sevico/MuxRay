@@ -2063,42 +2063,6 @@
           "unit": "count"
         },
         {
-          "section": "mp3Headers",
-          "name": "eventCount",
-          "value": "2",
-          "unit": "count"
-        },
-        {
-          "section": "mp3Headers",
-          "name": "validCount",
-          "value": "2",
-          "unit": "count"
-        },
-        {
-          "section": "mp3Headers",
-          "name": "malformedCount",
-          "value": "0",
-          "unit": "count"
-        },
-        {
-          "section": "mp3Headers",
-          "name": "freeFormatCount",
-          "value": "0",
-          "unit": "count"
-        },
-        {
-          "section": "mp3Headers",
-          "name": "parameterChangeCount",
-          "value": "0",
-          "unit": "count"
-        },
-        {
-          "section": "mp3Headers",
-          "name": "bitrateChangeCount",
-          "value": "0",
-          "unit": "count"
-        },
-        {
           "section": "composition",
           "name": "sampleCount",
           "value": "0",
@@ -2157,6 +2121,120 @@
           "name": "overlapMs",
           "value": null,
           "unit": "ms"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "completeFrameCount",
+          "value": "6",
+          "unit": "frames"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "attemptedHeaderCount",
+          "value": "6",
+          "unit": "headers"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "sampleCount",
+          "value": "6912",
+          "unit": "samples"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "frameBytes",
+          "value": "2502",
+          "unit": "byte"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "unresolvedBytes",
+          "value": "0",
+          "unit": "byte"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "parameterChangeCount",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "bitrateChangeCount",
+          "value": "0",
+          "unit": "count"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "completeTagCount",
+          "value": "2",
+          "unit": "tags"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "partialTagCount",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "freeFormatCount",
+          "value": "0",
+          "unit": "headers"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "truncatedHeaderCount",
+          "value": "0",
+          "unit": "headers"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "malformedHeaderCount",
+          "value": "0",
+          "unit": "headers"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "truncatedFrameCount",
+          "value": "0",
+          "unit": "frames"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "unsupportedLayerCount",
+          "value": "0",
+          "unit": "headers"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "budgetStoppedTagCount",
+          "value": "0",
+          "unit": "tags"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "maxFrames",
+          "value": "1000000",
+          "unit": "headers"
+        },
+        {
+          "section": "mp3Frames",
+          "name": "complete",
+          "value": "true",
+          "unit": ""
+        },
+        {
+          "section": "mp3Frames",
+          "name": "scanComplete",
+          "value": "true",
+          "unit": ""
+        },
+        {
+          "section": "mp3Frames",
+          "name": "durationSeconds",
+          "value": "192/1225",
+          "unit": "s"
         }
       ],
       "lists": [
@@ -2180,8 +2258,8 @@
         },
         {
           "kind": "mp3",
-          "observed": "2",
-          "retained": "2",
+          "observed": "6",
+          "retained": "6",
           "truncated": false
         },
         {
@@ -2203,25 +2281,37 @@
       "bounds": {
         "start": "0",
         "limit": 100,
-        "total": "2",
-        "next": "2"
+        "total": "6",
+        "next": "6"
       },
       "events": [
         {
           "id": "0",
           "tagId": "0",
-          "offset": "13",
+          "offset": "25",
           "bitOffset": 0,
           "dts": "0",
-          "title": "mp3Header",
+          "title": "mp3Frame",
           "severity": "",
-          "message": "",
+          "message": "Sequential frame observation; a stop spans the unresolved Tag suffix. DTS belongs to its FLV Tag. Payload is not decoded.",
           "values": [
             {
               "section": "",
-              "name": "complete",
-              "value": "true",
+              "name": "frameIndex",
+              "value": "0",
+              "unit": "index"
+            },
+            {
+              "section": "",
+              "name": "frameStatus",
+              "value": "complete",
               "unit": ""
+            },
+            {
+              "section": "",
+              "name": "sourceBitLength",
+              "value": "3336",
+              "unit": "bit"
             },
             {
               "section": "",
@@ -2251,13 +2341,7 @@
               "section": "",
               "name": "samplesPerFrame",
               "value": "1152",
-              "unit": "count"
-            },
-            {
-              "section": "",
-              "name": "bitrateMode",
-              "value": "indexed",
-              "unit": ""
+              "unit": "samples"
             },
             {
               "section": "",
@@ -2281,19 +2365,31 @@
         },
         {
           "id": "1",
-          "tagId": "1",
-          "offset": "1280",
+          "tagId": "0",
+          "offset": "442",
           "bitOffset": 0,
-          "dts": "26",
-          "title": "mp3Header",
+          "dts": "0",
+          "title": "mp3Frame",
           "severity": "",
-          "message": "",
+          "message": "Sequential frame observation; a stop spans the unresolved Tag suffix. DTS belongs to its FLV Tag. Payload is not decoded.",
           "values": [
             {
               "section": "",
-              "name": "complete",
-              "value": "true",
+              "name": "frameIndex",
+              "value": "1",
+              "unit": "index"
+            },
+            {
+              "section": "",
+              "name": "frameStatus",
+              "value": "complete",
               "unit": ""
+            },
+            {
+              "section": "",
+              "name": "sourceBitLength",
+              "value": "3336",
+              "unit": "bit"
             },
             {
               "section": "",
@@ -2323,13 +2419,319 @@
               "section": "",
               "name": "samplesPerFrame",
               "value": "1152",
+              "unit": "samples"
+            },
+            {
+              "section": "",
+              "name": "bitrateKbps",
+              "value": "128",
+              "unit": "kbps"
+            },
+            {
+              "section": "",
+              "name": "parametersChangedFromPrevious",
+              "value": "false",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "bitrateChangedFromPrevious",
+              "value": "false",
+              "unit": ""
+            }
+          ]
+        },
+        {
+          "id": "2",
+          "tagId": "0",
+          "offset": "859",
+          "bitOffset": 0,
+          "dts": "0",
+          "title": "mp3Frame",
+          "severity": "",
+          "message": "Sequential frame observation; a stop spans the unresolved Tag suffix. DTS belongs to its FLV Tag. Payload is not decoded.",
+          "values": [
+            {
+              "section": "",
+              "name": "frameIndex",
+              "value": "2",
+              "unit": "index"
+            },
+            {
+              "section": "",
+              "name": "frameStatus",
+              "value": "complete",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "sourceBitLength",
+              "value": "3336",
+              "unit": "bit"
+            },
+            {
+              "section": "",
+              "name": "version",
+              "value": "mpeg1",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "channelMode",
+              "value": "jointStereo",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "samplingFrequencyHz",
+              "value": "44100",
+              "unit": "Hz"
+            },
+            {
+              "section": "",
+              "name": "channels",
+              "value": "2",
               "unit": "count"
             },
             {
               "section": "",
-              "name": "bitrateMode",
-              "value": "indexed",
+              "name": "samplesPerFrame",
+              "value": "1152",
+              "unit": "samples"
+            },
+            {
+              "section": "",
+              "name": "bitrateKbps",
+              "value": "128",
+              "unit": "kbps"
+            },
+            {
+              "section": "",
+              "name": "parametersChangedFromPrevious",
+              "value": "false",
               "unit": ""
+            },
+            {
+              "section": "",
+              "name": "bitrateChangedFromPrevious",
+              "value": "false",
+              "unit": ""
+            }
+          ]
+        },
+        {
+          "id": "3",
+          "tagId": "1",
+          "offset": "1292",
+          "bitOffset": 0,
+          "dts": "26",
+          "title": "mp3Frame",
+          "severity": "",
+          "message": "Sequential frame observation; a stop spans the unresolved Tag suffix. DTS belongs to its FLV Tag. Payload is not decoded.",
+          "values": [
+            {
+              "section": "",
+              "name": "frameIndex",
+              "value": "0",
+              "unit": "index"
+            },
+            {
+              "section": "",
+              "name": "frameStatus",
+              "value": "complete",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "sourceBitLength",
+              "value": "3336",
+              "unit": "bit"
+            },
+            {
+              "section": "",
+              "name": "version",
+              "value": "mpeg1",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "channelMode",
+              "value": "jointStereo",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "samplingFrequencyHz",
+              "value": "44100",
+              "unit": "Hz"
+            },
+            {
+              "section": "",
+              "name": "channels",
+              "value": "2",
+              "unit": "count"
+            },
+            {
+              "section": "",
+              "name": "samplesPerFrame",
+              "value": "1152",
+              "unit": "samples"
+            },
+            {
+              "section": "",
+              "name": "bitrateKbps",
+              "value": "128",
+              "unit": "kbps"
+            },
+            {
+              "section": "",
+              "name": "parametersChangedFromPrevious",
+              "value": "false",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "bitrateChangedFromPrevious",
+              "value": "false",
+              "unit": ""
+            }
+          ]
+        },
+        {
+          "id": "4",
+          "tagId": "1",
+          "offset": "1709",
+          "bitOffset": 0,
+          "dts": "26",
+          "title": "mp3Frame",
+          "severity": "",
+          "message": "Sequential frame observation; a stop spans the unresolved Tag suffix. DTS belongs to its FLV Tag. Payload is not decoded.",
+          "values": [
+            {
+              "section": "",
+              "name": "frameIndex",
+              "value": "1",
+              "unit": "index"
+            },
+            {
+              "section": "",
+              "name": "frameStatus",
+              "value": "complete",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "sourceBitLength",
+              "value": "3336",
+              "unit": "bit"
+            },
+            {
+              "section": "",
+              "name": "version",
+              "value": "mpeg1",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "channelMode",
+              "value": "jointStereo",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "samplingFrequencyHz",
+              "value": "44100",
+              "unit": "Hz"
+            },
+            {
+              "section": "",
+              "name": "channels",
+              "value": "2",
+              "unit": "count"
+            },
+            {
+              "section": "",
+              "name": "samplesPerFrame",
+              "value": "1152",
+              "unit": "samples"
+            },
+            {
+              "section": "",
+              "name": "bitrateKbps",
+              "value": "128",
+              "unit": "kbps"
+            },
+            {
+              "section": "",
+              "name": "parametersChangedFromPrevious",
+              "value": "false",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "bitrateChangedFromPrevious",
+              "value": "false",
+              "unit": ""
+            }
+          ]
+        },
+        {
+          "id": "5",
+          "tagId": "1",
+          "offset": "2126",
+          "bitOffset": 0,
+          "dts": "26",
+          "title": "mp3Frame",
+          "severity": "",
+          "message": "Sequential frame observation; a stop spans the unresolved Tag suffix. DTS belongs to its FLV Tag. Payload is not decoded.",
+          "values": [
+            {
+              "section": "",
+              "name": "frameIndex",
+              "value": "2",
+              "unit": "index"
+            },
+            {
+              "section": "",
+              "name": "frameStatus",
+              "value": "complete",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "sourceBitLength",
+              "value": "3336",
+              "unit": "bit"
+            },
+            {
+              "section": "",
+              "name": "version",
+              "value": "mpeg1",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "channelMode",
+              "value": "jointStereo",
+              "unit": ""
+            },
+            {
+              "section": "",
+              "name": "samplingFrequencyHz",
+              "value": "44100",
+              "unit": "Hz"
+            },
+            {
+              "section": "",
+              "name": "channels",
+              "value": "2",
+              "unit": "count"
+            },
+            {
+              "section": "",
+              "name": "samplesPerFrame",
+              "value": "1152",
+              "unit": "samples"
             },
             {
               "section": "",

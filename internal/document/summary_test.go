@@ -53,11 +53,11 @@ func TestSummarySharedIndexCoreParityRetentionAndCopies(t *testing.T) {
 		t.Fatalf("expected shared chunked index: %v", err)
 	}
 	index := scan.Index()
-	wantRaw, err := analysis.AnalyzeV2(t.Context(), cursor.WithContext(t.Context(), s), scan, summaryview.DesktopOptions())
+	wantRaw, err := analysis.AnalyzeV3(t.Context(), cursor.WithContext(t.Context(), s), scan, summaryview.DesktopOptionsV3())
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, err := summaryview.Project(scan, wantRaw)
+	want, err := summaryview.ProjectV3(scan, wantRaw)
 	if err != nil {
 		t.Fatal(err)
 	}

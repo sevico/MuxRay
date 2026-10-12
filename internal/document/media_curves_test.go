@@ -39,8 +39,10 @@ func TestMediaCurvesPagesBeyondEventRetentionOwnCopiesWithoutIO(t *testing.T) {
 		t.Fatal(got.Err)
 	}
 	reads, stats := s.reads.Load(), s.stats.Load()
+	// This fixture has only fixed MP3 headers, with absent frame bodies. V3
+	// keeps the same interval curve numbers but explicitly marks coverage partial.
 	page, err := d.MediaCurves(1, 1, 1)
-	if err != nil || page.Start != 1 || page.Next != 2 || page.Total != 3 || page.IndexedTags != 600 || !page.ScanComplete || !page.Complete || len(page.Points) != 1 {
+	if err != nil || page.Start != 1 || page.Next != 2 || page.Total != 3 || page.IndexedTags != 600 || !page.ScanComplete || page.Complete || len(page.Points) != 1 {
 		t.Fatalf("page: %+v %v", page, err)
 	}
 	point := page.Points[0]

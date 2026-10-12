@@ -234,3 +234,66 @@ jobs:
             .cache/sh-ci/*.sha256
           include-hidden-files: true
           if-no-files-found: ignore
+
+  linux-full-codec:
+    name: Desktop Linux complete H264 headers and MP3 frame summary
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      GOTOOLCHAIN: go1.27.0
+      CGO_ENABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.0'
+          cache: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+      - name: Prepare independent regression evidence
+        run: |
+          mkdir -p .cache/fc-ci
+          git rev-parse HEAD > .cache/fc-ci/source-revision.log
+      - name: Install desktop and native regression dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev dbus-x11 xvfb xauth libglib2.0-bin at-spi2-core python3-pyatspi python3-xlib python3-jsonschema ffmpeg
+      - name: Build and identify production binaries
+        run: |
+          ./desktop/build-production.sh 2>&1 | tee .cache/fc-ci/production-build.log
+          git diff --exit-code -- desktop/frontend/wailsjs/go desktop/go.mod desktop/go.sum
+          go build -trimpath -o .cache/fc-ci/muxray ./cmd/muxray
+          sha256sum desktop/build/bin/MuxRay .cache/fc-ci/muxray > .cache/fc-ci/binaries.sha256
+      - name: Test independent codec regression tools
+        run: /usr/bin/python3 -B -m unittest discover -s tools/codec-regression -p '*_test.py' -v 2>&1 | tee .cache/fc-ci/tool-tests.log
+      - name: Generate source-derived complete header and frame expectations
+        run: /usr/bin/python3 -B tools/codec-regression/full_codec_oracle.py --output-dir "$PWD/.cache/fc-ci/samples" 2>&1 | tee .cache/fc-ci/generation.log
+      - name: Validate full CLI contracts, values and source bits
+        run: /usr/bin/python3 -B tools/codec-regression/verify_full_codec.py --input-dir "$PWD/.cache/fc-ci/samples" --cli "$PWD/.cache/fc-ci/muxray" --output-dir "$PWD/.cache/fc-ci/cli" 2>&1 | tee .cache/fc-ci/cli.log
+      - name: Native full H264 syntax and tail source links
+        run: /usr/bin/python3 -B tools/codec-regression/native_full_h264.py --input-dir "$PWD/.cache/fc-ci/samples" --binary "$PWD/desktop/build/bin/MuxRay" --output-dir "$PWD/.cache/fc-ci/h264" --timeout-seconds 240 2>&1 | tee .cache/fc-ci/h264.log
+      - name: Native all-frame MP3 summary, retained pages and source links
+        run: /usr/bin/python3 -B tools/codec-regression/native_full_summary.py --binary "$PWD/desktop/build/bin/MuxRay" --output-dir "$PWD/.cache/fc-ci/mp3" --timeout-seconds 420 2>&1 | tee .cache/fc-ci/mp3.log
+      - name: Verify binaries unchanged
+        if: always()
+        run: |
+          if [[ -f .cache/fc-ci/binaries.sha256 ]]; then
+            sha256sum --check .cache/fc-ci/binaries.sha256 2>&1 | tee .cache/fc-ci/binary-check.log
+          fi
+      - name: Preserve full codec evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-full-codec-regression
+          path: |
+            .cache/fc-ci/**/*.json
+            .cache/fc-ci/**/*.log
+            .cache/fc-ci/*.sha256
+          include-hidden-files: true
+          if-no-files-found: ignore

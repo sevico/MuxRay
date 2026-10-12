@@ -177,7 +177,7 @@ function DetailPanel({ view, onRetry, onContinue, onSelectMP3, onInspectMP3, onL
     {view.detailError && <div className="request-error" role="alert"><span>{fault(view.detailError)}</span>{view.detailRetry && <button onClick={onRetry}>{view.detailRetry === 'reload' ? '重新读取详情' : '重试详情查询'}</button>}</div>}
     {detail && <>
       <p className="detail-note">字段位置使用原文件的 byte 偏移和 bit 起点；位长包含字段占用的位数。{detail.kind === 'aacAudio' && ' AAC raw packet 仅显示封装信息与数据范围，不解码音频。'}</p>
-      {detail.kind === 'avcVideo' && <p className="detail-note">AVC 展开 SPS VUI、PPS 必要字段和 slice 头前缀，显示参数集引用及 I/P/B 类型；前缀完整不代表整帧可解码。时序和 HRD 是码流声明。派生值及跨段字段的单一原始位置显示“—”。</p>}
+      {detail.kind === 'avcVideo' && <p className="detail-note">AVC 展开 SPS VUI、PPS 扩展及普通 slice 完整头部，显示参考列表、权重、MMCO、QP 与去块滤波等字段。前缀与完整头部分别标明覆盖；不解码 slice 数据，不代表整帧可解码。时序和 HRD 是码流声明。派生值及跨段字段的单一原始位置显示“—”。</p>}
       {replay && <div className="detail-note" role="status">参数上下文已检查到 Tag {replay.next} 之前，目标为 Tag {replay.target}。{replay.canContinue ? <button disabled={busy || view.detailState !== 'ready' || view.summaryRunning} onClick={onContinue}>继续准备参数</button> : '当前段无法继续推进；请检查源数据或解析预算限制。'}</div>}
       {detail.kind === 'mp3Audio' && <>
         <p className="detail-note">MP3 在当前 Tag 内检查帧边界、VBR 声明、side-info 和头部 CRC，并显示主数据回指范围。范围覆盖不代表 bit-reservoir 或音频解码有效；可按需回溯前序 Tag，定位主数据依赖来源。</p>

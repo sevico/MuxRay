@@ -18,7 +18,7 @@ func (c *ParameterSetContext) Clone() *ParameterSetContext {
 	return &clone
 }
 
-// CompactClone retains only the immutable values needed by slice prefix
+// CompactClone retains only immutable values needed by slice header
 // parsing. It owns no RBSP bytes, field mappings, VUI, or source handle. The
 // 32 SPS / 256 PPS slots and fixed-size pointees bound checkpoint storage.
 // This is a context snapshot, not a substitute for the parsed parameter detail.
@@ -35,6 +35,8 @@ func (c *ParameterSetContext) CompactClone() *ParameterSetContext {
 			RBSP:                        RBSPView{EBSPSpan: s.RBSP.EBSPSpan},
 			SequenceParameterSetID:      s.SequenceParameterSetID,
 			BitDepthLumaMinus8:          s.BitDepthLumaMinus8,
+			ChromaFormatIDC:             s.ChromaFormatIDC,
+			MaxNumRefFrames:             s.MaxNumRefFrames,
 			SeparateColourPlaneFlag:     s.SeparateColourPlaneFlag,
 			Log2MaxFrameNumMinus4:       s.Log2MaxFrameNumMinus4,
 			FrameMbsOnlyFlag:            s.FrameMbsOnlyFlag,
@@ -57,11 +59,24 @@ func (c *ParameterSetContext) CompactClone() *ParameterSetContext {
 			SequenceParameterSetID:                p.SequenceParameterSetID,
 			BottomFieldPicOrderInFramePresentFlag: p.BottomFieldPicOrderInFramePresentFlag,
 			Complete:                              p.Complete,
+			EntropyCodingModeFlag:                 p.EntropyCodingModeFlag,
 			Deep: &PPSDetails{
 				PicInitQPMinus26:           &SignedField{Value: p.Deep.PicInitQPMinus26.Value},
 				RedundantPicCntPresentFlag: &VUIBooleanField{Value: p.Deep.RedundantPicCntPresentFlag.Value},
 				PrefixComplete:             p.Deep.PrefixComplete,
 			},
+		}
+
+		if p.Deep.Full != nil {
+			d := out.pps[id].Deep
+			d.NumSliceGroupsMinus1 = compactUnsigned(p.Deep.NumSliceGroupsMinus1)
+			d.NumRefIdxL0DefaultActiveMinus1 = compactUnsigned(p.Deep.NumRefIdxL0DefaultActiveMinus1)
+			d.NumRefIdxL1DefaultActiveMinus1 = compactUnsigned(p.Deep.NumRefIdxL1DefaultActiveMinus1)
+			d.WeightedPredFlag = compactBoolean(p.Deep.WeightedPredFlag)
+			d.WeightedBipredIDC = compactUnsigned(p.Deep.WeightedBipredIDC)
+			d.PicInitQSMinus26 = compactSigned(p.Deep.PicInitQSMinus26)
+			d.DeblockingFilterControlPresentFlag = compactBoolean(p.Deep.DeblockingFilterControlPresentFlag)
+			d.Full = &PPSFullDetails{Complete: p.Deep.Full.Complete, SliceGroupMapType: compactUnsigned(p.Deep.Full.SliceGroupMapType), SliceGroupChangeRateMinus1: compactUnsigned(p.Deep.Full.SliceGroupChangeRateMinus1)}
 		}
 	}
 	return out
@@ -96,11 +111,21 @@ func (c *ParameterSetContext) AddNALUnit(unit NALUnit) {
 		s := unit.SequenceParameterSet
 		if s == nil || s.SequenceParameterSetIDSpan.BitLength == 0 || s.SequenceParameterSetID > 31 {
 			c.sps = [32]*SequenceParameterSet{}
+			c.invalidateFullPPS(nil)
 			return
 		}
+		previous := c.sps[s.SequenceParameterSetID]
 		c.sps[s.SequenceParameterSetID] = nil
 		if !unit.SummaryComplete || !s.Complete || s.Log2MaxFrameNumMinus4 > 12 || s.PicOrderCntType > 2 || s.Log2MaxPicOrderCntLSBMinus4 > 12 {
+			c.invalidateFullPPS(&s.SequenceParameterSetID)
 			return
+		}
+		// Full PPS FMO bounds and scaling-list layout were validated against
+		// the preceding SPS. A changed dependency must not silently retain
+		// that validation. Identical syntax declarations at a new span remain
+		// usable; legacy PPS-prefix contexts keep their original behavior.
+		if previous == nil || previous.PicWidthInMbsMinus1 != s.PicWidthInMbsMinus1 || previous.PicHeightInMapUnitsMinus1 != s.PicHeightInMapUnitsMinus1 || previous.ChromaFormatIDC != s.ChromaFormatIDC || previous.BitDepthLumaMinus8 != s.BitDepthLumaMinus8 {
+			c.invalidateFullPPS(&s.SequenceParameterSetID)
 		}
 		copy := *s
 		copy.RBSP = RBSPView{EBSPSpan: s.RBSP.EBSPSpan}
@@ -150,4 +175,31 @@ func (c *ParameterSetContext) UsablePPSCount() (count uint32) {
 		}
 	}
 	return
+}
+
+func compactUnsigned(f *VUIUnsignedField) *VUIUnsignedField {
+	if f == nil {
+		return nil
+	}
+	return &VUIUnsignedField{Value: f.Value}
+}
+func compactBoolean(f *VUIBooleanField) *VUIBooleanField {
+	if f == nil {
+		return nil
+	}
+	return &VUIBooleanField{Value: f.Value}
+}
+func compactSigned(f *SignedField) *SignedField {
+	if f == nil {
+		return nil
+	}
+	return &SignedField{Value: f.Value}
+}
+
+func (c *ParameterSetContext) invalidateFullPPS(spsID *uint32) {
+	for id, p := range c.pps {
+		if p != nil && p.Deep != nil && p.Deep.Full != nil && (spsID == nil || p.SequenceParameterSetID == *spsID) {
+			c.pps[id] = nil
+		}
+	}
 }

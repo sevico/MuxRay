@@ -93,3 +93,7 @@ jobs:
         run: go test ./internal/analysis -run=^$ -fuzz=FuzzAnalyzeTag -fuzztime=30s
       - name: Fuzz MP3 cross-tag media analysis v2
         run: go test ./internal/analysis -run=^$ -fuzz=FuzzAnalyzeV2 -fuzztime=30s
+      - name: Fuzz bounded complete H264 headers
+        run: go test ./internal/avc -run=^$ -fuzz=FuzzFullHeaders -fuzztime=30s
+      - name: Fuzz sequential MP3 frame summary
+        run: go test ./internal/analysis -run=^$ -fuzz=FuzzMP3FramesSummary -fuzztime=30s

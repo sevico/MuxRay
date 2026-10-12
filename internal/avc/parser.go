@@ -23,6 +23,9 @@ func ParseDecoderConfigurationRecord(source io.ReaderAt, payload cursor.Span, op
 		diagnostics: newDiagnosticCollector(normalized.MaxDiagnostics, end), result: result,
 		budget: newParseBudget(normalized),
 	}
+	if normalized.ParseFullHeaders {
+		p.options.ParameterSets = NewParameterSetContext()
+	}
 	p.parse()
 	p.finish()
 	if p.err != nil {
@@ -232,6 +235,9 @@ func (p *configurationParser) readParameterSets(count uint32, expected NALUnitTy
 		item.SummaryComplete = summaryComplete
 		items = append(items, item)
 		p.parameterSets++
+		if p.options.ParseFullHeaders {
+			p.options.ParameterSets.AddNALUnit(NALUnit{Header: header, HeaderPresent: header.Complete, SequenceParameterSet: sps, PictureParameterSet: pps, SummaryComplete: summaryComplete})
+		}
 		if err != nil {
 			p.err = fmt.Errorf("avc: parse %s %d: %w", label, index, err)
 			return items
@@ -403,14 +409,24 @@ func ParseLengthPrefixedNALUnits(source io.ReaderAt, payload cursor.Span, length
 				Expected: number(1), Actual: number(0), RecoveryOffset: number(end),
 			})
 		} else {
-			header, sps, pps, summaryComplete, parseErr := parseParameterSetSummary(source, span, normalized, budget, diagnostics)
+			header, sps, pps, summaryComplete, parseErr := parseParameterSetSummary(source, span, withParameterContext(normalized, parameterContext), budget, diagnostics)
 			unit.Header, unit.HeaderPresent = header, header.Complete
 			unit.SequenceParameterSet, unit.PictureParameterSet = sps, pps
 			unit.SummaryComplete = summaryComplete
 			if normalized.ParseSliceHeaders && parseErr == nil && header.Complete &&
 				(header.NALUnitType == NALUnitTypeNonIDRSlice || header.NALUnitType == NALUnitTypeIDRSlice) {
-				unit.SliceHeader, parseErr = parseSliceHeader(source, span, header, parameterContext, budget, diagnostics)
+				unit.SliceHeader, parseErr = parseSliceHeader(source, span, header, parameterContext, budget, diagnostics, normalized.ParseFullHeaders)
 				unit.SummaryComplete = unit.SliceHeader != nil && unit.SliceHeader.PrefixComplete
+				if normalized.ParseFullHeaders {
+					unit.SummaryComplete = unit.SummaryComplete && unit.SliceHeader.Full != nil && unit.SliceHeader.Full.Complete
+				}
+			}
+			if normalized.ParseFullHeaders && normalized.ParseSliceHeaders && parseErr == nil && header.Complete {
+				switch header.NALUnitType {
+				case NALUnitTypeDataPartitionA, NALUnitTypeDataPartitionB, NALUnitTypeDataPartitionC, NALUnitTypeAuxiliaryCodedSlice, NALUnitTypeCodedSliceExtension, NALUnitTypeDepthViewCodedSliceExt:
+					diagnostics.add(Diagnostic{Code: CodeSliceHeaderUnsupported, Severity: SeverityError, Offset: span.ByteOffset, Message: "full slice headers support ordinary NAL types 1 and 5 only"})
+					unit.SummaryComplete = false
+				}
 			}
 			if parseErr != nil {
 				result.NALUnits = append(result.NALUnits, unit)
@@ -422,7 +438,7 @@ func ParseLengthPrefixedNALUnits(source io.ReaderAt, payload cursor.Span, length
 				return result, fmt.Errorf("avc: parse NAL unit %d: %w", unit.Index, parseErr)
 			}
 		}
-		if normalized.ParseSliceHeaders {
+		if normalized.ParseSliceHeaders || normalized.ParseFullHeaders {
 			parameterContext.AddNALUnit(unit)
 		}
 		result.NALUnits = append(result.NALUnits, unit)
@@ -470,4 +486,11 @@ func minUint32(a, b uint32) uint32 {
 
 func configurationHasExtension(profile uint8) bool {
 	return profile != 66 && profile != 77 && profile != 88
+}
+
+func withParameterContext(o Options, c *ParameterSetContext) Options {
+	if o.ParseFullHeaders {
+		o.ParameterSets = c
+	}
+	return o
 }

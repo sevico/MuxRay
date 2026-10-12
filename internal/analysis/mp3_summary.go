@@ -124,6 +124,7 @@ type summaryV2State struct {
 	haveMP3Header       bool
 	mp3Bitrate          bitrateAccumulator
 	curves              *mediaCurveCollector
+	frames              *mp3FrameState
 }
 
 func (a *analyzer) unknownAudioV2() {
@@ -133,11 +134,21 @@ func (a *analyzer) unknownAudioV2() {
 	a.v2.audioCodecs.UnknownTagCount++
 	a.v2.haveSoundFormat = false
 	a.v2.haveMP3Header = false
+	if a.v2.frames != nil {
+		a.v2.frames.summary.UnknownAudioTagCount++
+		a.v2.frames.havePrevious = false
+	}
 	a.breakAudioCoverageV2()
 }
 
 func (a *analyzer) observeAudioCodecV2(soundFormat uint8) {
 	v2 := a.v2
+	if v2.frames != nil && soundFormat != flv.SoundFormatMP3 {
+		v2.frames.havePrevious = false
+		if soundFormat != flv.SoundFormatAAC {
+			v2.frames.summary.UnsupportedAudioTagCount++
+		}
+	}
 	switch soundFormat {
 	case flv.SoundFormatAAC:
 		v2.audioCodecs.AACTagCount++
@@ -167,7 +178,7 @@ func (a *analyzer) visitMP3(tag flv.TagRecord) error {
 	parsed, err := mp3.ParseFrameHeader(a.source, cursor.Span{
 		ByteOffset: tag.PayloadSpan().ByteOffset + 1,
 		BitLength:  (tag.DataSize - 1) * 8,
-	}, mp3.Options{})
+	}, mp3.Options{InspectFrames: v2.frames != nil})
 	if err != nil {
 		return fmt.Errorf("analysis: parse MP3 first header tag %d: %w", tag.ID, err)
 	}
@@ -224,6 +235,9 @@ func (a *analyzer) visitMP3(tag flv.TagRecord) error {
 		headers.Events = append(headers.Events, event)
 	} else {
 		headers.Truncated = true
+	}
+	if v2.frames != nil {
+		return a.visitMP3Frames(tag, parsed)
 	}
 	return nil
 }

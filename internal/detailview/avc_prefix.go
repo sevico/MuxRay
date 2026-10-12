@@ -30,7 +30,11 @@ func (b *builder) avcParameterContext(parent string, p avccontext.ParameterResol
 }
 
 func (b *builder) avcPPSPrefix(parent string, p *avc.PPSDetails) {
-	id := b.add(parent, "PPS prefix", "RBSP syntax", "Through redundant_pic_cnt_present_flag; extensions and trailing bits are not validated", nil)
+	scope := "Through redundant_pic_cnt_present_flag; extensions and trailing bits are not validated"
+	if p.Full != nil {
+		scope = "Fields through redundant_pic_cnt_present_flag; see PPS extended syntax for remaining coverage"
+	}
+	id := b.add(parent, "PPS prefix", "RBSP syntax", scope, nil)
 	b.add(id, "prefixComplete", "derived boolean", strconv.FormatBool(p.PrefixComplete), nil)
 	b.prefixUint(id, "numSliceGroupsMinus1", p.NumSliceGroupsMinus1)
 	b.prefixUint(id, "numRefIdxL0DefaultActiveMinus1", p.NumRefIdxL0DefaultActiveMinus1)
@@ -47,7 +51,11 @@ func (b *builder) avcPPSPrefix(parent string, p *avc.PPSDetails) {
 }
 
 func (b *builder) avcSlicePrefix(parent string, index uint32, p *avc.SliceHeader) {
-	id := b.add(parent, fmt.Sprintf("Slice prefix NAL[%d]", index), "RBSP syntax", "Through redundant_pic_cnt only; remaining header and picture data are not decoded", nil)
+	scope := "Through redundant_pic_cnt only; remaining header and picture data are not decoded"
+	if p.Full != nil {
+		scope = "Fields through redundant_pic_cnt; see full header for remaining coverage"
+	}
+	id := b.add(parent, fmt.Sprintf("Slice prefix NAL[%d]", index), "RBSP syntax", scope, nil)
 	b.add(id, "prefixComplete", "derived boolean", strconv.FormatBool(p.PrefixComplete), nil)
 	b.prefixUint(id, "firstMbInSlice", p.FirstMBInSlice)
 	b.prefixUint(id, "sliceType", p.SliceType)

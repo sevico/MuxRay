@@ -31,6 +31,8 @@ def arguments(argv=None):
     parser.add_argument('--continue-context', type=int, default=0, help='explicit AVC parameter replay actions, 0 through 4; export every stage')
     parser.add_argument('--revisit-tag', type=int, help='after replay, visit an earlier Tag then return to the selected Tag')
     parser.add_argument('--mp3-browse', action='store_true', help='select frame 2 then last selectable frame, exporting each')
+    parser.add_argument('--mp3-summary', action='store_true', help='inspect all retained MP3 summary event pages and a late-frame Hex source')
+    parser.add_argument('--field-name', help='click one uniquely named source-backed detail field and retain Hex evidence')
     parser.add_argument('--avc-evidence', action='store_true', help='click AVC declaration/NAL/slice source buttons and save each Hex selection UI')
     parser.add_argument('--avc-search', choices=['mismatches', 'unknown', 'all'], help='inspect real bounded AVC search pages and source/detail navigation')
     parser.add_argument('--avc-search-pages', type=int, default=1, help='maximum explicit AVC search batches, 1 through 96')
@@ -54,6 +56,8 @@ def arguments(argv=None):
         args.tag = 0 if args.source else 4
     if not 0 <= args.tag < 1_000_000:
         parser.error('--tag must be between 0 and 999999 (desktop index budget)')
+    if args.field_name is not None and (not args.field_name or len(args.field_name) > 256 or not args.field_name.isprintable()):
+        parser.error('--field-name must be 1 through 256 printable characters')
     if not 0 <= args.continue_context <= 4:
         parser.error('--continue-context must be between 0 and 4')
     if args.revisit_tag is not None and (not args.continue_context or not 0 <= args.revisit_tag < args.tag):
@@ -103,9 +107,9 @@ def generated_fixture():
     selected = records[4]
     end = selected['offset'] + 15 + selected['payloadBytes']
     # The historical Hex fixture's 65 88 NAL predates slice-prefix parsing.
-    # Keep its other Tags but supply the minimum valid prefix for its PPS/SPS:
-    # first_mb=0, I slice=2, PPS=0, frame_num=0 (4 bits), idr_pic_id=0.
-    payload = bytes.fromhex('17010000000000000365b840')
+    # Keep its other Tags but provide the header through QP/deblocking syntax
+    # for its PPS/SPS, followed by opaque data; the macroblocks are not decoded.
+    payload = bytes.fromhex('17010000000000000465b840a8')
     return data[:selected['offset']] + tag(9, payload) + data[end:]
 
 
@@ -383,9 +387,39 @@ def run_worker(args):
     result = {'passed': False, 'pid': app.pid}
     try:
         open_source()
-        if args.media_curves:
+        if args.media_curves or args.mp3_summary:
             click('分析媒体')
             wait(lambda: find('push button', '查看媒体曲线').getState().contains(pyatspi.STATE_ENABLED), 'media summary ready', 90)
+        if args.mp3_summary:
+            click('MP3 帧头 (256)', 'page tab')
+            result['mp3SummaryPages'] = []
+            for index in range(3):
+                start = index * 100
+                expected_buttons = [f'定位媒体事件 {i} 原始字节' for i in range(start, min(start + 100, 256))]
+                wait(lambda: [name for _, _, role, name in rows() if role == 'push button' and
+                              re.fullmatch(r'定位媒体事件 \d+ 原始字节', name)] == expected_buttons, 'MP3 summary event page ready')
+                ui, snapshot_name = f'mp3-summary-page-{index}-ui.json', f'mp3-summary-page-{index}.json'
+                dump(ui)
+                snapshot, checked = export_snapshot(snapshot_name)
+                result['mp3SummaryPages'].append({'uiFile': ui, 'uiSHA256': digest(out / ui), 'start': start, 'rowCount': len(expected_buttons),
+                                                  'file': snapshot_name, 'snapshotCheck': checked})
+                if not find('push button', '媒体事件下一页').getState().contains(pyatspi.STATE_ENABLED):
+                    break
+                require(index < 2, 'summary exceeded the expected 256-event retained prefix')
+                click('媒体事件下一页')
+            require(len(result['mp3SummaryPages']) == 3, 'summary did not expose all three retained event pages')
+            last = snapshot['summaryPage']['page']['events'][-1]
+            require(last['title'] == 'mp3Frame', 'summary did not expose full-frame observations')
+            click(f'定位媒体事件 {last["id"]} 原始字节')
+            wait_text(f'媒体概览 · mp3Frame · {last["offset"]} : 0 · 仅标记位置，无已知范围。')
+            wait(lambda: any(n == f'查看 byte {last["offset"]} 的位' for _, _, _, n in rows()), 'summary late-frame Hex source')
+            dump('mp3-summary-source-ui.json')
+            _, checked = export_snapshot('mp3-summary-source.json')
+            result['mp3SummarySource'] = {'uiFile': 'mp3-summary-source-ui.json',
+                                           'uiSHA256': digest(out / 'mp3-summary-source-ui.json'),
+                                           'file': 'mp3-summary-source.json', 'snapshotCheck': checked,
+                                           'eventId': last['id'], 'offset': last['offset']}
+        if args.media_curves:
             click('查看媒体曲线')
             wait_text(' · 本页 ')
             metric = {'audio': '音频码率', 'video': '视频码率', 'mp3': 'MP3 码率', 'gopAverage': 'GOP 平均时长', 'gopMax': 'GOP 最长时长'}[args.media_curves]
@@ -590,6 +624,19 @@ def run_worker(args):
                 _, checked = export_snapshot('context-revisit.json', args.revisit_tag)
                 result['contextStages'].append({'file': 'context-revisit.json', 'snapshotCheck': checked})
                 select_tag(args.tag)
+        if args.field_name:
+            initial, checked = export_snapshot('field-initial.json', args.tag)
+            fields = [field for field in initial['detail']['detail']['fields'] if field['name'] == args.field_name and field['span'] is not None]
+            require(len(fields) == 1, 'detail source field is missing or ambiguous: ' + args.field_name)
+            span = fields[0]['span']
+            click('定位字段 ' + args.field_name)
+            wait_text(f'{args.field_name} · {span["byteOffset"]} : {span["bitOffset"]} · {span["bitLength"]} bit')
+            wait(lambda: any(n == f'查看 byte {span["byteOffset"]} 的位' for _, _, _, n in rows()), 'detail field Hex source')
+            dump('field-source-ui.json')
+            _, source_check = export_snapshot('field-source.json')
+            result['fieldSource'] = {'fieldName': args.field_name, 'span': span, 'initialFile': 'field-initial.json',
+                                      'initialSnapshotCheck': checked, 'file': 'field-source.json', 'snapshotCheck': source_check,
+                                      'uiFile': 'field-source-ui.json', 'uiSHA256': digest(out / 'field-source-ui.json')}
         _, result['snapshotCheck'] = export_snapshot('snapshot.json', args.tag)
         dump('saved-ui.json')
         result['sourceFDsBeforeClose'] = source_fds(observe(app.pid, known), source)
@@ -662,6 +709,10 @@ def launch(args):
     command.extend(['--continue-context', str(args.continue_context)])
     if args.mp3_browse:
         command.append('--mp3-browse')
+    if args.mp3_summary:
+        command.append('--mp3-summary')
+    if args.field_name:
+        command.extend(['--field-name', args.field_name])
     if args.avc_evidence:
         command.append('--avc-evidence')
     if args.avc_search:
@@ -682,7 +733,7 @@ def launch(args):
               'sourceBytes': args.source.stat().st_size, 'origin': 'generated' if generated else 'user-supplied',
               'tag': args.tag, 'maxSourceBytes': args.max_source_bytes, 'timeoutSeconds': args.timeout_seconds,
               'continueContext': args.continue_context, 'revisitTag': args.revisit_tag,
-              'mp3Browse': args.mp3_browse, 'avcEvidence': args.avc_evidence, 'mediaCurves': args.media_curves,
+              'mp3Browse': args.mp3_browse, 'mp3Summary': args.mp3_summary, 'fieldName': args.field_name, 'avcEvidence': args.avc_evidence, 'mediaCurves': args.media_curves,
               'avcSearch': args.avc_search, 'avcSearchPages': args.avc_search_pages, 'avcSearchLong': args.avc_search_long,
               'avcSearchGate': str(args.avc_search_gate) if args.avc_search_gate else None, 'avcSearchAction': args.avc_search_action, 'mp3History': args.mp3_history, 'mp3Frame': args.mp3_frame,
               'argv': command, 'environment': {key: env[key] for key in env if key.startswith('XDG_') or key in

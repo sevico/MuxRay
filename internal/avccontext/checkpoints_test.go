@@ -173,7 +173,10 @@ func TestCompactCheckpointStorageHasFixedBound(t *testing.T) {
 		sets.AddNALUnit(avc.NALUnit{HeaderPresent: true, SummaryComplete: true, Header: avc.NALHeader{NALUnitType: 7}, SequenceParameterSet: &avc.SequenceParameterSet{Complete: true, SequenceParameterSetID: id, SequenceParameterSetIDSpan: span}})
 	}
 	for id := uint32(0); id < 256; id++ {
-		sets.AddNALUnit(avc.NALUnit{HeaderPresent: true, SummaryComplete: true, Header: avc.NALHeader{NALUnitType: 8}, PictureParameterSet: &avc.PictureParameterSet{Complete: true, PictureParameterSetID: id, PictureParameterSetIDSpan: span, Deep: &avc.PPSDetails{PrefixComplete: true, PicInitQPMinus26: &avc.SignedField{Span: span}, RedundantPicCntPresentFlag: &avc.VUIBooleanField{Span: span}}}})
+		sets.AddNALUnit(avc.NALUnit{HeaderPresent: true, SummaryComplete: true, Header: avc.NALHeader{NALUnitType: 8}, PictureParameterSet: &avc.PictureParameterSet{Complete: true, PictureParameterSetID: id, PictureParameterSetIDSpan: span, Deep: &avc.PPSDetails{PrefixComplete: true, PicInitQPMinus26: &avc.SignedField{Span: span}, RedundantPicCntPresentFlag: &avc.VUIBooleanField{Span: span},
+			NumSliceGroupsMinus1: &avc.VUIUnsignedField{Span: span}, NumRefIdxL0DefaultActiveMinus1: &avc.VUIUnsignedField{Span: span}, NumRefIdxL1DefaultActiveMinus1: &avc.VUIUnsignedField{Span: span}, WeightedPredFlag: &avc.VUIBooleanField{Span: span}, WeightedBipredIDC: &avc.VUIUnsignedField{Span: span}, PicInitQSMinus26: &avc.SignedField{Span: span}, DeblockingFilterControlPresentFlag: &avc.VUIBooleanField{Span: span},
+			Full: &avc.PPSFullDetails{Complete: true, SliceGroupMapType: &avc.VUIUnsignedField{Span: span}, SliceGroupChangeRateMinus1: &avc.VUIUnsignedField{Span: span}, SliceGroupID: make([]*avc.VUIUnsignedField, avc.MaxFMOMapUnits), ScalingLists: make([]avc.ScalingList, 12)},
+		}}})
 	}
 	checkpoint := &ParameterCheckpoint{sets: sets.CompactClone()}
 	seen := map[uintptr]bool{}

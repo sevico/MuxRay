@@ -257,7 +257,9 @@ func (p *rbspParser) vuiInvalid(field *VUIUnsignedField, code, message string, e
 	p.addAt(field.Span, Diagnostic{Code: code, Severity: SeverityError, Message: message, Expected: number(uint64(expected)), Actual: number(uint64(field.Value))})
 }
 
-func (p *rbspParser) trailingBits() bool {
+func (p *rbspParser) trailingBits() bool { return p.trailingBitsFor("SPS") }
+
+func (p *rbspParser) trailingBitsFor(label string) bool {
 	value, span, ok := p.readBits(1)
 	if !ok {
 		return false
@@ -277,7 +279,7 @@ func (p *rbspParser) trailingBits() bool {
 		}
 	}
 	if p.remainingBits() != 0 {
-		p.fail(CodeRBSPTrailingBitsInvalid, "unexpected data after SPS rbsp_trailing_bits", 0, uint64(p.remainingBits()))
+		p.fail(CodeRBSPTrailingBitsInvalid, "unexpected data after "+label+" rbsp_trailing_bits", 0, uint64(p.remainingBits()))
 		return false
 	}
 	return true

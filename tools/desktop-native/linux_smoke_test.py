@@ -48,6 +48,7 @@ class LinuxSmokeTest(unittest.TestCase):
             ['--avc-search-long'], ['--avc-search-action', 'cancel'], ['--avc-search-gate', '/tmp/unused'],
             ['--mp3-frame', '0'], ['--mp3-history', '--mp3-frame', '64'],
             ['--mp3-history', '--mp3-frame', '-1'], ['--avc-search', 'all', '--mp3-history'],
+            ['--field-name', ''], ['--field-name', '\n'], ['--field-name', 'a' * 257],
         ]
         for extra in invalid:
             with self.subTest(extra=extra), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as caught:
@@ -72,6 +73,9 @@ class LinuxSmokeTest(unittest.TestCase):
     def test_codec_browsing_and_curve_metric_are_explicit(self):
         defaults = smoke.arguments(self.argv)
         self.assertFalse(defaults.mp3_browse)
+        self.assertFalse(defaults.mp3_summary)
+        self.assertTrue(smoke.arguments(self.argv + ['--mp3-summary']).mp3_summary)
+        self.assertEqual(smoke.arguments(self.argv + ['--field-name', 'sliceBetaOffsetDiv2']).field_name, 'sliceBetaOffsetDiv2')
         self.assertIsNone(defaults.media_curves)
         for metric in ('audio', 'video', 'mp3', 'gopAverage', 'gopMax'):
             args = smoke.arguments(self.argv + ['--mp3-browse', '--media-curves', metric])
@@ -95,10 +99,10 @@ class LinuxSmokeTest(unittest.TestCase):
         target = records[4]
         begin, old_end = target['offset'], target['offset'] + 15 + target['payloadBytes']
         self.assertEqual(data[:begin], old[:begin])
-        self.assertEqual(data[old_end + 1:], old[old_end:])
-        self.assertEqual(int.from_bytes(data[begin + 1:begin + 4], 'big'), 12)
-        self.assertEqual(data[begin + 11:begin + 23], bytes.fromhex('17010000000000000365b840'))
-        self.assertEqual(int.from_bytes(data[begin + 23:begin + 27], 'big'), 23)
+        self.assertEqual(data[old_end + 2:], old[old_end:])
+        self.assertEqual(int.from_bytes(data[begin + 1:begin + 4], 'big'), 13)
+        self.assertEqual(data[begin + 11:begin + 24], bytes.fromhex('17010000000000000465b840a8'))
+        self.assertEqual(int.from_bytes(data[begin + 24:begin + 28], 'big'), 24)
         # Ten encoded syntax bits: ue(0), ue(2), ue(0), u(4)=0, ue(0).
         self.assertEqual(''.join(f'{b:08b}' for b in data[begin + 21:begin + 23])[:10], '1011100001')
 
