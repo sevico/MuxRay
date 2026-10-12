@@ -107,9 +107,10 @@ def generated_fixture():
     selected = records[4]
     end = selected['offset'] + 15 + selected['payloadBytes']
     # The historical Hex fixture's 65 88 NAL predates slice-prefix parsing.
-    # Keep its other Tags but provide the header through QP/deblocking syntax
-    # for its PPS/SPS, followed by opaque data; the macroblocks are not decoded.
-    payload = bytes.fromhex('17010000000000000465b840a8')
+    # Keep its other Tags but provide the complete IDR header for its PPS/SPS:
+    # prefix (10 bits), IDR flags 00, se(0) QP delta, ue(1) deblocking disabled.
+    # The remaining byte is RBSP trailing bits; macroblocks are not decoded.
+    payload = bytes.fromhex('17010000000000000465b84a80')
     return data[:selected['offset']] + tag(9, payload) + data[end:]
 
 

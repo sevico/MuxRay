@@ -92,7 +92,7 @@ class LinuxSmokeTest(unittest.TestCase):
             smoke.arguments(self.argv + ['--source', str(source)])
         self.assertEqual(smoke.arguments(self.argv + ['--source', str(source), '--max-source-bytes', str(32 << 20)]).source, source)
 
-    def test_generated_fixture_has_valid_slice_prefix_without_changing_other_tags(self):
+    def test_generated_fixture_has_full_idr_header_without_changing_other_tags(self):
         from hex_fixtures import fixtures
         old, records = fixtures()['hex-details.flv']
         data = smoke.generated_fixture()
@@ -101,10 +101,20 @@ class LinuxSmokeTest(unittest.TestCase):
         self.assertEqual(data[:begin], old[:begin])
         self.assertEqual(data[old_end + 2:], old[old_end:])
         self.assertEqual(int.from_bytes(data[begin + 1:begin + 4], 'big'), 13)
-        self.assertEqual(data[begin + 11:begin + 24], bytes.fromhex('17010000000000000465b840a8'))
+        self.assertEqual(data[begin + 11:begin + 21], bytes.fromhex('17010000000000000465'))
         self.assertEqual(int.from_bytes(data[begin + 24:begin + 28], 'big'), 24)
-        # Ten encoded syntax bits: ue(0), ue(2), ue(0), u(4)=0, ue(0).
-        self.assertEqual(''.join(f'{b:08b}' for b in data[begin + 21:begin + 23])[:10], '1011100001')
+        # Its existing SPS has POC type 2/frame_num width 4; its PPS enables
+        # deblocking syntax, with no redundant_pic_cnt or slice groups.
+        # The IDR I header must end after disable_deblocking_filter_idc=1.
+        codewords = [
+            '1', '011', '1', '0000', '1',  # first_mb=0, I, PPS=0, frame=0, idr_pic_id=0
+            '0', '0',                    # no_output_of_prior_pics, long_term_reference
+            '1', '010',                  # slice_qp_delta=0, disable_deblocking_filter_idc=1
+        ]
+        header = ''.join(codewords)
+        self.assertEqual(len(header), 16)
+        rbsp = ''.join(f'{b:08b}' for b in data[begin + 21:begin + 24])
+        self.assertEqual(rbsp, header + '10000000')
 
     def test_proc_stat_comm_and_pid_reuse(self):
         fields = ['S', '123'] + ['0'] * 17 + ['456']
