@@ -72,6 +72,8 @@ go run ./cmd/muxray detail --tag 0 --pretty sample.flv
 
 桌面新增 **H.264 批量证据检索**：按 NAL 头筛选声明差异、未知证据或全部候选，支持继续、取消、回看和 Tag/Hex 定位。每批最多 256 Tag、64 条结果、1 MiB 读取；每 Tag 最多 256 个 NAL 头，不批量解析 slice。**MP3 跨 Tag 依赖来源**可按所选帧显式回溯，列出主数据物理槽位的来源 Tag、帧和范围，支持精确跳转。历史不足、损坏、配置切换和预算耗尽保留未知，不重建 reservoir 或解码音频。范围与合同见 [ADR-027](docs/decisions/027-bounded-codec-search-and-mp3-sources.md)。
 
+干净构建产物、独立字节对照与九轮 Linux 原生结果见 [批量检索与跨 Tag 来源验收](docs/desktop-codec-search-history-20261012.md)。
+
 新增编解码器的生成样本、独立字段/源位对照和 Linux 基础、PPS/slice、side-info/长文件原生验收已固化到 [回归工具](tools/codec-regression/README.md)，CI 使用相同入口，生成媒体不进入 Git。
 
 新增 [native_browse_evidence.py](tools/codec-regression/native_browse_evidence.py) 检查 MP3 选帧、H.264 声明与 NAL 证据，以及当前曲线页随快照 v2 导出；命令和范围见 [桌面开发说明](desktop/README.md#linux-构建)。
