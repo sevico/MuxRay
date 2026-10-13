@@ -29,7 +29,7 @@ export function MP3FramePanel({ detail, disabled, onSelect, onPage }: { detail: 
     </>}
     {frames && <>
     <div className="codec-frame-controls">
-      <label>选择帧 <select aria-label="MP3 帧选择" disabled={disabled} value={frames.selected ?? ''} onChange={event => onSelect(event.target.value === '' ? null : Number(event.target.value))}>
+      <label>选择帧 <select key={page?.start ?? 0} aria-label="MP3 帧选择" disabled={disabled} value={frames.selected ?? ''} onChange={event => onSelect(event.target.value === '' ? null : Number(event.target.value))}>
         <option value="">{page && page.start > 0 ? '本页前两帧预览' : '前两帧预览'}</option>
         {frames.selectable.map(index => <option key={index} value={index}>帧 {index}</option>)}
       </select></label>
