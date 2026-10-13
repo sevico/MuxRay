@@ -24,6 +24,8 @@ content. Choices on a late page use bounded `selectableFrameOffsets` plus the
 explicit page start; a long CSV of absolute indices would exceed the existing
 256-byte generic field value limit. Frame labels and source navigation always
 use the original indices.
+The native frame selector is recreated when the page start changes so that
+WebKitGTK exposes the replacement options through its accessibility tree.
 
 An opaque checkpoint retains the next frame/offset, physical main-data history
 and at most 64 compact source slots, with no open reader or decoded audio.

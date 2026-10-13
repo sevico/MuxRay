@@ -54,6 +54,7 @@ H.264 详情增加 PPS 可选扩展、FMO 0–6 与 slice 头后半段：参考�
 “分析媒体”增加 MP3 完整帧数、样本数、精确分数时长、参数/码率变化与未解析字节。统计最多检查 100 万帧头，事件独立保留 256 条并支持分页；Tag 中后续帧也会参与统计。事件 DTS 属于 Tag，样本时长不是实测播放时长。截断、free-format 和预算外范围明确标为部分；不检查音频载荷。所选 Tag 的 MP3 详情独立按每页 64 帧 / 1 MiB 覆盖分页，并可从完整帧事件打开对应帧详情。详细语义见 [ADR-029](../docs/decisions/029-full-codec-headers-and-frame-summary.md)。
 
 固定生产构建与 Linux 原生操作结果见 [完整头部与全帧汇总验收](../docs/desktop-full-codec-20261012.md)。
+后续详情翻页、汇总帧联动及 SEI 字段定位见 [MP3 分页与 SEI 验收](../docs/desktop-page-sei-20261013.md)。
 
 ## 媒体码率与 GOP 曲线
 

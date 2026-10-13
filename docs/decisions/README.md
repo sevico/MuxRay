@@ -34,3 +34,4 @@ Repository-wide architecture and compatibility decisions are recorded here. An a
 | [ADR-028](./028-search-snapshot-v3-and-native-regression.md) | Accepted | Export a retained H.264 search page in snapshot v3 and automate native search/dependency regression |
 
 - [ADR-029: Full ordinary H.264 headers and MP3 frame summary](029-full-codec-headers-and-frame-summary.md)
+- [ADR-030: MP3 frame pages, summary links and H.264 SEI evidence](030-mp3-frame-pages-and-sei.md)
