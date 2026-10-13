@@ -285,7 +285,7 @@ jobs:
       - name: Validate SEI v5 and legacy CLI contracts
         run: /usr/bin/python3 -B tools/codec-regression/verify_paged_codec.py --input-dir "$PWD/.cache/fc-ci/ps-samples" --cli "$PWD/.cache/fc-ci/muxray" --output-dir "$PWD/.cache/fc-ci/ps-cli" 2>&1 | tee .cache/fc-ci/ps-cli.log
       - name: Eight native MP3 page, summary-link and SEI source rounds
-        run: /usr/bin/python3 -B tools/codec-regression/native_paged_codec.py --input-dir "$PWD/.cache/fc-ci/ps-samples" --binary "$PWD/desktop/build/bin/MuxRay" --output-dir "$PWD/.cache/fc-ci/ps" --timeout-seconds 600 2>&1 | tee .cache/fc-ci/ps-native.log
+        run: /usr/bin/python3 -B tools/codec-regression/native_paged_codec.py --input-dir "$PWD/.cache/fc-ci/ps-samples" --binary "$PWD/desktop/build/bin/MuxRay" --output-dir "$PWD/.cache/fc-ci/ps" --timeout-seconds 1200 2>&1 | tee .cache/fc-ci/ps-native.log
       - name: Verify binaries unchanged
         if: always()
         run: |

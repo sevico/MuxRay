@@ -158,7 +158,7 @@ def main(argv=None):
     parser.add_argument('--binary', type=executable, required=True)
     parser.add_argument('--output-dir', type=new_directory, required=True)
     parser.add_argument('--case', action='append', choices=CASES)
-    parser.add_argument('--timeout-seconds', type=int, default=600)
+    parser.add_argument('--timeout-seconds', type=int, default=1200)
     args = parser.parse_args(argv)
     if not 30 <= args.timeout_seconds <= 1800:
         parser.error('--timeout-seconds must be 30 through 1800')

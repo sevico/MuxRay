@@ -8,9 +8,25 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import linux_smoke as smoke
+
+
+def accessible_combo(names, missing_index=None):
+    items = []
+    for name in names:
+        item = Mock()
+        item.name, item.childCount = name, 0
+        item.getRoleName.return_value = 'menu item'
+        item.queryAction.return_value.nActions = 1
+        item.queryAction.return_value.doAction.return_value = True
+        items.append(item)
+    root = Mock()
+    root.childCount = len(items)
+    root.getRoleName.return_value = 'combo box'
+    root.getChildAtIndex.side_effect = lambda i: None if i == missing_index else items[i]
+    return root, items
 
 
 class LinuxSmokeTest(unittest.TestCase):
@@ -19,6 +35,42 @@ class LinuxSmokeTest(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.argv = ['--binary', sys.executable, '--output-dir', str(self.root / 'new')]
+
+    @patch.object(smoke.time, 'sleep')
+    def test_combo_reacquires_all_options_after_missing_middle_child(self, sleep):
+        names = ['本页前两帧预览'] + [f'帧 {i}' for i in range(2560, 2624)]
+        stale, stale_items = accessible_combo(names, 4)
+        fresh, items = accessible_combo(names)
+        lookup = Mock(side_effect=[stale, fresh])
+        smoke.choose_accessible_option(lookup, 41, 'MP3 帧选择', '帧 2600')
+        self.assertEqual(lookup.call_count, 2)
+        self.assertTrue(all(not item.queryAction.called for item in stale_items))
+        items[41].queryAction.return_value.doAction.assert_called_once_with(0)
+        self.assertTrue(all(not item.queryAction.called for i, item in enumerate(items) if i != 41))
+
+    @patch.object(smoke.time, 'sleep')
+    def test_combo_persistent_stale_tree_stops_without_action(self, sleep):
+        root, items = accessible_combo(['preview', 'frame 0', 'frame 1'], 1)
+        lookup = Mock(return_value=root)
+        with self.assertRaisesRegex(RuntimeError, 'changed during enumeration'):
+            smoke.choose_accessible_option(lookup, 2, 'frames', 'frame 1')
+        self.assertEqual(lookup.call_count, 5)
+        self.assertEqual(sleep.call_count, 4)
+        self.assertTrue(all(not item.queryAction.called for item in items))
+
+    @patch.object(smoke.time, 'sleep')
+    def test_combo_rejects_shifted_identity_and_does_not_repeat_failed_action(self, sleep):
+        root, items = accessible_combo(['preview', 'frame 1', 'frame 2'])
+        with self.assertRaisesRegex(RuntimeError, 'identity differs'):
+            smoke.choose_accessible_option(lambda: root, 1, 'frames', 'frame 0')
+        self.assertTrue(all(not item.queryAction.called for item in items))
+        action = items[1].queryAction.return_value
+        action.doAction.return_value = False
+        lookup = Mock(return_value=root)
+        with self.assertRaisesRegex(RuntimeError, 'action failed'):
+            smoke.choose_accessible_option(lookup, 1, 'frames', 'frame 1')
+        self.assertEqual(lookup.call_count, 1)
+        action.doAction.assert_called_once_with(0)
 
     def test_defaults_and_supplied_source_default_tag(self):
         args = smoke.arguments(self.argv)

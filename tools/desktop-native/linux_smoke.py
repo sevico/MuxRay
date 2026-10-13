@@ -188,6 +188,39 @@ def require(condition, message):
         raise RuntimeError(message)
 
 
+def choose_accessible_option(get_combo, index, label, expected_name=None):
+    # A page update can invalidate any descendant proxy. Discard the entire
+    # enumeration and acquire the combo again; skipping a child shifts indices.
+    for attempt in range(5):
+        try:
+            pending, items, visited = [get_combo()], [], 0
+            while pending:
+                item = pending.pop()
+                require(item is not None, 'stale accessible option')
+                visited += 1
+                require(visited <= 256, 'combo tree exceeded node budget')
+                if item.getRoleName() == 'menu item':
+                    items.append(item)
+                count = item.childCount
+                children = [item.getChildAtIndex(i) for i in reversed(range(count))]
+                require(item.childCount == count and all(child is not None for child in children),
+                        'combo options changed during enumeration')
+                pending.extend(children)
+            require(0 <= index < len(items), 'select option out of range: ' + label)
+            if expected_name is not None:
+                require(items[index].name == expected_name, 'select option identity differs: ' + label)
+            action = items[index].queryAction()
+            require(action.nActions == 1, 'select option action missing: ' + label)
+        except Exception:
+            if attempt == 4:
+                raise
+            time.sleep(0.1)
+            continue
+        # Do not retry an action that might already have changed the selection.
+        require(action.doAction(0), 'select option action failed: ' + label)
+        return
+
+
 def validate_export(snapshot, tag, generated):
     require(snapshot['session']['scan']['complete'], 'smoke requires a complete container index')
     selected = snapshot['selectedTag']
@@ -294,20 +327,11 @@ def run_worker(args):
         return wait(lambda: any(fragment in name or fragment in node_text(node) for node, _, _, name in
                                (search_rows() if args.avc_search_long else rows())), fragment)
 
-    def choose(label, index):
-        node = find('combo box', label)
+    def choose(label, index, expected_name=None):
         # WebKitGTK exposes HTML options as menu items rather than Selection.
         # Invoke the selected item's native action once; arrow-key changes can
         # disable the selector while an intermediate detail request is running.
-        pending, items = [node], []
-        while pending:
-            item = pending.pop()
-            if item.getRoleName() == 'menu item':
-                items.append(item)
-            pending.extend(item.getChildAtIndex(i) for i in reversed(range(item.childCount)))
-        require(0 <= index < len(items), 'select option out of range: ' + label)
-        action = items[index].queryAction()
-        require(action.nActions == 1 and action.doAction(0), 'select option action failed: ' + label)
+        choose_accessible_option(lambda: find('combo box', label), index, label, expected_name)
 
     def window(title):
         found = []
@@ -374,7 +398,7 @@ def run_worker(args):
     def select_mp3_frame(index):
         start = mp3_page_start()
         require(start <= index < start + 64, 'selected MP3 frame is outside the ready page')
-        choose('MP3 帧选择', index - start + 1)
+        choose('MP3 帧选择', index - start + 1, f'帧 {index}')
         wait_text(f'当前展开 MP3 帧 {index} ·')
 
     def export_snapshot(name, tag=None):
