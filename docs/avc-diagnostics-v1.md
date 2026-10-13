@@ -77,11 +77,16 @@ the human-readable `message`.
 | `AVC_SEI_PAYLOAD_TRUNCATED` | Declared payload size exceeds inspected RBSP bytes. |
 | `AVC_SEI_SYNTAX_INVALID` | Supported SEI syntax, payload alignment, range or NAL reference constraint is invalid. |
 | `AVC_SEI_TRAILING_BITS_INVALID` | Required SEI RBSP trailing bits are missing or invalid. |
+| `AVC_SEI_TIMING_CONTEXT_MISSING` | Detail v6 / desktop cannot establish a valid SPS timing dependency; the dependent payload remains opaque. |
+| `AVC_SEI_TIMING_CONTEXT_AMBIGUOUS` | Detail v6 / desktop observed conflicting or insufficient picture/activation coverage; timing fields are not guessed. |
 
 Unknown payload types retain their source range and are not errors merely because
 their syntax is unsupported. Truncation and resource budgets preserve observed
 fields; neither recovery-point declarations nor a complete message guarantees
 decoder recovery. Shared RBSP mapping/EPB diagnostics also apply.
+Missing timing context marks analysis incomplete; it is not proof that the
+underlying media is damaged. The two timing codes are opt-in v6 additions and
+do not change CLI v1–v5 diagnostics.
 
 ## Severity and recovery
 

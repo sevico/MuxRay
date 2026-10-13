@@ -12,7 +12,27 @@ export interface MP3FrameSelection { selected: number | null; selectable: number
 export interface MP3FramePage {
   state: 'ready' | 'preparing' | 'stopped'; requested: number; start: number; next: number | null;
   progress: number; frames: number; bytesCovered: number; bytesRead: number;
-  replayPages: number; checkpoints: number; canContinue: boolean; selected: number | null;
+  replayPages: number; checkpoints: number; canContinue: boolean; selected: number | null; stopReason: string;
+}
+
+export function mp3FrameIndex(text: string): number | null {
+  if (!/^(0|[1-9][0-9]{0,9})$/.test(text)) return null;
+  const index = Number(text);
+  return index <= 4294967295 ? index : null;
+}
+
+// Keep the existing confirmed choices within a page. Crossing a page uses
+// its original frame boundary; the host must confirm the requested frame.
+export function adjacentMP3Frame(detail: Detail | null, direction: -1 | 1): number | null {
+  const frames = mp3FrameSelection(detail), page = mp3FramePage(detail);
+  if (!frames) return null;
+  const position = frames.selected === null ? -1 : frames.selectable.indexOf(frames.selected);
+  if (direction === -1) {
+    if (position > 0) return frames.selectable[position - 1];
+    return position === 0 && page && page.start > 0 ? page.start - 1 : null;
+  }
+  if (position + 1 < frames.selectable.length) return frames.selectable[position + 1];
+  return position >= 0 ? page?.next ?? null : null;
 }
 
 export function mp3FramePage(detail: Detail | null): MP3FramePage | null {
@@ -42,7 +62,8 @@ export function mp3FramePage(detail: Detail | null): MP3FramePage | null {
         (selectedIndex !== null && (selectedIndex < requested || selectedIndex >= requested + 64 || selectedIndex > 4294967295))) return null;
     return { state: state as MP3FramePage['state'], requested, start, next: nextIndex, progress, frames,
       bytesCovered: number('pageBytesCovered', 1048576n), bytesRead: number('pageBytesRead', 65536n),
-      replayPages: number('replayPages', 16n), checkpoints: number('checkpointCount', 64n), canContinue: canContinue === 'true', selected: selectedIndex };
+      replayPages: number('replayPages', 16n), checkpoints: number('checkpointCount', 64n), canContinue: canContinue === 'true', selected: selectedIndex,
+      stopReason: value('pageStopReason') ?? '' };
   } catch { return null; }
 }
 

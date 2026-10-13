@@ -28,6 +28,8 @@ type AVCSEIMessage struct {
 	SyntaxSupported      bool                        `json:"syntaxSupported"`
 	RecoveryPoint        *AVCSEIRecoveryPoint        `json:"recoveryPoint,omitempty"`
 	UserDataUnregistered *AVCSEIUserDataUnregistered `json:"userDataUnregistered,omitempty"`
+	BufferingPeriod      *AVCSEIBufferingPeriod      `json:"bufferingPeriod,omitempty"`
+	PictureTiming        *AVCSEIPictureTiming        `json:"pictureTiming,omitempty"`
 	PayloadComplete      bool                        `json:"payloadComplete"`
 	Complete             bool                        `json:"complete"`
 }
@@ -71,6 +73,11 @@ func mapSEI(p *avc.SEIMessageSequence) *AVCSEIMessageSequence {
 	}
 	for _, m := range p.Messages {
 		n := AVCSEIMessage{Index: m.Index, PayloadType: mapVUIUint(m.PayloadType), PayloadSize: mapVUIUint(m.PayloadSize), Kind: m.Kind, SyntaxSupported: m.SyntaxSupported, PayloadComplete: m.PayloadComplete, Complete: m.Complete}
+		// v5 keeps timing payloads opaque even when a caller supplies a deeper
+		// parse. The CLI uses matching parser depth to preserve diagnostics too.
+		if m.Kind == "bufferingPeriod" || m.Kind == "pictureTiming" {
+			n.Kind, n.SyntaxSupported = "unknown", false
+		}
 		if m.PayloadSpan != nil {
 			s := mapAVCMappedSpan(*m.PayloadSpan)
 			n.PayloadSpan = &s

@@ -170,7 +170,7 @@ func TestCompactCheckpointStorageHasFixedBound(t *testing.T) {
 	sets := avc.NewParameterSetContext()
 	span := avc.MappedSpan{BitLength: 1, SourceSpans: make([]cursor.Span, 128)}
 	for id := uint32(0); id < 32; id++ {
-		sets.AddNALUnit(avc.NALUnit{HeaderPresent: true, SummaryComplete: true, Header: avc.NALHeader{NALUnitType: 7}, SequenceParameterSet: &avc.SequenceParameterSet{Complete: true, SequenceParameterSetID: id, SequenceParameterSetIDSpan: span}})
+		sets.AddNALUnit(avc.NALUnit{HeaderPresent: true, SummaryComplete: true, Header: avc.NALHeader{NALUnitType: 7}, SequenceParameterSet: &avc.SequenceParameterSet{Complete: true, SequenceParameterSetID: id, SequenceParameterSetIDSpan: span, Timing: &avc.SPSTimingParameters{SPSID: id, SPSSpan: cursor.Span{ByteOffset: uint64(id + 1), BitLength: 8}, NALHRD: avc.HRDTimingParameters{Present: true, CPBCount: 32, InitialCPBRemovalDelayLength: 32, CPBRemovalDelayLength: 32, DPBOutputDelayLength: 32, TimeOffsetLength: 31}, VCLHRD: avc.HRDTimingParameters{Present: true, CPBCount: 32}}}})
 	}
 	for id := uint32(0); id < 256; id++ {
 		sets.AddNALUnit(avc.NALUnit{HeaderPresent: true, SummaryComplete: true, Header: avc.NALHeader{NALUnitType: 8}, PictureParameterSet: &avc.PictureParameterSet{Complete: true, PictureParameterSetID: id, PictureParameterSetIDSpan: span, Deep: &avc.PPSDetails{PrefixComplete: true, PicInitQPMinus26: &avc.SignedField{Span: span}, RedundantPicCntPresentFlag: &avc.VUIBooleanField{Span: span},

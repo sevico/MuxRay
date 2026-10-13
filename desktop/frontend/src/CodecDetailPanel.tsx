@@ -1,7 +1,7 @@
 import type { Detail } from './protocol';
 import type { HexSelection } from './hex';
 import { selectionFromSpan } from './hex';
-import { keyframeEvidence, keyframeRelations, mp3FramePage, mp3FrameSelection, mp3Dependency } from './codec-details';
+import { adjacentMP3Frame, keyframeEvidence, keyframeRelations, mp3FramePage, mp3FrameSelection, mp3Dependency } from './codec-details';
 import type { MP3DependencySource } from './codec-details';
 
 const dependencyReasons: Record<string, string> = {
@@ -13,19 +13,25 @@ const dependencyReasons: Record<string, string> = {
   frame_budget: '帧检查数量达到上限', coverage_budget: '源范围检查预算耗尽', read_budget: '读取字节预算耗尽', source_limit: '来源条目数达到上限',
 };
 
-export function MP3FramePanel({ detail, disabled, onSelect, onPage }: { detail: Detail; disabled: boolean; onSelect: (index: number | null) => void; onPage: (direction: -1 | 1 | 'continue') => void }) {
+export function MP3FramePanel({ detail, disabled, jumpError, onSelect, onPage, onJump, onStep }: { detail: Detail; disabled: boolean; jumpError: string | null; onSelect: (index: number | null) => void; onPage: (direction: -1 | 1 | 'continue') => void; onJump: (text: string) => void; onStep: (direction: -1 | 1) => void }) {
   const frames = mp3FrameSelection(detail), page = mp3FramePage(detail);
   if (!frames && !page) return null;
-  const position = !frames || frames.selected === null ? -1 : frames.selectable.indexOf(frames.selected);
+  const target = page?.selected === null ? `MP3 帧页 ${page.requested}` : `MP3 帧 ${page?.selected}`;
+  const beyondEnd = page?.stopReason === 'end' && (page.selected ?? page.requested) >= page.progress;
   return <section className="codec-evidence" aria-label="MP3 逐帧详情">
     <h3>MP3 逐帧详情</h3>
     {page && <>
+      <form className="codec-frame-controls" onSubmit={event => { event.preventDefault(); onJump((event.currentTarget.elements.namedItem('mp3-frame-index') as HTMLInputElement).value); }}>
+        <label>Tag 内帧号 <input name="mp3-frame-index" aria-label="MP3 帧号" aria-describedby="mp3-frame-jump-note" aria-invalid={jumpError ? true : undefined} type="text" inputMode="numeric" autoComplete="off" placeholder="从 0 开始" disabled={disabled} /></label>
+        <button type="submit" disabled={disabled}>跳转 MP3 帧</button>
+      </form>
+      {jumpError && <p className="detail-note problem" role="alert">{jumpError}</p>}
       <div className="codec-frame-controls">
         <button disabled={disabled || page.state === 'preparing' || page.start === 0} onClick={() => onPage(-1)}>上一 MP3 帧页</button>
         <button disabled={disabled || page.state !== 'ready' || page.next === null} onClick={() => onPage(1)}>下一 MP3 帧页</button>
         {page.canContinue && <button disabled={disabled} onClick={() => onPage('continue')}>继续定位 MP3 帧页</button>}
       </div>
-      <p className="detail-note" role="status">{page.state === 'preparing' ? `正在定位 MP3 帧页 ${page.requested}，已检查到帧 ${page.progress} 之前。请继续定位。` : page.state === 'stopped' ? `MP3 帧页 ${page.requested} 定位停止，已检查到帧 ${page.progress} 之前。请查看详情诊断。` : `MP3 帧页 ${page.start} · 本页 ${page.frames} 个帧头 · 覆盖 ${page.bytesCovered} byte。`}</p>
+      <p className="detail-note" role="status">{page.state === 'preparing' ? `正在定位 ${target}，已检查到帧 ${page.progress} 之前。请继续定位，或输入其他帧号。` : page.state === 'stopped' ? (beyondEnd ? `${target} 超出当前 Tag 已确认帧范围，已检查到帧 ${page.progress} 之前。可输入较小帧号重新定位。` : `${target} 定位停止，已检查到帧 ${page.progress} 之前，目标帧或后续边界无法确认。可输入较小帧号重新定位；请查看详情诊断。`) : `MP3 帧页 ${page.start} · 本页 ${page.frames} 个帧头 · 覆盖 ${page.bytesCovered} byte。`}</p>
     </>}
     {frames && <>
     <div className="codec-frame-controls">
@@ -33,13 +39,13 @@ export function MP3FramePanel({ detail, disabled, onSelect, onPage }: { detail: 
         <option value="">{page && page.start > 0 ? '本页前两帧预览' : '前两帧预览'}</option>
         {frames.selectable.map(index => <option key={index} value={index}>帧 {index}</option>)}
       </select></label>
-      <button disabled={disabled || position <= 0} onClick={() => onSelect(frames.selectable[position - 1])}>上一 MP3 帧</button>
-      <button disabled={disabled || position + 1 >= frames.selectable.length} onClick={() => onSelect(frames.selectable[position + 1])}>下一 MP3 帧</button>
+      <button disabled={disabled || adjacentMP3Frame(detail, -1) === null} onClick={() => onStep(-1)}>上一 MP3 帧</button>
+      <button disabled={disabled || adjacentMP3Frame(detail, 1) === null} onClick={() => onStep(1)}>下一 MP3 帧</button>
       <button disabled={disabled || !frames.selectable.length || frames.selected === frames.selectable.at(-1)} onClick={() => onSelect(frames.selectable.at(-1)!)}>末个可选 MP3 帧</button>
     </div>
     <p className="detail-note" role="status">{frames.selected === null ? (page && page.start > 0 ? '当前显示本页前两帧预览' : '当前显示前两帧预览') : `当前展开 MP3 帧 ${frames.selected}`} · 已检查 {frames.checked} 个帧头，{frames.selectable.length} 帧可选（索引从 0 开始）。</p>
     </>}
-    <p className="detail-note">帧号保持 Tag 内原始序号；每页检查最多 64 帧，预览只展开前两帧。依赖分析保留跨页历史。截断、未知帧长和预算停止处不会猜测后续边界。</p>
+    <p id="mp3-frame-jump-note" className="detail-note">帧号保持 Tag 内原始序号（从 0 开始）；上一帧、下一帧可跨页。每页检查最多 64 帧，预览只展开前两帧。远帧可能需要手动继续定位；依赖分析保留跨页历史。截断、未知帧长和预算停止处不会猜测后续边界。</p>
   </section>;
 }
 

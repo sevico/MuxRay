@@ -146,7 +146,7 @@ export function App({ controller }: { controller: Controller }) {
             <button disabled={!canPage || !bounds || view.loading || unsigned(bounds.next) >= unsigned(bounds.total) || !!isClosing} onClick={() => bounds && controller.select(view.tab, bounds.next)}>下一页</button>
           </div></div>}
         </section>
-        {view.selectedTag && <DetailPanel view={view} onRetry={() => controller.retryDetail()} onContinue={() => controller.continueAVCContext()} onSelectMP3={index => controller.selectMP3Frame(index)} onPageMP3={direction => controller.pageMP3Frames(direction)} onInspectMP3={() => controller.inspectMP3Dependency()} onLocateMP3={(source, destination) => controller.locateMP3Source(source, destination)} onLocate={selection => controller.showHex(selection)} />}
+        {view.selectedTag && <DetailPanel view={view} onRetry={() => controller.retryDetail()} onContinue={() => controller.continueAVCContext()} onSelectMP3={index => controller.selectMP3Frame(index)} onPageMP3={direction => controller.pageMP3Frames(direction)} onJumpMP3={text => controller.jumpMP3Frame(text)} onStepMP3={direction => controller.stepMP3Frame(direction)} onInspectMP3={() => controller.inspectMP3Dependency()} onLocateMP3={(source, destination) => controller.locateMP3Source(source, destination)} onLocate={selection => controller.showHex(selection)} />}
         </div>
         <HexPanel view={view} controller={controller} disabled={!canPage || !!isClosing} message={fault} />
       </>}
@@ -163,7 +163,7 @@ function TagTable({ rows, selectedId, disabled, onSelect, onLocate }: { rows: Ta
   </tr>)}</tbody></table>;
 }
 
-function DetailPanel({ view, onRetry, onContinue, onSelectMP3, onPageMP3, onInspectMP3, onLocateMP3, onLocate }: { view: ViewState; onRetry: () => void; onContinue: () => void; onSelectMP3: (index: number | null) => void; onPageMP3: (direction: -1 | 1 | 'continue') => void; onInspectMP3: () => void; onLocateMP3: (source: MP3DependencySource, destination: 'tag' | 'hex') => void; onLocate: (selection: HexSelection) => void }) {
+function DetailPanel({ view, onRetry, onContinue, onSelectMP3, onPageMP3, onJumpMP3, onStepMP3, onInspectMP3, onLocateMP3, onLocate }: { view: ViewState; onRetry: () => void; onContinue: () => void; onSelectMP3: (index: number | null) => void; onPageMP3: (direction: -1 | 1 | 'continue') => void; onJumpMP3: (text: string) => void; onStepMP3: (direction: -1 | 1) => void; onInspectMP3: () => void; onLocateMP3: (source: MP3DependencySource, destination: 'tag' | 'hex') => void; onLocate: (selection: HexSelection) => void }) {
   const detail = view.detail;
   const kind = detail?.kind === 'amf0ScriptData' ? 'AMF0 Script Data' : detail?.kind === 'aacAudio' ? 'AAC Audio' : detail?.kind === 'avcVideo' ? 'AVC Video' : detail?.kind === 'mp3Audio' ? 'MP3 Audio' : 'Tag 详情';
   const busy = ['loading', 'pending', 'recovering'].includes(view.detailState);
@@ -177,13 +177,13 @@ function DetailPanel({ view, onRetry, onContinue, onSelectMP3, onPageMP3, onInsp
     {view.detailError && <div className="request-error" role="alert"><span>{fault(view.detailError)}</span>{view.detailRetry && <button onClick={onRetry}>{view.detailRetry === 'reload' ? '重新读取详情' : '重试详情查询'}</button>}</div>}
     {detail && <>
       <p className="detail-note">字段位置使用原文件的 byte 偏移和 bit 起点；位长包含字段占用的位数。{detail.kind === 'aacAudio' && ' AAC raw packet 仅显示封装信息与数据范围，不解码音频。'}</p>
-      {detail.kind === 'avcVideo' && <p className="detail-note">AVC 展开 SPS VUI、PPS 扩展及普通 slice 完整头部，显示参考列表、权重、MMCO、QP 与去块滤波等字段，并解析 SEI 消息边界、恢复点和 UUID 用户数据。未知 SEI 保留类型与源范围。前缀与完整头部分别标明覆盖；不解码 slice 数据，不代表整帧可解码。时序和 HRD 是码流声明。派生值及跨段字段的单一原始位置显示“—”。</p>}
+      {detail.kind === 'avcVideo' && <p className="detail-note">AVC 展开 SPS VUI、PPS 扩展及普通 slice 完整头部，并解析 SEI 恢复点、UUID 用户数据、缓冲周期与图像时序字段。时序解析显示所用 SPS 及选择依据；上下文缺失或含糊时保留未知。未知 SEI 保留类型与源范围。前缀与完整头部分别标明覆盖；不解码图像或推算播放时间线。派生值及跨段字段的单一原始位置显示“—”。</p>}
       {replay && <div className="detail-note" role="status">参数上下文已检查到 Tag {replay.next} 之前，目标为 Tag {replay.target}。{replay.canContinue ? <button disabled={busy || view.detailState !== 'ready' || view.summaryRunning} onClick={onContinue}>继续准备参数</button> : '当前段无法继续推进；请检查源数据或解析预算限制。'}</div>}
       {detail.kind === 'mp3Audio' && <>
         <p className="detail-note">MP3 在当前 Tag 内检查帧边界、VBR 声明、side-info 和头部 CRC，并显示主数据回指范围。范围覆盖不代表 bit-reservoir 或音频解码有效；可按需回溯前序 Tag，定位主数据依赖来源。</p>
         <p className="detail-note">free-format 的码率和帧长未知；派生字段不标注单一原始位置，以“—”显示。</p>
       </>}
-      <MP3FramePanel detail={detail} disabled={busy || view.detailState !== 'ready' || view.summaryRunning || view.avcSearchRunning || view.sourceChanged} onSelect={onSelectMP3} onPage={onPageMP3} />
+      <MP3FramePanel key={`${view.session?.sessionId}-${view.selectedTag?.id}`} detail={detail} jumpError={view.mp3JumpError} disabled={busy || view.detailState !== 'ready' || view.summaryRunning || view.avcSearchRunning || view.sourceChanged} onSelect={onSelectMP3} onPage={onPageMP3} onJump={onJumpMP3} onStep={onStepMP3} />
       <MP3DependencyPanel detail={detail} disabled={busy || view.detailState !== 'ready' || view.summaryRunning || view.avcSearchRunning || view.sourceChanged} onInspect={onInspectMP3} onLocate={onLocateMP3} />
       <KeyframeEvidencePanel detail={detail} disabled={busy || view.detailState !== 'ready' || view.summaryRunning || view.avcSearchRunning || view.sourceChanged} onLocate={onLocate} />
       {!detail.complete && <p className="detail-note problem">保留可解析的字段；请结合下方详情诊断检查未完成部分。</p>}

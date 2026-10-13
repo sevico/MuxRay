@@ -9,7 +9,7 @@ import (
 const (
 	MaxParameterCheckpoints = 8
 	// Compact contexts contain only fixed-size objects: 32 SPS, 256 PPS,
-	// bounded fixed-value PPS metadata and their original NAL spans. The generous
+	// bounded fixed-value PPS and SPS timing metadata and their original NAL spans. The generous
 	// bound is checked against the reachable Go storage by tests.
 	MaxParameterCheckpointBytes = 512 << 10
 )
@@ -80,8 +80,8 @@ func (p *ParameterCheckpoint) matches(framing Resolution, selected uint64, optio
 }
 
 func parameterOptions(options avc.Options) (avc.Options, error) {
-	options.ParsePPS, options.ParseSliceHeaders, options.ParseVUI = true, false, false
-	options.ParseSEI = false
+	options.ParsePPS, options.ParseSliceHeaders, options.ParseVUI = true, false, options.ParseSEITiming
+	options.ParseSEI = options.ParseSEITiming
 	options.ParameterSets = nil
 	return options.Normalized()
 }

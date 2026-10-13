@@ -197,3 +197,20 @@ page identities, bounded replay progress, explicit continuation and source
 positions. Snapshot v3 carries these fields under the existing detail request
 ID; no new snapshot envelope or CLI MP3 schema is introduced. See
 [ADR-030](../decisions/030-mp3-frame-pages-and-sei.md).
+
+## SEI timing details v6 and direct MP3 navigation
+
+[`flv-avc-tag-detail-v6.schema.json`](./flv-avc-tag-detail-v6.schema.json)
+adds `bufferingPeriod` and `pictureTiming`, including original SPS/activation
+source ranges and bounded HRD/clock fields. A resolved context identifies its
+selection evidence; missing or ambiguous context leaves dependent values absent
+and analysis incomplete. Clock declarations do not reconstruct HRD or playback
+time. Conditional syntax, signed offsets, CPB/clock cardinalities, partial
+results and old-version isolation have separate contract checks.
+
+CLI v1–v5 retain their parse depth and contracts. Report constructors should
+receive the matching parse depth to preserve that version's diagnostics;
+projection alone does not undo a deeper parse. The default remains v1.
+Desktop MP3 direct frame input and cross-page stepping reuse `mp3PageStart` and
+`mp3FrameIndex`; the desktop and snapshot envelopes are unchanged. See
+[ADR-031](../decisions/031-direct-mp3-and-sei-timing.md).

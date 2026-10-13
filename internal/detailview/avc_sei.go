@@ -24,6 +24,7 @@ func (b *builder) avcSEI(parent, name string, p *avc.SEIMessageSequence) {
 		b.add(group, "messageComplete", "derived boolean", strconv.FormatBool(m.Complete), nil)
 		b.seiUint(group, "payloadType", m.PayloadType)
 		b.seiUint(group, "payloadSize", m.PayloadSize)
+		b.avcSEITiming(group, m)
 		if m.PayloadSpan != nil {
 			b.seiMapped(group, "seiPayload", "RBSP payload", "Inspected payload bytes; unknown types remain opaque", *m.PayloadSpan)
 		}

@@ -97,3 +97,5 @@ jobs:
         run: go test ./internal/avc -run=^$ -fuzz=FuzzFullHeaders -fuzztime=30s
       - name: Fuzz sequential MP3 frame summary
         run: go test ./internal/analysis -run=^$ -fuzz=FuzzMP3FramesSummary -fuzztime=30s
+      - name: Fuzz contextual SEI timing
+        run: go test ./internal/avc -run=^$ -fuzz=FuzzSEITimingBounded -fuzztime=30s

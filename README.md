@@ -28,7 +28,7 @@ MuxRay 是一个面向 FLV 和音视频码流的跨平台诊断工具。项目�
 - 正常、边界、损坏样本的 unit、Golden 与 fuzz 测试；
 - 离线语料身份/差分校验与实际落盘大文件的扫描测量工具。
 
-AVC/MP3 详情 v2 和桌面详情增加了 SPS VUI、Tag 内 MP3 多帧边界、Xing/Info/VBRI 声明及头部/side-info CRC 检查。AVC 详情 v3 和桌面进一步支持 PPS 必要字段、I/P/B slice 头前缀、参数集来源与长文件分段上下文复用；MP3 v3 增加 side-info 字段及同 Tag 主数据回溯窗口分析。AVC v4 已支持普通 NAL 1/5 的完整 slice 头，v5 增加 SEI 消息解析；桌面 MP3 详情支持分页与汇总帧联动。图像解码、MP3 主数据解码/bit-reservoir 重建、SEI picture timing/HRD 时序求值、分页帧级曲线和实时 RTMP/HTTP-FLV 仍未实现。
+AVC/MP3 详情 v2 和桌面详情增加了 SPS VUI、Tag 内 MP3 多帧边界、Xing/Info/VBRI 声明及头部/side-info CRC 检查。AVC 详情 v3 和桌面进一步支持 PPS 必要字段、I/P/B slice 头前缀、参数集来源与长文件分段上下文复用；MP3 v3 增加 side-info 字段及同 Tag 主数据回溯窗口分析。AVC v4 已支持普通 NAL 1/5 的完整 slice 头，v5 增加 SEI 消息解析，v6 增加有可信 SPS 来源的缓冲周期与图像时序字段；桌面 MP3 详情支持分页、帧号直达、跨页逐帧操作与汇总帧联动。图像解码、MP3 主数据解码/bit-reservoir 重建、HRD/DPB 时间线重建、分页帧级曲线和实时 RTMP/HTTP-FLV 仍未实现。
 
 当前媒体曲线采用源 Tag 窗口，不是解码帧或固定时间桶。完成媒体概览后，每页按需
 读取 64 点；未知时长不补零，最后未闭合区间不猜时长。口径与边界见
@@ -72,7 +72,9 @@ go run ./cmd/muxray detail --tag 0 --pretty sample.flv
 
 `detail --schema-version 5` 使用独立的 [AVC v5 schema](docs/schemas/flv-avc-tag-detail-v5.schema.json)，解析 SEI 消息的类型、声明长度、恢复点和 UUID 用户数据（最多 64 字节数据预览）。未知消息保留源范围；跨防竞争字节的字段保留分段映射。每 NAL 最多读取 64 KiB / 保留 64 消息，每包累计 256 KiB / 256 消息；参数上下文回放不解析 SEI。恢复点仅为声明，不保证能独立解码。
 
-桌面 **MP3 分页详情**每页最多 64 帧 / 1 MiB 覆盖 / 64 KiB 实际读取，支持上一页、下一页及汇总完整帧记录直接定位。帧号与位位置保持 Tag 内原始值；远页每次最多推进 16 页，并可显式继续，文档最多缓存 64 个紧凑检查点。MP3 逐帧汇总仍独立保留 256 条事件，详情可以继续查看更晚的帧。源变化、取消或过期请求不能提交检查点。详见 [ADR-030](docs/decisions/030-mp3-frame-pages-and-sei.md)。
+`detail --schema-version 6` 在 v5 基础上解析 SEI `buffering_period` 与 `pic_timing`，保留 CPB/DPB 延迟、图像结构、完整或部分时钟字段及有符号偏移，并给出原始 SPS 和选择依据。上下文缺失或含糊时保留未知，不猜测活动 SPS 或播放时间线。仅新深度的参数回放保留有界时序摘要；旧 CLI v1–v5 与默认版本不变。详见 [ADR-031](docs/decisions/031-direct-mp3-and-sei-timing.md)。
+
+桌面 **MP3 分页详情**每页最多 64 帧 / 1 MiB 覆盖 / 64 KiB 实际读取，支持上一页、下一页、输入 Tag 内帧号直达、跨页上一/下一帧及汇总完整帧记录直接定位。帧号与位位置保持 Tag 内原始值；远页每次最多推进 16 页，并可显式继续，文档最多缓存 64 个紧凑检查点。MP3 逐帧汇总仍独立保留 256 条事件，详情可以继续查看更晚的帧。源变化、取消或过期请求不能提交检查点。详见 [ADR-030](docs/decisions/030-mp3-frame-pages-and-sei.md)。
 
 桌面 H.264 详情对照所选 Tag 的 FLV 关键帧声明、已观察 IDR NAL 和 slice 类型集合，分别说明 NAL 头与 slice 类型覆盖，并可定位原始声明和代表证据。I slice 不等于 IDR，多 slice 不代表多个完整图像；覆盖不全时不会把未观察到当作不存在。此对照复用已有解析结果，不增加源读取，也不改变 Summary 按声明统计的 GOP。
 

@@ -318,6 +318,9 @@ func parseSequenceParameterSet(source io.ReaderAt, span cursor.Span, options Opt
 	result = finishSPS(result, p)
 	if options.ParseVUI && result.Complete {
 		result.VUI = parseVUI(p, result.VUIParametersPresentFlag, result.MaxNumRefFrames)
+		if options.ParseSEITiming {
+			result.Timing = summarizeSPSTiming(&result)
+		}
 	}
 	return result, nil
 }

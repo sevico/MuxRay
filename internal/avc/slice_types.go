@@ -2,7 +2,8 @@ package avc
 
 import "github.com/sevico/muxray/internal/cursor"
 
-// SignedField retains a successfully decoded signed Exp-Golomb field.
+// SignedField retains a successfully decoded signed field. Slice fields use
+// Exp-Golomb coding; SEI time_offset uses fixed-width two's complement.
 type SignedField struct {
 	Value int64
 	Span  MappedSpan

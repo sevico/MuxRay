@@ -24,6 +24,9 @@ type Options struct {
 	// ParseSEI inspects selected SEI NAL units with independent byte/message
 	// budgets. It does not enable parameter-set or slice parsing.
 	ParseSEI bool
+	// ParseSEITiming adds context-dependent SEI syntax. It enables bounded SPS
+	// timing metadata but does not automatically enable selected SEI inspection.
+	ParseSEITiming bool
 	// ParameterSets is cloned for each parse; in-band updates never mutate it.
 	ParameterSets    *ParameterSetContext
 	MaxDiagnostics   uint32
@@ -59,7 +62,10 @@ const (
 
 // Normalized applies defaults and rejects values outside package hard limits.
 func (o Options) Normalized() (Options, error) {
-	if o.ParseSliceHeaders || o.ParseFullHeaders {
+	if o.ParseSEITiming {
+		o.ParseVUI = true
+	}
+	if o.ParseSliceHeaders || o.ParseFullHeaders || o.ParseSEITiming {
 		o.ParsePPS = true
 	}
 	if o.MaxDiagnostics == 0 {
@@ -216,6 +222,8 @@ type SequenceParameterSet struct {
 	// VUI is nil unless ParseVUI is enabled and phase-one syntax is complete.
 	// Its independent completeness includes the SPS rbsp_trailing_bits.
 	VUI *VUIParameters
+	// Timing is populated only by ParseSEITiming after complete VUI validation.
+	Timing *SPSTimingParameters
 
 	ProfileIDC                 uint8
 	ProfileIDCSpan             MappedSpan

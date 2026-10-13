@@ -8,7 +8,7 @@ export function mp3PageDetail(start = 0, selected?: number, state = 'ready', pro
   };
   const actual = state === 'ready' ? start : Math.max(0, progress - 64);
   group('page', 'MP3 frame page', 'bounded frame page', {
-    pageState: state, requestedPageStart: String(start), pageStartIndex: String(actual), pageSize: '64', nextPageStart: String(actual + 64),
+    pageState: state, pageStopReason: state === 'stopped' ? 'invalid_frame' : 'page_limit', requestedPageStart: String(start), pageStartIndex: String(actual), pageSize: '64', nextPageStart: String(actual + 64),
     nextFrameIndex: String(progress), pageFrames: '64', pageBytesCovered: '26688', pageBytesRead: '256', pageReadBudget: '65536',
     replayPages: '1', replayPageBudget: '16', checkpointCount: '2', hasNext: 'true', canContinue: String(state === 'preparing'),
     requestedFrameIndex: selected === undefined ? 'preview' : String(selected),

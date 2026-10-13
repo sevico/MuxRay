@@ -4,7 +4,7 @@ import type { CurveMetric } from './media-curves.ts';
 import type { API, Detail, DetailRequest, DetailResponse, DiagnosticPage, HexRequest, HexResponse, HexWindow, PageResponse, PickResponse, Session, SessionResponse, Tag, TagPage } from './protocol.ts';
 import { unsigned } from './numbers.ts';
 import { avcReplayProgress } from './details.ts';
-import { mp3FramePage, mp3FrameSelection, mp3Dependency } from './codec-details.ts';
+import { adjacentMP3Frame, mp3FrameIndex, mp3FramePage, mp3FrameSelection, mp3Dependency } from './codec-details.ts';
 import type { MP3DependencySource } from './codec-details.ts';
 import { avcSearchFilter, validateAVCSearch } from './avc-search.ts';
 import type { AVCSearchFilter, AVCSearchPage, AVCSearchRequest, AVCSearchRow } from './protocol.ts';
@@ -61,6 +61,7 @@ export interface ViewState {
   detailState: '' | 'loading' | 'pending' | 'recovering' | 'ready' | 'failed';
   detailError: string | null;
   detailRetry: '' | 'confirm' | 'reload';
+  mp3JumpError: string | null;
   hex: HexWindow | null;
   hexSelection: HexSelection | null;
   hexState: '' | 'loading' | 'pending' | 'recovering' | 'ready' | 'failed';
@@ -184,7 +185,7 @@ export class Controller {
   private api: API;
   private clock: Scheduler;
   private listeners = new Set<() => void>();
-  private state: ViewState = { fileName: '', session: null, operation: '', error: null, tab: 'tags', start: '0', page: null, loading: false, tagFilter: null, filteredPage: null, filterError: null, filterPrevious: null, filterHistoryLimited: false, trendPage: null, trendLoading: false, trendError: null, trendStart: '0', trendSelectedId: null, trendMetric: 'dts', trendType: 'all', trendGapThreshold: '1000', saveState: '', savePending: false, saveError: null, saveRetry: false, saveSourceName: '', saveSessionId: null, saveFileName: '', saveBytesWritten: '0', selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '', hex: null, hexSelection: null, hexState: '', hexError: null, hexRetry: '', tagJumpError: null, sourceChanged: false, avcSearchPage: null, avcSearchState: '', avcSearchRunning: false, avcSearchCancelRequested: false, avcSearchError: null, avcSearchRetry: '', avcSearchFilter: 'mismatches', avcSearchStart: '0', avcSearchPrevious: null, summary: null, summaryState: '', summaryRunning: false, summaryCancelRequested: false, summaryProcessed: '0', summaryTotal: '0', summaryError: null, summaryRetry: '', summaryKind: 'keyframes', summaryStart: '0', summaryPage: null, summaryPageLoading: false, summaryPageError: null, summaryPrevious: null, curvePage: null, curveLoading: false, curveError: null, curveStart: '0', curveSelectedIndex: null, curveMetric: 'audio' };
+  private state: ViewState = { fileName: '', session: null, operation: '', error: null, tab: 'tags', start: '0', page: null, loading: false, tagFilter: null, filteredPage: null, filterError: null, filterPrevious: null, filterHistoryLimited: false, trendPage: null, trendLoading: false, trendError: null, trendStart: '0', trendSelectedId: null, trendMetric: 'dts', trendType: 'all', trendGapThreshold: '1000', saveState: '', savePending: false, saveError: null, saveRetry: false, saveSourceName: '', saveSessionId: null, saveFileName: '', saveBytesWritten: '0', selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '', mp3JumpError: null, hex: null, hexSelection: null, hexState: '', hexError: null, hexRetry: '', tagJumpError: null, sourceChanged: false, avcSearchPage: null, avcSearchState: '', avcSearchRunning: false, avcSearchCancelRequested: false, avcSearchError: null, avcSearchRetry: '', avcSearchFilter: 'mismatches', avcSearchStart: '0', avcSearchPrevious: null, summary: null, summaryState: '', summaryRunning: false, summaryCancelRequested: false, summaryProcessed: '0', summaryTotal: '0', summaryError: null, summaryRetry: '', summaryKind: 'keyframes', summaryStart: '0', summaryPage: null, summaryPageLoading: false, summaryPageError: null, summaryPrevious: null, curvePage: null, curveLoading: false, curveError: null, curveStart: '0', curveSelectedIndex: null, curveMetric: 'audio' };
   private disposed = false;
   private statusVersion = 0;
   private pageVersion = 0;
@@ -213,7 +214,7 @@ export class Controller {
   private detailPolls = 0;
   private stopDetailTimer: (() => void) | null = null;
   private jumpTagId: string | null = null;
-  private jumpMP3Frame: number | undefined;
+  private jumpMP3FrameIndex: number | undefined;
   private hexRequest: HexRequest | null = null;
   private hexPhase: 'start' | 'get' = 'start';
   private hexBusy = false;
@@ -669,7 +670,7 @@ export class Controller {
       if (!this.disposed && version === this.pageVersion && this.state.session?.sessionId === session.sessionId && this.ready()) {
         this.update({ page: result });
         if (this.jumpTagId && result.tab === 'tags') {
-          const id = this.jumpTagId, frame = this.jumpMP3Frame; this.jumpTagId = null; this.jumpMP3Frame = undefined;
+          const id = this.jumpTagId, frame = this.jumpMP3FrameIndex; this.jumpTagId = null; this.jumpMP3FrameIndex = undefined;
           this.selectTag(id, frame);
         }
       }
@@ -703,7 +704,7 @@ export class Controller {
     this.stopDetailTimer?.(); this.stopDetailTimer = null;
     this.detailRequest = { sessionId: this.state.session!.sessionId, requestId: (++this.nextReadID).toString(), tagId, ...(mp3FrameIndex === undefined ? {} : { mp3FrameIndex, ...(mp3FrameIndex < 64 ? {} : { mp3PageStart: Math.floor(mp3FrameIndex / 64) * 64 }) }) };
     this.detailPhase = 'start'; this.detailPaused = false; this.detailPolls = 0;
-    this.update({ selectedTag: tag, detail: null, detailState: 'loading', detailError: null, detailRetry: '' });
+    this.update({ selectedTag: tag, detail: null, detailState: 'loading', detailError: null, detailRetry: '', mp3JumpError: null });
     // Keep one IPC wait. If an older reply is in flight, coalesce selections
     // into this latest intent; its finite deadline releases the local slot.
     this.ensureDetail();
@@ -714,7 +715,7 @@ export class Controller {
     this.detailPaused = false;
     this.stopDetailTimer?.(); this.stopDetailTimer = null;
     this.replyStops.get('detail')?.();
-    this.update({ selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '' });
+    this.update({ selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '', mp3JumpError: null });
   }
   private ensureDetail(): void {
     if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || this.detailBusy || this.detailPaused || this.stopDetailTimer || !this.detailRequest || !this.ready() || this.refreshStatus || this.pollFailed) return;
@@ -735,7 +736,7 @@ export class Controller {
       const response = detailResult(raw, request);
       if (response.state === 'ready') {
         this.detailPaused = true;
-        this.update({ detail: response.detail, detailState: 'ready', detailError: null, detailRetry: '' });
+        this.update({ detail: response.detail, detailState: 'ready', detailError: null, detailRetry: '', mp3JumpError: null });
       } else if (response.state === 'failed') {
         this.detailPaused = true;
         const code = response.error!.code;
@@ -775,8 +776,30 @@ export class Controller {
     const { sessionId, tagId, mp3PageStart } = this.detailRequest;
     this.detailRequest = { sessionId, tagId, requestId: (++this.nextReadID).toString(), ...(mp3PageStart === undefined ? {} : { mp3PageStart }), ...(index === null ? {} : { mp3FrameIndex: index }) };
     this.detailPhase = 'start'; this.detailPaused = false; this.detailPolls = 0;
-    this.update({ detailState: 'loading', detailError: null, detailRetry: '' });
+    this.update({ detailState: 'loading', detailError: null, detailRetry: '', mp3JumpError: null });
     this.ensureDetail();
+  }
+  jumpMP3Frame(text: string): void {
+    const page = mp3FramePage(this.state.detail);
+    if (this.disposed || this.state.summaryRunning || this.state.avcSearchRunning || this.detailBusy || !this.detailPaused || !this.detailRequest ||
+        this.state.detailState !== 'ready' || !page || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    const index = mp3FrameIndex(text);
+    if (index === null) { this.update({ mp3JumpError: '请输入 0–4294967295 之间的十进制整数帧号（索引从 0 开始）。' }); return; }
+    this.update({ mp3JumpError: null });
+    if (page.state === 'ready' && mp3FrameSelection(this.state.detail)?.selected === index) return;
+    if (this.nextReadID === 18446744073709551615n) { this.update({ detailError: 'id_exhausted' }); return; }
+    this.clearHex();
+    const { sessionId, tagId } = this.detailRequest;
+    this.detailRequest = { sessionId, tagId, requestId: (++this.nextReadID).toString(), mp3PageStart: Math.floor(index / 64) * 64, mp3FrameIndex: index };
+    this.detailPhase = 'start'; this.detailPaused = false; this.detailPolls = 0;
+    this.update({ detailState: 'loading', detailError: null, detailRetry: '', mp3JumpError: null });
+    this.ensureDetail();
+  }
+  stepMP3Frame(direction: -1 | 1): void {
+    const index = adjacentMP3Frame(this.state.detail, direction);
+    if (index === null) return;
+    if (mp3FrameSelection(this.state.detail)?.selectable.includes(index)) this.selectMP3Frame(index);
+    else this.jumpMP3Frame(String(index));
   }
   pageMP3Frames(direction: -1 | 1 | 'continue'): void {
     const page = mp3FramePage(this.state.detail);
@@ -795,7 +818,7 @@ export class Controller {
     this.clearHex();
     this.detailRequest = { ...request, requestId: (++this.nextReadID).toString() };
     this.detailPhase = 'start'; this.detailPaused = false; this.detailPolls = 0;
-    this.update({ detailState: 'loading', detailError: null, detailRetry: '' });
+    this.update({ detailState: 'loading', detailError: null, detailRetry: '', mp3JumpError: null });
     this.ensureDetail();
   }
   inspectMP3Dependency(): void {
@@ -808,7 +831,7 @@ export class Controller {
     this.clearHex();
     this.detailRequest = { ...this.detailRequest, requestId: (++this.nextReadID).toString(), mp3FrameIndex: index, mp3Dependency: true };
     this.detailPhase = 'start'; this.detailPaused = false; this.detailPolls = 0;
-    this.update({ detailState: 'loading', detailError: null, detailRetry: '' });
+    this.update({ detailState: 'loading', detailError: null, detailRetry: '', mp3JumpError: null });
     this.ensureDetail();
   }
   locateMP3Source(source: MP3DependencySource, destination: 'tag' | 'hex'): void {
@@ -828,7 +851,7 @@ export class Controller {
     this.clearHex();
     this.detailRequest = { ...this.detailRequest, requestId: (++this.nextReadID).toString() };
     this.detailPhase = 'start'; this.detailPaused = false; this.detailPolls = 0;
-    this.update({ detailState: 'loading', detailError: null, detailRetry: '' });
+    this.update({ detailState: 'loading', detailError: null, detailRetry: '', mp3JumpError: null });
     this.ensureDetail();
   }
   retryDetail(): void {
@@ -841,7 +864,7 @@ export class Controller {
       this.detailRequest = { ...this.detailRequest, requestId: (++this.nextReadID).toString() };
     }
     this.detailPhase = 'start'; this.detailPaused = false; this.detailPolls = 0;
-    this.update({ detailState: 'loading', detailError: null, detailRetry: '' });
+    this.update({ detailState: 'loading', detailError: null, detailRetry: '', mp3JumpError: null });
     this.ensureDetail();
   }
   jumpTag(text: string, mp3FrameIndex?: number): void {
@@ -852,7 +875,7 @@ export class Controller {
       if (mp3FrameIndex !== undefined && (!Number.isInteger(mp3FrameIndex) || mp3FrameIndex < 0 || mp3FrameIndex > 4294967295)) throw new Error('Invalid frame.');
       this.select('tags', (id / BigInt(PAGE_SIZE) * BigInt(PAGE_SIZE)).toString());
       this.jumpTagId = id.toString();
-      this.jumpMP3Frame = mp3FrameIndex;
+      this.jumpMP3FrameIndex = mp3FrameIndex;
       this.update({ tagJumpError: null });
     } catch { this.update({ tagJumpError: 'tag_not_found' }); }
   }

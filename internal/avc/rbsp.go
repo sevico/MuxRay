@@ -21,6 +21,8 @@ type parseBudget struct {
 	sliceBytesRead          uint32
 	seiBytesRead            uint32
 	seiMessages             uint32
+	pendingTiming           []pendingSEITiming
+	timingSlice             timingSliceEvidence
 }
 
 func newParseBudget(options Options) *parseBudget {

@@ -35,3 +35,4 @@ Repository-wide architecture and compatibility decisions are recorded here. An a
 
 - [ADR-029: Full ordinary H.264 headers and MP3 frame summary](029-full-codec-headers-and-frame-summary.md)
 - [ADR-030: MP3 frame pages, summary links and H.264 SEI evidence](030-mp3-frame-pages-and-sei.md)
+- [ADR-031: Direct MP3 navigation and contextual SEI timing fields](031-direct-mp3-and-sei-timing.md)

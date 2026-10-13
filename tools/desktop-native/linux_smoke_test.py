@@ -80,6 +80,16 @@ class LinuxSmokeTest(unittest.TestCase):
         args = smoke.arguments(self.argv + ['--source', str(source)])
         self.assertEqual(args.tag, 0)
 
+    def test_direct_mp3_navigation_is_explicit_and_bounded(self):
+        args = smoke.arguments(self.argv + ['--mp3-jump-frame', '63', '--mp3-frame-walk', 'next', '--mp3-frame-walk', 'previous'])
+        self.assertEqual((args.mp3_jump_frame, args.mp3_frame_walk), (63, ['next', 'previous']))
+        for extra in [['--mp3-jump-frame', '-1'], ['--mp3-jump-frame', '4294967296'],
+                      ['--mp3-frame-walk', 'next'], ['--mp3-jump-frame', '2600', '--mp3-page-steps', '1'],
+                      ['--mp3-jump-frame', '2600', '--mp3-frame', '2600', '--mp3-history'],
+                      ['--mp3-jump-frame', '63'] + ['--mp3-frame-walk', 'next'] * 9]:
+            with self.subTest(extra=extra), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                smoke.arguments(self.argv + extra)
+
     def test_avc_evidence_is_explicit_and_preserves_other_defaults(self):
         self.assertFalse(smoke.arguments(self.argv).avc_evidence)
         args = smoke.arguments(self.argv + ['--avc-evidence', '--media-curves', 'video'])

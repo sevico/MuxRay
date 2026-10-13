@@ -16,6 +16,10 @@ CONTRACTS = (
     ("docs/schemas/flv-avc-tag-detail-v5.schema.json", "testdata/golden/flv-avc-detail-sei-config-v5.json"),
     ("docs/schemas/flv-avc-tag-detail-v5.schema.json", "testdata/golden/flv-avc-detail-sei-truncated-v5.json"),
     ("docs/schemas/flv-avc-tag-detail-v5.schema.json", "testdata/golden/flv-avc-detail-sei-budget-v5.json"),
+    ("docs/schemas/flv-avc-tag-detail-v6.schema.json", "testdata/golden/flv-avc-detail-timing-v6.json"),
+    ("docs/schemas/flv-avc-tag-detail-v6.schema.json", "testdata/golden/flv-avc-detail-timing-hrd-v6.json"),
+    ("docs/schemas/flv-avc-tag-detail-v6.schema.json", "testdata/golden/flv-avc-detail-timing-missing-v6.json"),
+    ("docs/schemas/flv-avc-tag-detail-v6.schema.json", "testdata/golden/flv-avc-detail-timing-truncated-v6.json"),
 
     ("docs/schemas/flv-avc-tag-detail-v4.schema.json", "testdata/golden/flv-avc-detail-v4.json"),
     ("docs/schemas/flv-avc-tag-detail-v4.schema.json", "testdata/golden/flv-avc-detail-nalu-v4.json"),
@@ -1867,6 +1871,72 @@ def validate_sei_v5_contracts() -> None:
     print("validated SEI v5 budgets, supported syntax, partial contracts and legacy isolation")
 
 
+def validate_sei_timing_v6_contracts() -> None:
+    validator = Draft202012Validator(load_json("docs/schemas/flv-avc-tag-detail-v6.schema.json"))
+    valid = load_json("testdata/golden/flv-avc-detail-timing-v6.json")
+    base = ["detail", "nalUnitSequence", "nalUnits", 0, "sei", "messages"]
+    context = base + [1, "pictureTiming", "context"]
+    for path, value in (
+        (["schemaVersion"], 5),
+        (base + [0, "payloadType", "value"], 1),
+        (base + [0, "bufferingPeriod", "sequenceParameterSetId", "value"], 32),
+        (base + [1, "syntaxSupported"], False),
+        (context + ["state"], "missing"),
+        (context + ["source"], "guessed"),
+        (context + ["spsId"], 32),
+        (context + ["parameters", "nalHrd", "cpbCount"], 33),
+        (context + ["parameters", "nalHrd", "cpbRemovalDelayLength"], 33),
+        (base + [1, "pictureTiming", "clockTimestamps"], [{"index": 0}] * 4),
+        (base + [1, "pictureTiming", "clockTimestamps"], [{"index": 0}]),
+        (base + [1, "pictureTiming", "extra"], True),
+    ):
+        changed = deepcopy(valid)
+        parent = changed
+        for key in path[:-1]:
+            parent = parent[key]
+        parent[path[-1]] = value
+        require_invalid(validator, changed, "SEI timing contract mutation: " + str(path))
+    for field in ("spsId", "spsSpan", "parameters", "evidenceSpan"):
+        changed = deepcopy(valid)
+        parent = changed
+        for key in context:
+            parent = parent[key]
+        del parent[field]
+        require_invalid(validator, changed, "resolved timing requires " + field)
+    for version in range(1, 6):
+        old = Draft202012Validator(load_json(f"docs/schemas/flv-avc-tag-detail-v{version}.schema.json"))
+        downgraded = deepcopy(valid)
+        downgraded["schemaVersion"] = version
+        require_invalid(old, downgraded, f"timing must not leak into AVC v{version}")
+    hrd = load_json("testdata/golden/flv-avc-detail-timing-hrd-v6.json")
+    for path, value in (
+        (base + [0, "bufferingPeriod", "nalInitialDelays"], []),
+        (base + [1, "pictureTiming", "clockTimestamps"], []),
+        (base + [1, "pictureTiming", "clockTimestamps", 0, "secondsValue", "value"], 60),
+        (base + [1, "pictureTiming", "clockTimestamps", 0, "countingType", "value"], 7),
+        (base + [1, "pictureTiming", "clockTimestamps", 0, "timeOffset", "value"], -1073741825),
+    ):
+        changed = deepcopy(hrd)
+        parent = changed
+        for key in path[:-1]:
+            parent = parent[key]
+        parent[path[-1]] = value
+        require_invalid(validator, changed, "complete timing shape: " + str(path))
+    for path in (
+        base + [1, "pictureTiming", "cpbRemovalDelay"],
+        base + [1, "pictureTiming", "dpbOutputDelay"],
+        base + [1, "pictureTiming", "clockTimestamps", 0, "timeOffset"],
+        base + [1, "pictureTiming", "clockTimestamps", 0, "secondsValue"],
+    ):
+        changed = deepcopy(hrd)
+        parent = changed
+        for key in path[:-1]:
+            parent = parent[key]
+        del parent[path[-1]]
+        require_invalid(validator, changed, "complete timing requires " + str(path))
+    print("validated timing v6 provenance, closed fields, bounds and legacy isolation")
+
+
 def main() -> None:
     manifest_schema = load_json("testdata/manifests/sample-manifest-v1.schema.json")
     Draft202012Validator.check_schema(manifest_schema)
@@ -1890,6 +1960,7 @@ def main() -> None:
     validate_mp3_v3_edge_cases()
     validate_full_codec_contracts()
     validate_sei_v5_contracts()
+    validate_sei_timing_v6_contracts()
     print("validated MP3 v3 layouts, partial values, source fields, dependency states and version isolation")
     print("validated AVC v3 prefix presence, version isolation, closed fields and budgets")
     print("validated AVC/MP3 detail v2 version isolation, presence, bounds, CRC and VBR shapes")

@@ -116,3 +116,27 @@ test('MP3 late-page offsets retain 64 global choices without oversized text fiel
   assert.equal(mp3FrameSelection(detail)?.selectable.at(-1), 2623);
   assert.equal(mp3FrameSelection(detail)?.selected, 2600);
 });
+
+import { adjacentMP3Frame, mp3FrameIndex } from '../src/codec-details.ts';
+
+test('MP3 typed frame indices are canonical uint32 values without Number coercion', () => {
+  for (const [text, expected] of [['0', 0], ['63', 63], ['64', 64], ['2600', 2600], ['4294967295', 4294967295]] as const) assert.equal(mp3FrameIndex(text), expected);
+  for (const text of ['', ' ', ' 64', '64 ', '+64', '-1', '01', '1.0', '1e3', '0x40', 'NaN', 'Infinity', '4294967296', '9007199254740993', '６４', '64\n']) assert.equal(mp3FrameIndex(text), null, text);
+});
+
+test('MP3 adjacent navigation preserves confirmed local choices and crosses exact page boundaries', () => {
+  assert.equal(adjacentMP3Frame(mp3PageDetail(0, 63), 1), 64);
+  assert.equal(adjacentMP3Frame(mp3PageDetail(64, 64), -1), 63);
+  assert.equal(adjacentMP3Frame(mp3PageDetail(0, 0), -1), null);
+  assert.equal(adjacentMP3Frame(mp3PageDetail(64), -1), null);
+  assert.equal(adjacentMP3Frame(mp3PageDetail(64), 1), 64);
+  assert.equal(adjacentMP3Frame(mp3PageDetail(2560, 2600, 'preparing', 1024), 1), null);
+  const page = mp3PageDetail(64, 66);
+  page.fields.find(f => f.name === 'selectableFrameOffsets')!.value = '0,2,5';
+  assert.equal(adjacentMP3Frame(page, -1), 64);
+  assert.equal(adjacentMP3Frame(page, 1), 69);
+  page.fields.find(f => f.name === 'selectedFrameIndex')!.value = '69';
+  page.fields.find(f => f.name === 'hasNext')!.value = 'false';
+  page.fields.find(f => f.name === 'nextPageStart')!.value = 'none';
+  assert.equal(adjacentMP3Frame(page, 1), null, 'terminal page does not fabricate another frame');
+});

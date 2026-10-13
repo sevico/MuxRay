@@ -400,3 +400,37 @@ absolute output path for each run because D-Bus socket paths have a size limit.
 All native rounds use the shared isolated Linux helper and verify source/binary
 hashes, exported snapshots, source descriptor release and normal process exit.
 They do not validate audio/video decoding or Windows/macOS native behavior.
+
+## Direct MP3 frames and SEI timing v6
+
+`timing_navigation_oracle.py` authors SPS/VUI/HRD, buffering-period and
+picture-timing bits with independent original-source mappings, plus a 3,000-frame
+MP3 Tag. They are structural fixtures, not decoding-conformance media.
+`verify_timing_navigation.py` checks v6 values, context identity, partial states,
+source bits and budgets, then compares every v1–v5 output byte-for-byte with a
+frozen prior CLI. Build that baseline from commit
+`0e853bebd90f12658c1123f8703fb247cbf61530`; the independent Linux CI job builds both.
+
+```sh
+python3 -B tools/codec-regression/timing_navigation_oracle.py --output-dir "$PWD/.cache/tn-samples"
+python3 -B tools/codec-regression/verify_timing_navigation.py --input-dir "$PWD/.cache/tn-samples" --cli "$PWD/.cache/muxray" --baseline-cli "$PWD/.cache/baseline-cli" --output-dir "$PWD/.cache/tn-cli"
+/usr/bin/python3 -B tools/codec-regression/native_timing_navigation.py --input-dir "$PWD/.cache/tn-samples" --binary "$PWD/desktop/build/bin/MuxRay" --output-dir "$PWD/.cache/tn-native" --timeout-seconds 900
+GOTOOLCHAIN=go1.27.0 /usr/bin/python3 -B tools/codec-regression/performance_baseline.py --output-dir "$PWD/.cache/tn-performance"
+```
+
+Native cases cover frame 2600 through three explicitly continued requests,
+63→64→63 across pages, HRD delays, cross-Tag activation provenance, split EPB
+source fields, missing context, truncation and message budgets. `--case` can be
+repeated to split independent runs. Each run uses fresh output directories,
+private Xvfb/D-Bus and memory-only settings, checking actual controls, exported
+snapshots, original source hashes, file release and application exit.
+
+The performance runner records three 200 ms benchmark repeats by default,
+raw logs, medians, toolchain/host/revision and output hashes. MP3 measurements
+use an already-open local file with an empty or populated document checkpoint
+cache; they exclude scanning, file opening, dependency lookup and UI automation.
+The OS cache is not flushed. SEI measurements separately include configuration,
+reuse existing context, or clone compact context, using an in-memory ReaderAt.
+Read counts/bytes and request/page counts establish the workload; `B/op` and
+`allocs/op` are Go allocations, not RSS or peak live memory. No cross-machine
+speed threshold is imposed. Whole native-run duration is not parser latency.

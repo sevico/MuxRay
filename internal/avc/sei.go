@@ -43,6 +43,7 @@ type SEIMessageSequence struct {
 	SyntaxBits       uint32
 	FramingComplete  bool
 	Complete         bool
+	timingValid      bool
 }
 
 type SEIMessage struct {
@@ -53,6 +54,8 @@ type SEIMessage struct {
 	Kind                 string
 	SyntaxSupported      bool
 	RecoveryPoint        *SEIRecoveryPoint
+	BufferingPeriod      *SEIBufferingPeriod
+	PictureTiming        *SEIPictureTiming
 	UserDataUnregistered *SEIUserDataUnregistered
 	PayloadComplete      bool
 	Complete             bool
@@ -124,6 +127,14 @@ func parseSEI(source io.ReaderAt, span cursor.Span, header NALHeader, options Op
 		m.PayloadType = p.seiHeaderValue()
 		if m.PayloadType != nil {
 			switch m.PayloadType.Value {
+			case 0:
+				if options.ParseSEITiming {
+					m.Kind, m.SyntaxSupported = "bufferingPeriod", true
+				}
+			case 1:
+				if options.ParseSEITiming {
+					m.Kind, m.SyntaxSupported = "pictureTiming", true
+				}
 			case 5:
 				m.Kind, m.SyntaxSupported = "userDataUnregistered", true
 			case 6:
@@ -155,6 +166,27 @@ func parseSEI(source io.ReaderAt, span cursor.Span, header NALHeader, options Op
 		q := newRBSPParser(payloadData, diagnostics)
 		q.bitPosition = start
 		switch m.Kind {
+		case "bufferingPeriod":
+			m.BufferingPeriod = q.seiBufferingPeriod(m.PayloadComplete, options.ParameterSets, timingEvidence(&m))
+			if options.ParameterSets != nil {
+				options.ParameterSets.timingActive = nil
+				if m.PayloadComplete && !q.fatal && !q.invalid && data.valid && !header.ForbiddenZeroBit && header.NALRefIDC == 0 {
+					options.ParameterSets.timingActive = m.BufferingPeriod.Context.Parameters
+					options.ParameterSets.timingEvidence = timingEvidence(&m)
+				}
+			}
+		case "pictureTiming":
+			m.PictureTiming = &SEIPictureTiming{Context: SEITimingContext{State: "missing"}}
+			pending := pendingSEITiming{sequence: r, index: m.Index, parser: q, afterSlice: budget.timingSlice.seen}
+			if c := options.ParameterSets; c != nil {
+				for id, set := range c.sps {
+					if set != nil {
+						pending.sets[id] = set.Timing
+					}
+				}
+				pending.active, pending.evidence = c.timingActive, c.timingEvidence
+			}
+			budget.pendingTiming = append(budget.pendingTiming, pending)
 		case "recoveryPoint":
 			m.RecoveryPoint = q.seiRecoveryPoint(m.PayloadComplete)
 		case "userDataUnregistered":
@@ -171,6 +203,10 @@ func parseSEI(source io.ReaderAt, span cursor.Span, header NALHeader, options Op
 	}
 	r.SyntaxBits = p.bitPosition
 	r.Complete = r.FramingComplete && valid && !p.fatal && !p.invalid
+	r.timingValid = r.FramingComplete && data.valid && !header.ForbiddenZeroBit && header.NALRefIDC == 0
+	if options.ParseSEITiming && options.ParameterSets != nil && (!r.FramingComplete || !data.valid || header.ForbiddenZeroBit || header.NALRefIDC != 0) {
+		options.ParameterSets.timingActive = nil
+	}
 	return r, nil
 }
 
@@ -199,28 +235,32 @@ func (p *rbspParser) seiRecoveryPoint(payloadComplete bool) *SEIRecoveryPoint {
 	if r.ChangingSliceGroupIDC != nil && r.ChangingSliceGroupIDC.Value > 2 {
 		p.semanticFatal(r.ChangingSliceGroupIDC.Span, CodeSEISyntaxInvalid, "changing_slice_group_idc exceeds syntax range", 2, uint64(r.ChangingSliceGroupIDC.Value))
 	}
+	r.PayloadExtensionBits, r.PayloadAlignmentBits = p.seiPayloadTail(payloadComplete)
+	return r
+}
+
+func (p *rbspParser) seiPayloadTail(payloadComplete bool) (extension, alignment *MappedSpan) {
 	if p.fatal || !payloadComplete || p.remainingBits() == 0 {
-		return r
+		return
 	}
-	// sei_payload() permits opaque reserved_payload_extension_data before
-	// the final bit_equal_to_one and byte-alignment zero bits. Locate that
-	// marker only within the final byte and after the supported syntax.
+	// sei_payload() permits opaque reserved extension bits before the final
+	// bit_equal_to_one and byte-alignment zero bits.
 	left := p.remainingBits()
 	last := p.data.bytes[len(p.data.bytes)-1]
 	zeros := uint32(bits.TrailingZeros8(last))
 	if zeros == 8 || zeros+1 > left {
 		p.fail(CodeSEITrailingBitsInvalid, "SEI payload alignment lacks bit_equal_to_one", 1, 0)
-		return r
+		return
 	}
-	if extension := left - zeros - 1; extension > 0 {
-		s := p.mappedSpan(p.bitPosition, extension)
-		r.PayloadExtensionBits = &s
-		p.bitPosition += extension
+	if count := left - zeros - 1; count > 0 {
+		s := p.mappedSpan(p.bitPosition, count)
+		extension = &s
+		p.bitPosition += count
 	}
 	s := p.mappedSpan(p.bitPosition, zeros+1)
-	r.PayloadAlignmentBits = &s
+	alignment = &s
 	p.bitPosition += zeros + 1
-	return r
+	return
 }
 
 func (p *rbspParser) seiUserData(size uint32) *SEIUserDataUnregistered {

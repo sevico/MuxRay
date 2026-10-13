@@ -23,10 +23,23 @@ func ParseDecoderConfigurationRecord(source io.ReaderAt, payload cursor.Span, op
 		diagnostics: newDiagnosticCollector(normalized.MaxDiagnostics, end), result: result,
 		budget: newParseBudget(normalized),
 	}
-	if normalized.ParseFullHeaders {
+	if normalized.ParseFullHeaders || normalized.ParseSEITiming {
 		p.options.ParameterSets = NewParameterSetContext()
 	}
 	p.parse()
+	if normalized.ParseSEITiming {
+		p.budget.finishSEITiming(p.options.ParameterSets, !p.framingFatal && p.err == nil)
+		for i := range p.result.SequenceParameterSets {
+			if sei := p.result.SequenceParameterSets[i].SEI; sei != nil {
+				p.result.SequenceParameterSets[i].SummaryComplete = sei.Complete
+			}
+		}
+		for i := range p.result.PictureParameterSets {
+			if sei := p.result.PictureParameterSets[i].SEI; sei != nil {
+				p.result.PictureParameterSets[i].SummaryComplete = sei.Complete
+			}
+		}
+	}
 	p.finish()
 	if p.err != nil {
 		return p.result, p.err
@@ -239,8 +252,8 @@ func (p *configurationParser) readParameterSets(count uint32, expected NALUnitTy
 		}
 		items = append(items, item)
 		p.parameterSets++
-		if p.options.ParseFullHeaders {
-			p.options.ParameterSets.AddNALUnit(NALUnit{Header: header, HeaderPresent: header.Complete, SequenceParameterSet: sps, PictureParameterSet: pps, SummaryComplete: summaryComplete})
+		if p.options.ParseFullHeaders || p.options.ParseSEITiming {
+			p.options.ParameterSets.AddNALUnit(NALUnit{Header: header, HeaderPresent: header.Complete, SequenceParameterSet: sps, PictureParameterSet: pps, SEI: item.SEI, SummaryComplete: item.SummaryComplete})
 		}
 		if err != nil {
 			p.err = fmt.Errorf("avc: parse %s %d: %w", label, index, err)
@@ -418,14 +431,14 @@ func ParseLengthPrefixedNALUnits(source io.ReaderAt, payload cursor.Span, length
 			unit.SequenceParameterSet, unit.PictureParameterSet = sps, pps
 			unit.SummaryComplete = summaryComplete
 			if normalized.ParseSEI && parseErr == nil && header.Complete && header.NALUnitType == NALUnitTypeSEI {
-				unit.SEI, parseErr = parseSEI(source, span, header, normalized, budget, diagnostics)
+				unit.SEI, parseErr = parseSEI(source, span, header, withParameterContext(normalized, parameterContext), budget, diagnostics)
 				unit.SummaryComplete = unit.SEI.Complete
 			}
-			if normalized.ParseSliceHeaders && parseErr == nil && header.Complete &&
+			if (normalized.ParseSliceHeaders || normalized.ParseSEITiming) && parseErr == nil && header.Complete &&
 				(header.NALUnitType == NALUnitTypeNonIDRSlice || header.NALUnitType == NALUnitTypeIDRSlice) {
-				unit.SliceHeader, parseErr = parseSliceHeader(source, span, header, parameterContext, budget, diagnostics, normalized.ParseFullHeaders)
+				unit.SliceHeader, parseErr = parseSliceHeader(source, span, header, parameterContext, budget, diagnostics, normalized.ParseFullHeaders && normalized.ParseSliceHeaders)
 				unit.SummaryComplete = unit.SliceHeader != nil && unit.SliceHeader.PrefixComplete
-				if normalized.ParseFullHeaders {
+				if normalized.ParseFullHeaders && normalized.ParseSliceHeaders {
 					unit.SummaryComplete = unit.SummaryComplete && unit.SliceHeader.Full != nil && unit.SliceHeader.Full.Complete
 				}
 			}
@@ -446,11 +459,35 @@ func ParseLengthPrefixedNALUnits(source io.ReaderAt, payload cursor.Span, length
 				return result, fmt.Errorf("avc: parse NAL unit %d: %w", unit.Index, parseErr)
 			}
 		}
-		if normalized.ParseSliceHeaders || normalized.ParseFullHeaders {
+		if normalized.ParseSEITiming {
+			switch unit.Header.NALUnitType {
+			case NALUnitTypeNonIDRSlice, NALUnitTypeIDRSlice:
+				budget.rememberTimingSlice(unit, parameterContext)
+			case NALUnitTypeAccessUnitDelimiter:
+				if budget.timingSlice.seen {
+					budget.timingSlice.ambiguous = true
+				}
+			case NALUnitTypeSequenceParameterSet, NALUnitTypePictureParameterSet, NALUnitTypeSEI, NALUnitTypeFillerData:
+			default:
+				budget.timingSlice.ambiguous = true
+			}
+			if !unit.HeaderPresent || unit.Header.ForbiddenZeroBit {
+				budget.timingSlice.ambiguous = true
+			}
+		}
+		if normalized.ParseSliceHeaders || normalized.ParseFullHeaders || normalized.ParseSEITiming {
 			parameterContext.AddNALUnit(unit)
 		}
 		result.NALUnits = append(result.NALUnits, unit)
 		position += uint64(length)
+	}
+	if normalized.ParseSEITiming {
+		budget.finishSEITiming(parameterContext, framingComplete && position == end)
+		for i := range result.NALUnits {
+			if result.NALUnits[i].SEI != nil {
+				result.NALUnits[i].SummaryComplete = result.NALUnits[i].SEI.Complete
+			}
+		}
 	}
 	result.BytesConsumed = position - start
 	result.SyntaxSpan = cursor.Span{ByteOffset: start, BitLength: uint32(result.BytesConsumed * 8)}
@@ -497,7 +534,7 @@ func configurationHasExtension(profile uint8) bool {
 }
 
 func withParameterContext(o Options, c *ParameterSetContext) Options {
-	if o.ParseFullHeaders {
+	if o.ParseFullHeaders || o.ParseSEITiming {
 		o.ParameterSets = c
 	}
 	return o

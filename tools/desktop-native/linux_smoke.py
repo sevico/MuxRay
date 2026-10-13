@@ -34,6 +34,8 @@ def arguments(argv=None):
     parser.add_argument('--mp3-summary', action='store_true', help='inspect all retained MP3 summary event pages and a late-frame Hex source')
     parser.add_argument('--mp3-summary-link', action='store_true', help='open the last retained complete MP3 event in paginated frame details')
     parser.add_argument('--mp3-page-steps', type=int, default=0, help='explicit next-frame-page actions, 0 through 64; retain each UI state')
+    parser.add_argument('--mp3-jump-frame', type=int, help='enter an original Tag-relative uint32 frame index and explicitly continue bounded locating requests')
+    parser.add_argument('--mp3-frame-walk', action='append', choices=['next', 'previous'], default=[], help='after direct jump, activate an adjacent frame button; at most 8 actions')
     parser.add_argument('--field-name', help='click one uniquely named source-backed detail field and retain Hex evidence')
     parser.add_argument('--avc-evidence', action='store_true', help='click AVC declaration/NAL/slice source buttons and save each Hex selection UI')
     parser.add_argument('--avc-search', choices=['mismatches', 'unknown', 'all'], help='inspect real bounded AVC search pages and source/detail navigation')
@@ -79,6 +81,10 @@ def arguments(argv=None):
         parser.error('--mp3-summary-link requires --mp3-summary')
     if not 0 <= args.mp3_page_steps <= 64 or (args.mp3_page_steps and (args.mp3_browse or args.avc_search)):
         parser.error('--mp3-page-steps must be 0 through 64 and cannot combine with browse or AVC search')
+    if args.mp3_jump_frame is not None and (not 0 <= args.mp3_jump_frame <= 4294967295 or args.mp3_browse or args.avc_search or args.mp3_page_steps or args.mp3_summary_link or args.mp3_frame is not None):
+        parser.error('--mp3-jump-frame must fit uint32 and cannot combine with another frame-selection flow')
+    if args.mp3_frame_walk and (args.mp3_jump_frame is None or len(args.mp3_frame_walk) > 8):
+        parser.error('--mp3-frame-walk requires --mp3-jump-frame and permits at most 8 explicit actions')
     if args.mp3_frame is not None and (not (args.mp3_history or args.mp3_page_steps or args.mp3_summary_link) or not 0 <= args.mp3_frame <= 4294967295):
         parser.error('--mp3-frame requires history, pages or summary link and must fit uint32')
     if args.avc_search and args.mp3_history:
@@ -229,6 +235,29 @@ def validate_export(snapshot, tag, generated):
     require(snapshot['hex']['window']['offset'] == selected['offset'], 'Hex is not positioned at the selected Tag')
     if generated:
         require(snapshot['detail']['detail']['complete'], 'generated fixture detail is incomplete')
+
+
+def check_mp3_navigation_stage(snapshot, target, previous=None):
+    detail = snapshot['detail']
+    fields = {f['name']: f['value'] for f in detail['detail']['fields']}
+    require(detail['state'] == 'ready' and fields['requestedFrameIndex'] == str(target) and
+            fields['requestedPageStart'] == str(target // 64 * 64), 'direct MP3 navigation identity differs')
+    require(fields['replayPageBudget'] == '16' and 1 <= int(fields['replayPages']) <= 16 and
+            int(fields['checkpointCount']) <= 64, 'direct MP3 navigation exceeded replay/checkpoint bounds')
+    state, progress = fields['pageState'], int(fields['nextFrameIndex'])
+    require(state in ('preparing', 'ready', 'stopped'), 'unexpected MP3 navigation state')
+    if previous:
+        require(int(detail['requestId']) > int(previous['requestId']) and progress > previous['nextFrameIndex'],
+                'direct MP3 continuation reused a request or did not advance')
+    if state == 'preparing':
+        require(fields['canContinue'] == 'true' and progress <= target // 64 * 64 and
+                fields['replayPages'] == '16' and 'Frame inspection' not in fields,
+                'preparing MP3 navigation exposed a wrong page or lacked progress')
+    elif state == 'ready':
+        require(fields['pageStartIndex'] == str(target // 64 * 64) and fields['selectedFrameIndex'] == str(target),
+                'ready MP3 navigation selected a different frame')
+    return {'requestId': detail['requestId'], 'targetFrame': target, 'state': state,
+            'pageStart': int(fields['pageStartIndex']), 'nextFrameIndex': progress, 'replayPages': int(fields['replayPages'])}
 
 
 def run_worker(args):
@@ -400,6 +429,42 @@ def run_worker(args):
         require(start <= index < start + 64, 'selected MP3 frame is outside the ready page')
         choose('MP3 帧选择', index - start + 1, f'帧 {index}')
         wait_text(f'当前展开 MP3 帧 {index} ·')
+
+    def jump_mp3_frame(index):
+        entry = find('entry', 'MP3 帧号')
+        require(entry.queryComponent().grabFocus(), 'MP3 frame input focus failed')
+        combo('a')
+        for char in str(index):
+            key(char, True)
+            key(char, False)
+        screen.sync()
+        wait(lambda: node_text(find('entry', 'MP3 帧号')) == str(index), 'MP3 frame input readback')
+        click('跳转 MP3 帧')
+        result['mp3DirectNavigation'] = []
+        previous = None
+        for step in range(4):
+            wait(lambda: any((f'正在定位 MP3 帧 {index}，' in name or f'当前展开 MP3 帧 {index} ·' in name or
+                              f'MP3 帧 {index} 超出' in name or f'MP3 帧 {index} 定位停止' in name) or
+                             (f'正在定位 MP3 帧 {index}，' in node_text(node) or f'当前展开 MP3 帧 {index} ·' in node_text(node) or
+                              f'MP3 帧 {index} 超出' in node_text(node) or f'MP3 帧 {index} 定位停止' in node_text(node))
+                             for node, _, _, name in rows()), 'direct MP3 frame navigation')
+            filename = f'mp3-direct-{step}.json'
+            snapshot, checked = export_snapshot(filename, args.tag)
+            stage = check_mp3_navigation_stage(snapshot, index, previous)
+            ui_name = f'mp3-direct-{step}-ui.json'
+            dump(ui_name)
+            stage.update(file=filename, snapshotCheck=checked, uiFile=ui_name, uiSHA256=digest(out / ui_name))
+            result['mp3DirectNavigation'].append(stage)
+            if stage['state'] != 'preparing':
+                require(stage['state'] == 'ready', 'direct MP3 navigation stopped before target')
+                return
+            require(step < 3, 'direct MP3 navigation exceeded four explicit requests')
+            previous = stage
+            click('继续定位 MP3 帧页')
+            # The next export must carry a new request identity and progress;
+            # a still-visible previous status cannot satisfy that assertion.
+            wait_text(f'正在定位 MP3 帧 {index}，已检查到帧 {stage["nextFrameIndex"] + 1024} 之前。' if
+                      stage['nextFrameIndex'] + 1024 <= index // 64 * 64 else f'当前展开 MP3 帧 {index} ·')
 
     def export_snapshot(name, tag=None):
         if tag is not None:
@@ -598,6 +663,25 @@ def run_worker(args):
                 result['avcSearchSelected'] = {'tagId': target, 'file': 'avc-search-selected.json', 'snapshotCheck': checked}
         if not args.mp3_summary_link:
             select_tag(args.tag)
+        if args.mp3_jump_frame is not None:
+            jump_mp3_frame(args.mp3_jump_frame)
+        selected_target = args.mp3_jump_frame
+        if args.mp3_frame_walk:
+            result['mp3AdjacentFrames'] = []
+            for step, direction in enumerate(args.mp3_frame_walk):
+                selected_target += 1 if direction == 'next' else -1
+                require(0 <= selected_target <= 4294967295, 'adjacent MP3 target outside uint32')
+                click('下一 MP3 帧' if direction == 'next' else '上一 MP3 帧')
+                wait_text(f'当前展开 MP3 帧 {selected_target} ·')
+                filename = f'mp3-adjacent-{step}.json'
+                snapshot, checked = export_snapshot(filename, args.tag)
+                stage = check_mp3_navigation_stage(snapshot, selected_target)
+                require(stage['state'] == 'ready', 'adjacent MP3 frame did not become ready')
+                ui_name = f'mp3-adjacent-{step}-ui.json'
+                dump(ui_name)
+                stage.update(direction=direction, file=filename, snapshotCheck=checked,
+                             uiFile=ui_name, uiSHA256=digest(out / ui_name))
+                result['mp3AdjacentFrames'].append(stage)
         if args.mp3_page_steps:
             start = mp3_page_start()
             result['mp3FramePages'] = []
@@ -609,6 +693,7 @@ def run_worker(args):
                 result['mp3FramePages'].append({'start': target, 'uiFile': name, 'uiSHA256': digest(out / name)})
         if args.mp3_frame is not None:
             select_mp3_frame(args.mp3_frame)
+            selected_target = args.mp3_frame
             if args.mp3_page_steps or args.mp3_summary_link:
                 _, checked = export_snapshot('mp3-page-selected.json', args.tag)
                 result['mp3PageSelected'] = {'file': 'mp3-page-selected.json', 'snapshotCheck': checked}
@@ -644,7 +729,7 @@ def run_worker(args):
                 if int(first['tagId']) != args.tag:
                     select_tag(args.tag)
                 move_mp3_page(target_page)
-                select_mp3_frame(args.mp3_frame if args.mp3_frame is not None else target_page)
+                select_mp3_frame(selected_target if selected_target is not None else target_page)
                 click('定位 MP3 依赖来源')
                 wait_text('MP3 依赖定位完成：')
         if args.mp3_browse:
@@ -790,6 +875,10 @@ def launch(args):
         command.append('--mp3-summary-link')
     if args.mp3_page_steps:
         command.extend(['--mp3-page-steps', str(args.mp3_page_steps)])
+    if args.mp3_jump_frame is not None:
+        command.extend(['--mp3-jump-frame', str(args.mp3_jump_frame)])
+    for direction in args.mp3_frame_walk:
+        command.extend(['--mp3-frame-walk', direction])
     if args.field_name:
         command.extend(['--field-name', args.field_name])
     if args.avc_evidence:
@@ -813,6 +902,7 @@ def launch(args):
               'tag': args.tag, 'maxSourceBytes': args.max_source_bytes, 'timeoutSeconds': args.timeout_seconds,
               'continueContext': args.continue_context, 'revisitTag': args.revisit_tag,
               'mp3Browse': args.mp3_browse, 'mp3Summary': args.mp3_summary, 'mp3SummaryLink': args.mp3_summary_link, 'mp3PageSteps': args.mp3_page_steps,
+              'mp3JumpFrame': args.mp3_jump_frame, 'mp3FrameWalk': args.mp3_frame_walk,
               'fieldName': args.field_name, 'avcEvidence': args.avc_evidence, 'mediaCurves': args.media_curves,
               'avcSearch': args.avc_search, 'avcSearchPages': args.avc_search_pages, 'avcSearchLong': args.avc_search_long,
               'avcSearchGate': str(args.avc_search_gate) if args.avc_search_gate else None, 'avcSearchAction': args.avc_search_action, 'mp3History': args.mp3_history, 'mp3Frame': args.mp3_frame,

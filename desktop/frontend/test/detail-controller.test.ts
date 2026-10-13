@@ -352,3 +352,89 @@ test('MP3 exact frame navigation within the same retained Tag reloads its page',
   assert.equal(starts.length, 2); assert.equal(starts[1].mp3PageStart, 192); assert.equal(starts[1].mp3FrameIndex, 255);
   assert.equal(controller.getSnapshot().detailError, null); controller.dispose();
 });
+
+test('MP3 typed navigation rejects invalid input without IPC and selects exact uint32 frame pages', async () => {
+  const starts: DetailRequest[] = [];
+  const { controller } = setup({ startDetail: async request => {
+    starts.push(request);
+    const start = request.mp3PageStart ?? 0;
+    return ready(request, { detail: start > 10000 ? mp3PageDetail(start, request.mp3FrameIndex, 'preparing', 1024) : mp3PageDetail(start, request.mp3FrameIndex) });
+  } });
+  controller.jumpMP3Frame('2600'); assert.equal(starts.length, 0);
+  await controller.open(); await settle(); controller.selectTag('0'); await settle();
+  for (const input of ['', '-1', '+1', '01', ' 64', '64 ', '1.5', '1e3', '4294967296', '9007199254740993']) {
+    controller.jumpMP3Frame(input); await settle(); assert.equal(starts.length, 1, input); assert.match(controller.getSnapshot().mp3JumpError!, /0–4294967295/);
+  }
+  controller.jumpMP3Frame('0'); await settle(); assert.equal(controller.getSnapshot().mp3JumpError, null);
+  controller.jumpMP3Frame('0'); await settle(); assert.equal(starts.length, 2, 'same selected frame is idempotent');
+  controller.jumpMP3Frame('4294967295'); await settle();
+  assert.deepEqual(starts.map(r => [r.mp3PageStart, r.mp3FrameIndex]), [[undefined, undefined], [0, 0], [4294967232, 4294967295]]);
+  assert.equal(controller.getSnapshot().detailError, null); controller.dispose();
+});
+
+test('MP3 previous and next frame cross 63/64 while retaining local selection and dropping dependency intent', async () => {
+  const starts: DetailRequest[] = [];
+  const { controller } = setup({ startDetail: async request => {
+    starts.push(request); const d = mp3PageDetail(request.mp3PageStart, request.mp3FrameIndex);
+    if (request.mp3Dependency) d.fields.push(...dependencyDetail(request.tagId, request.mp3FrameIndex).fields);
+    return ready(request, { detail: d });
+  } });
+  await controller.open(); await settle(); controller.selectTag('1'); await settle();
+  controller.jumpMP3Frame('63'); await settle(); controller.inspectMP3Dependency(); await settle();
+  controller.stepMP3Frame(1); await settle(); controller.stepMP3Frame(-1); await settle(); controller.stepMP3Frame(-1); await settle();
+  assert.deepEqual(starts.slice(1).map(r => [r.mp3PageStart, r.mp3FrameIndex, r.mp3Dependency]), [[0, 63, undefined], [0, 63, true], [64, 64, undefined], [0, 63, undefined], [0, 62, undefined]]);
+  assert.equal(controller.getSnapshot().detailError, null); controller.dispose();
+});
+
+test('MP3 direct remote frame waits for explicit continuation and permits a nearer replacement target', async () => {
+  const starts: DetailRequest[] = []; let remoteReads = 0;
+  const { controller, clock } = setup({ startDetail: async request => {
+    starts.push(request);
+    if (request.mp3FrameIndex === 2600 && ++remoteReads < 3) return ready(request, { detail: mp3PageDetail(2560, 2600, 'preparing', remoteReads * 1024) });
+    return ready(request, { detail: mp3PageDetail(request.mp3PageStart, request.mp3FrameIndex) });
+  } });
+  await controller.open(); await settle(); controller.selectTag('0'); await settle(); controller.jumpMP3Frame('2600'); await settle();
+  clock.tick(); await settle(); controller.stepMP3Frame(1); assert.equal(starts.length, 2); assert.equal(clock.tasks.size, 0);
+  controller.pageMP3Frames('continue'); await settle(); controller.jumpMP3Frame('2'); await settle();
+  assert.equal(starts.at(-1)?.mp3FrameIndex, 2); assert.equal(controller.getSnapshot().detailState, 'ready');
+  controller.jumpMP3Frame('2600'); await settle();
+  assert.deepEqual(starts.slice(1).map(r => [r.requestId, r.mp3PageStart, r.mp3FrameIndex]), [['2', 2560, 2600], ['3', 2560, 2600], ['4', 0, 2], ['5', 2560, 2600]]);
+  assert.equal(controller.getSnapshot().detailError, null); controller.dispose();
+});
+
+test('MP3 out-of-range or damaged-page stops retain the target and allow correction without automatic retries', async () => {
+  for (const reason of ['end', 'invalid_frame']) {
+    const starts: DetailRequest[] = [];
+    const { controller, clock } = setup({ startDetail: async request => {
+      starts.push(request);
+      const d = request.mp3FrameIndex === 63 ? mp3PageDetail(0, 63, 'stopped', 3) : mp3PageDetail(request.mp3PageStart, request.mp3FrameIndex);
+      if (request.mp3FrameIndex === 63) for (const [name, value] of Object.entries({ pageStopReason: reason, pageFrames: '3', nextPageStart: 'none', hasNext: 'false' })) d.fields.find(f => f.name === name)!.value = value;
+      return ready(request, { detail: d });
+    } });
+    await controller.open(); await settle(); controller.selectTag('0'); await settle(); controller.jumpMP3Frame('63'); await settle();
+    assert.equal(controller.getSnapshot().detailState, 'ready'); assert.equal(controller.getSnapshot().detailError, null);
+    controller.pageMP3Frames('continue'); clock.tick(); await settle(); assert.equal(starts.length, 2);
+    controller.jumpMP3Frame('2'); await settle(); assert.equal(starts.at(-1)?.mp3FrameIndex, 2); assert.equal(controller.getSnapshot().detailError, null);
+    controller.dispose();
+  }
+});
+
+test('MP3 canceled direct requests retry the exact frame and late replies cannot replace another Tag', async () => {
+  const starts: DetailRequest[] = [], old = deferred<DetailResponse>(); let reads = 0;
+  const { controller } = setup({ startDetail: request => {
+    starts.push(request);
+    if (request.mp3FrameIndex === 2600) {
+      if (++reads === 1) return Promise.resolve(ready(request, { state: 'failed', detail: null, error: { code: 'canceled', message: 'Canceled.' } }));
+      return old.promise;
+    }
+    return Promise.resolve(ready(request, { detail: mp3PageDetail(request.mp3PageStart, request.mp3FrameIndex) }));
+  } });
+  await controller.open(); await settle(); controller.selectTag('0'); await settle(); controller.jumpMP3Frame('2600'); await settle();
+  assert.equal(controller.getSnapshot().detailRetry, 'reload'); controller.retryDetail(); await settle();
+  assert.deepEqual(starts.slice(1).map(r => [r.requestId, r.mp3PageStart, r.mp3FrameIndex]), [['2', 2560, 2600], ['3', 2560, 2600]]);
+  controller.jumpMP3Frame('2'); assert.equal(starts.length, 3, 'pending direct reads are serial');
+  controller.selectTag('1'); old.resolve(ready(starts[2], { detail: mp3PageDetail(2560, 2600) })); await settle();
+  assert.equal(controller.getSnapshot().selectedTag?.id, '1'); assert.equal(starts.at(-1)?.mp3FrameIndex, undefined); assert.equal(controller.getSnapshot().detailError, null);
+  controller.jumpMP3Frame('bad'); assert.notEqual(controller.getSnapshot().mp3JumpError, null);
+  await controller.close(); await settle(); assert.equal(controller.getSnapshot().mp3JumpError, null); controller.dispose();
+});

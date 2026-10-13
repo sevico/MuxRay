@@ -25,11 +25,12 @@ func DesktopAVCOptions() flv.AVCVideoOptions {
 	}}
 }
 
-// DesktopFullAVCOptions enables PPS extension/FMO context for full headers.
+// DesktopFullAVCOptions enables full PPS and compact SEI timing context.
 // Framing-only callers keep DesktopAVCOptions and its original read depth.
 func DesktopFullAVCOptions() flv.AVCVideoOptions {
 	options := DesktopAVCOptions()
 	options.AVC.ParseFullHeaders = true
+	options.AVC.ParseSEITiming = true
 	return options
 }
 
@@ -38,6 +39,7 @@ func (b *builder) avc(ctx context.Context, source io.ReaderAt, tag flv.TagRecord
 	options.AVC.ParseVUI = true
 	options.AVC.ParseFullHeaders = b.fullAVC
 	options.AVC.ParseSEI = b.fullAVC
+	options.AVC.ParseSEITiming = b.fullAVC
 	if parameters != nil {
 		options.AVC.ParsePPS, options.AVC.ParseSliceHeaders = true, true
 		options.AVC.ParameterSets = parameters.Context

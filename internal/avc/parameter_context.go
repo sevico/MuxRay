@@ -1,11 +1,15 @@
 package avc
 
+import "github.com/sevico/muxray/internal/cursor"
+
 // ParameterSetContext holds bounded parameter-set summaries. Its zero value
 // is empty. Parsed summaries are immutable; updates replace slots. Callers
 // must not mutate a context concurrently with Clone or Add methods.
 type ParameterSetContext struct {
-	sps [32]*SequenceParameterSet
-	pps [256]*PictureParameterSet
+	sps            [32]*SequenceParameterSet
+	pps            [256]*PictureParameterSet
+	timingActive   *SPSTimingParameters
+	timingEvidence cursor.Span
 }
 
 func NewParameterSetContext() *ParameterSetContext { return &ParameterSetContext{} }
@@ -19,20 +23,23 @@ func (c *ParameterSetContext) Clone() *ParameterSetContext {
 }
 
 // CompactClone retains only immutable values needed by slice header
-// parsing. It owns no RBSP bytes, field mappings, VUI, or source handle. The
-// 32 SPS / 256 PPS slots and fixed-size pointees bound checkpoint storage.
+// parsing and optional SEI timing evidence. It owns no RBSP bytes, field
+// mappings, full VUI, or source handle. The 32 SPS / 256 PPS slots and
+// fixed-size pointees bound checkpoint storage.
 // This is a context snapshot, not a substitute for the parsed parameter detail.
 func (c *ParameterSetContext) CompactClone() *ParameterSetContext {
 	out := NewParameterSetContext()
 	if c == nil {
 		return out
 	}
+	out.timingActive, out.timingEvidence = c.timingActive, c.timingEvidence
 	for id, s := range c.sps {
 		if s == nil {
 			continue
 		}
 		out.sps[id] = &SequenceParameterSet{
 			RBSP:                        RBSPView{EBSPSpan: s.RBSP.EBSPSpan},
+			Timing:                      s.Timing,
 			SequenceParameterSetID:      s.SequenceParameterSetID,
 			BitDepthLumaMinus8:          s.BitDepthLumaMinus8,
 			ChromaFormatIDC:             s.ChromaFormatIDC,
@@ -90,10 +97,10 @@ func (c *ParameterSetContext) AddConfiguration(record ConfigurationRecord) {
 		return
 	}
 	for _, set := range record.SequenceParameterSets {
-		c.AddNALUnit(NALUnit{Header: set.Header, HeaderPresent: set.HeaderPresent, SequenceParameterSet: set.SequenceParameterSet, PictureParameterSet: set.PictureParameterSet, SummaryComplete: set.SummaryComplete})
+		c.AddNALUnit(NALUnit{Header: set.Header, HeaderPresent: set.HeaderPresent, SequenceParameterSet: set.SequenceParameterSet, PictureParameterSet: set.PictureParameterSet, SEI: set.SEI, SummaryComplete: set.SummaryComplete})
 	}
 	for _, set := range record.PictureParameterSets {
-		c.AddNALUnit(NALUnit{Header: set.Header, HeaderPresent: set.HeaderPresent, SequenceParameterSet: set.SequenceParameterSet, PictureParameterSet: set.PictureParameterSet, SummaryComplete: set.SummaryComplete})
+		c.AddNALUnit(NALUnit{Header: set.Header, HeaderPresent: set.HeaderPresent, SequenceParameterSet: set.SequenceParameterSet, PictureParameterSet: set.PictureParameterSet, SEI: set.SEI, SummaryComplete: set.SummaryComplete})
 	}
 }
 
@@ -104,11 +111,17 @@ func (c *ParameterSetContext) AddNALUnit(unit NALUnit) {
 		*c = ParameterSetContext{}
 		return
 	}
+	if unit.Header.ForbiddenZeroBit {
+		c.timingActive = nil
+	}
 	switch unit.Header.NALUnitType {
 	case NALUnitTypeEndOfSequence, NALUnitTypeEndOfStream:
 		*c = ParameterSetContext{}
 	case NALUnitTypeSequenceParameterSet:
 		s := unit.SequenceParameterSet
+		if s == nil || s.SequenceParameterSetIDSpan.BitLength == 0 || s.SequenceParameterSetID > 31 || c.timingActive != nil && c.timingActive.SPSID == s.SequenceParameterSetID {
+			c.timingActive = nil
+		}
 		if s == nil || s.SequenceParameterSetIDSpan.BitLength == 0 || s.SequenceParameterSetID > 31 {
 			c.sps = [32]*SequenceParameterSet{}
 			c.invalidateFullPPS(nil)
@@ -131,6 +144,31 @@ func (c *ParameterSetContext) AddNALUnit(unit NALUnit) {
 		copy.RBSP = RBSPView{EBSPSpan: s.RBSP.EBSPSpan}
 		copy.VUI = nil
 		c.sps[s.SequenceParameterSetID] = &copy
+	case NALUnitTypeSEI:
+		if unit.SEI != nil {
+			if !unit.SEI.timingValid {
+				c.timingActive = nil
+				return
+			}
+			for _, message := range unit.SEI.Messages {
+				if message.Kind == "bufferingPeriod" {
+					c.timingActive = nil
+					if message.Complete && message.BufferingPeriod != nil && message.BufferingPeriod.Context.State == "resolved" {
+						c.timingActive = message.BufferingPeriod.Context.Parameters
+						c.timingEvidence = *message.BufferingPeriod.Context.EvidenceSpan
+					}
+				}
+			}
+		}
+	case NALUnitTypeDataPartitionA, NALUnitTypeDataPartitionB, NALUnitTypeDataPartitionC, NALUnitTypeAuxiliaryCodedSlice, NALUnitTypeCodedSliceExtension, NALUnitTypeDepthViewCodedSliceExt:
+		c.timingActive = nil
+	case NALUnitTypeNonIDRSlice, NALUnitTypeIDRSlice:
+		if c.timingActive != nil {
+			s := unit.SliceHeader
+			if s == nil || !s.PrefixComplete || s.ReferencedSPSID == nil || *s.ReferencedSPSID != c.timingActive.SPSID {
+				c.timingActive = nil
+			}
+		}
 	case NALUnitTypePictureParameterSet:
 		p := unit.PictureParameterSet
 		if p == nil || p.PictureParameterSetIDSpan.BitLength == 0 || p.PictureParameterSetID > 255 {
@@ -144,6 +182,9 @@ func (c *ParameterSetContext) AddNALUnit(unit NALUnit) {
 		copy := *p
 		copy.RBSP = RBSPView{EBSPSpan: p.RBSP.EBSPSpan}
 		c.pps[p.PictureParameterSetID] = &copy
+	case NALUnitTypeAccessUnitDelimiter, NALUnitTypeFillerData:
+	default:
+		c.timingActive = nil
 	}
 }
 
