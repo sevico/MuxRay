@@ -86,6 +86,7 @@ go run ./cmd/muxray detail --tag 0 --pretty sample.flv
 
 完整普通 H.264 头和 MP3 全帧汇总的构建身份、独立对照及原生结果见 [完整头部与全帧汇总验收](docs/desktop-full-codec-20261012.md)。
 后续分页详情、汇总帧联动与 SEI 的结果见 [MP3 分页与 SEI 验收](docs/desktop-page-sei-20261013.md)。
+帧号直达、SEI 时序语法及后台性能基线见 [帧号直达与时序验收](docs/desktop-timing-navigation-20261013.md)。
 
 新增编解码器的生成样本、独立字段/源位对照和 Linux 基础、PPS/slice、side-info/长文件原生验收已固化到 [回归工具](tools/codec-regression/README.md)，CI 使用相同入口，生成媒体不进入 Git。
 

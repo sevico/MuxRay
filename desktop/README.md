@@ -55,6 +55,7 @@ H.264 详情增加 PPS 可选扩展、FMO 0–6 与 slice 头后半段：参考�
 
 固定生产构建与 Linux 原生操作结果见 [完整头部与全帧汇总验收](../docs/desktop-full-codec-20261012.md)。
 后续详情翻页、汇总帧联动及 SEI 字段定位见 [MP3 分页与 SEI 验收](../docs/desktop-page-sei-20261013.md)。
+帧号直达、SEI 时序字段及后台性能基线见 [帧号直达与时序验收](../docs/desktop-timing-navigation-20261013.md)。
 
 ## 媒体码率与 GOP 曲线
 
@@ -208,7 +209,7 @@ I/P/B 类型、帧号、条件 POC 字段及所引用 SPS/PPS 的原始位置。
 显示覆盖计数及 missing/invalidated/budget_exhausted，遇坏配置、EOS、编码切换
 或不可检查视频范围不沿用旧参数。长距离参数预算不否定已找到的 NAL 长度。
 达到预算后显示已完成的 Tag 边界，可点击“继续准备参数”推进下一段；单 Tag 无法完成时不提供继续操作。每文档最多缓存 8 个紧凑检查点（合计上限 4 MiB），同文件随机跳转可以复用，取消或过期请求不提交，源变化/关闭即清除。每次仍受三秒截止和串行读取约束。CLI v3 自动推进最多 128 段，见 [ADR-025](../docs/decisions/025-avc-checkpoints-mp3-side-info.md)。
-SEI（NAL type 6）展开消息类型、长度、完整性和源范围；已支持 `recovery_point` 与 `user_data_unregistered` 的 UUID 和十六进制预览。未知类型保留为 opaque，并明确 `syntaxSupported=false`。每 NAL 最多 64 KiB / 64 消息，每次 selected-Tag 解析累计 256 KiB / 256 消息，用户数据预览最多 64 字节。恢复点不推导 DPB 或可独立解码状态，picture timing/HRD 消息暂未解释。单段字段直接定位 Hex；跨防竞争字节的字段可从 `.source[i]` 分别定位，各段排除防竞争字节。SEI 不参与参数回放和批量证据检索。CLI 通过 v5 显式启用。
+SEI（NAL type 6）展开消息类型、长度、完整性和源范围；支持 `recovery_point` 与 `user_data_unregistered` 的 UUID 和十六进制预览，以及下述缓冲周期与图像时序字段。未知类型保留为 opaque，并明确 `syntaxSupported=false`。每 NAL 最多 64 KiB / 64 消息，每次 selected-Tag 解析累计 256 KiB / 256 消息，用户数据预览最多 64 字节。恢复点不推导 DPB 或可独立解码状态。单段字段直接定位 Hex；跨防竞争字节的字段可从 `.source[i]` 分别定位，各段排除防竞争字节。批量证据检索不解析 SEI。CLI v5 显式启用恢复点与用户数据，v6 再启用时序语法及其上下文回放。
 
 “H.264 关键帧声明与 NAL 证据”显示所选 Tag 的 FLV FrameType、IDR NAL 观察和
 P/B/I/SP/SI slice 类型集合，并分别标明 NAL 头与 slice 类型覆盖。已观察到的 IDR
