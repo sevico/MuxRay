@@ -383,7 +383,7 @@ python3 -B tools/codec-regression/verify_paged_codec.py \
   --output-dir "$PWD/.cache/ps-cli-check"
 /usr/bin/python3 -B tools/codec-regression/native_paged_codec.py \
   --input-dir "$PWD/.cache/ps-samples" --binary "$PWD/desktop/build/bin/MuxRay" \
-  --output-dir "$PWD/.cache/ps-native" --timeout-seconds 1200
+  --output-dir "$PWD/.cache/ps-native" --timeout-seconds 1800
 ```
 
 The CLI checker validates opt-in AVC v5 schemas, values, source mapping and
