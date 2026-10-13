@@ -19,6 +19,8 @@ type rbspData struct {
 type parseBudget struct {
 	mappingEntriesRemaining uint32
 	sliceBytesRead          uint32
+	seiBytesRead            uint32
+	seiMessages             uint32
 }
 
 func newParseBudget(options Options) *parseBudget {

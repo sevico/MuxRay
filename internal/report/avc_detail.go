@@ -122,6 +122,7 @@ type AVCNALHeaderDetail struct {
 }
 
 type AVCNALUnitDetail struct {
+	SEI                  *AVCSEIMessageSequence   `json:"sei,omitempty"`
 	SliceHeaderFull      *AVCSliceHeaderDetails   `json:"sliceHeaderFull,omitempty"`
 	SliceHeaderPrefix    *AVCSlicePrefixDetail    `json:"sliceHeaderPrefix,omitempty"`
 	Index                uint32                   `json:"index"`

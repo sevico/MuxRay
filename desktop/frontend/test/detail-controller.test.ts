@@ -312,3 +312,43 @@ test('MP3 dependency cannot publish a response for the wrong target or navigate 
   assert.equal(controller.getSnapshot().detailError, 'invalid_response');
   controller.locateMP3Source(mp3Dependency(dependencyDetail())!.sources[0], 'tag'); await settle(); assert.equal(starts.length, 2); controller.dispose();
 });
+
+import { mp3PageDetail } from './mp3-page-fixture.ts';
+
+test('MP3 next and previous pages clear selection while frame expansion retains page identity', async () => {
+  const starts: DetailRequest[] = [];
+  const { controller } = setup({ startDetail: async request => {
+    starts.push(request); return ready(request, { detail: mp3PageDetail(request.mp3PageStart, request.mp3FrameIndex) });
+  } });
+  await controller.open(); await settle(); controller.selectTag('0'); await settle();
+  controller.pageMP3Frames(1); await settle(); controller.selectMP3Frame(66); await settle();
+  controller.pageMP3Frames(-1); await settle();
+  assert.deepEqual(starts.map(r => [r.mp3PageStart, r.mp3FrameIndex]), [[undefined, undefined], [64, undefined], [64, 66], [0, undefined]]);
+  assert.equal(controller.getSnapshot().detailError, null); controller.dispose();
+});
+test('MP3 long-page replay is explicit, preserves frame intent and advances request IDs', async () => {
+  const starts: DetailRequest[] = [];
+  const { controller } = setup({ startDetail: async request => {
+    starts.push(request); return ready(request, { detail: mp3PageDetail(2560, 2600, starts.length < 3 ? 'preparing' : 'ready', starts.length * 1024) });
+  } });
+  await controller.open(); await settle(); controller.selectTag('0', 2600); await settle();
+  assert.equal(starts.length, 1); assert.equal(controller.getSnapshot().detailState, 'ready');
+  controller.pageMP3Frames(1); await settle(); assert.equal(starts.length, 1);
+  controller.pageMP3Frames('continue'); await settle(); controller.pageMP3Frames('continue'); await settle();
+  assert.deepEqual(starts.map(r => [r.requestId, r.mp3PageStart, r.mp3FrameIndex]), [['1', 2560, 2600], ['2', 2560, 2600], ['3', 2560, 2600]]);
+  assert.equal(controller.getSnapshot().detailError, null); controller.dispose();
+});
+test('MP3 page replies for another page are rejected even with matching selected preview', async () => {
+  const { controller } = setup({ startDetail: async request => ready(request, { detail: mp3PageDetail() }) });
+  await controller.open(); await settle(); controller.selectTag('0'); await settle(); controller.pageMP3Frames(1); await settle();
+  assert.equal(controller.getSnapshot().detailError, 'invalid_response'); controller.dispose();
+});
+test('MP3 exact frame navigation within the same retained Tag reloads its page', async () => {
+  const starts: DetailRequest[] = [];
+  const { controller } = setup({ startDetail: async request => {
+    starts.push(request); return ready(request, { detail: mp3PageDetail(request.mp3PageStart, request.mp3FrameIndex) });
+  } });
+  await controller.open(); await settle(); controller.selectTag('0'); await settle(); controller.selectTag('0', 255); await settle();
+  assert.equal(starts.length, 2); assert.equal(starts[1].mp3PageStart, 192); assert.equal(starts[1].mp3FrameIndex, 255);
+  assert.equal(controller.getSnapshot().detailError, null); controller.dispose();
+});

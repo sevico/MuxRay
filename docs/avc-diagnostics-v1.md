@@ -67,6 +67,22 @@ the human-readable `message`.
 | `AVC_SPS_CROP_INVALID` | Cropping offsets exceed the coded frame dimensions. |
 | `AVC_DIAGNOSTIC_LIMIT_REACHED` | Additional diagnostics were omitted after the configured limit. |
 
+## SEI message inspection (opt-in detail v5 / desktop)
+
+| Code | Meaning |
+|---|---|
+| `AVC_SEI_BYTE_LIMIT_REACHED` | SEI source bytes reached the per-NAL 64 KiB or cumulative 256 KiB limit. |
+| `AVC_SEI_MESSAGE_LIMIT_REACHED` | SEI messages reached the per-NAL 64 or cumulative 256 limit. |
+| `AVC_SEI_HEADER_TRUNCATED` | A payload type/size continuation lacks its terminating byte. |
+| `AVC_SEI_PAYLOAD_TRUNCATED` | Declared payload size exceeds inspected RBSP bytes. |
+| `AVC_SEI_SYNTAX_INVALID` | Supported SEI syntax, payload alignment, range or NAL reference constraint is invalid. |
+| `AVC_SEI_TRAILING_BITS_INVALID` | Required SEI RBSP trailing bits are missing or invalid. |
+
+Unknown payload types retain their source range and are not errors merely because
+their syntax is unsupported. Truncation and resource budgets preserve observed
+fields; neither recovery-point declarations nor a complete message guarantees
+decoder recovery. Shared RBSP mapping/EPB diagnostics also apply.
+
 ## Severity and recovery
 
 - `warning` records a non-canonical or unexpected value whose bounded syntax

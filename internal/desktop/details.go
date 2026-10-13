@@ -25,6 +25,7 @@ type DetailRequest struct {
 	RequestID     string  `json:"requestId"`
 	TagID         string  `json:"tagId"`
 	MP3FrameIndex *uint32 `json:"mp3FrameIndex,omitempty"`
+	MP3PageStart  *uint32 `json:"mp3PageStart,omitempty"`
 	MP3Dependency bool    `json:"mp3Dependency,omitempty"`
 }
 
@@ -50,6 +51,10 @@ type detailSession interface {
 
 type mp3FrameDetailSession interface {
 	StartDetailWithMP3Frame(uint64, uint64, *uint32) (document.DetailResult, error)
+}
+
+type mp3PageDetailSession interface {
+	StartDetailWithMP3Page(uint64, uint64, *uint32, *uint32, bool) (document.DetailResult, error)
 }
 
 type mp3DependencyDetailSession interface {
@@ -112,7 +117,14 @@ func (b *Bindings) StartDetail(request DetailRequest) DetailResponse {
 	}
 	var result document.DetailResult
 	var err error
-	if request.MP3Dependency {
+	if request.MP3PageStart != nil {
+		selector, ok := owner.(mp3PageDetailSession)
+		if !ok {
+			response.Error = fault(CodeInvalidArgument)
+			return response
+		}
+		result, err = selector.StartDetailWithMP3Page(id, tagID, request.MP3FrameIndex, request.MP3PageStart, request.MP3Dependency)
+	} else if request.MP3Dependency {
 		selector, ok := owner.(mp3DependencyDetailSession)
 		if !ok {
 			response.Error = fault(CodeInvalidArgument)

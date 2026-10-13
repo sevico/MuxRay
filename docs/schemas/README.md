@@ -179,3 +179,21 @@ duration, unresolved bytes and independently bounded source events. Event DTS
 belongs to the FLV Tag. Older CLI identities remain frozen. Desktop generic
 metrics/fields/events carry the new facts within existing snapshot v3 bounds.
 See [ADR-029](../decisions/029-full-codec-headers-and-frame-summary.md).
+
+## SEI details v5 and desktop MP3 pages
+
+[`flv-avc-tag-detail-v5.schema.json`](./flv-avc-tag-detail-v5.schema.json)
+adds optional `sei` to NAL/parameter-set entries. Its message list retains type,
+size, payload coverage and exact RBSP-to-source segments. Recovery-point fields
+and unregistered UUID data are interpreted; other payloads explicitly set
+`syntaxSupported=false`. `complete` validates framing and supported syntax; it
+does not claim that an unknown message was decoded or that video can recover.
+The sequence separately reports `framingComplete`; UUID application data is a
+bounded hex preview. CLI versions 1–4 omit SEI, and MP3 versions 1–3 are unchanged.
+
+Desktop MP3 pages use optional `mp3PageStart` (multiple of 64) and the original
+`mp3FrameIndex` inside that page. Generic detail fields retain requested/actual
+page identities, bounded replay progress, explicit continuation and source
+positions. Snapshot v3 carries these fields under the existing detail request
+ID; no new snapshot envelope or CLI MP3 schema is introduced. See
+[ADR-030](../decisions/030-mp3-frame-pages-and-sei.md).

@@ -120,6 +120,158 @@
       "truncated": true,
       "fields": [
         {
+          "id": "page-0",
+          "parentId": "",
+          "name": "MP3 frame page",
+          "type": "bounded frame page",
+          "value": "ready",
+          "span": null
+        },
+        {
+          "id": "page-1",
+          "parentId": "page-0",
+          "name": "pageState",
+          "type": "derived enum",
+          "value": "ready",
+          "span": null
+        },
+        {
+          "id": "page-2",
+          "parentId": "page-0",
+          "name": "pageStopReason",
+          "type": "derived enum",
+          "value": "end",
+          "span": null
+        },
+        {
+          "id": "page-3",
+          "parentId": "page-0",
+          "name": "requestedPageStart",
+          "type": "derived count",
+          "value": "0",
+          "span": null
+        },
+        {
+          "id": "page-4",
+          "parentId": "page-0",
+          "name": "pageStartIndex",
+          "type": "derived count",
+          "value": "0",
+          "span": null
+        },
+        {
+          "id": "page-5",
+          "parentId": "page-0",
+          "name": "pageSize",
+          "type": "derived count",
+          "value": "64",
+          "span": null
+        },
+        {
+          "id": "page-6",
+          "parentId": "page-0",
+          "name": "nextFrameIndex",
+          "type": "derived count",
+          "value": "3",
+          "span": null
+        },
+        {
+          "id": "page-7",
+          "parentId": "page-0",
+          "name": "pageFrames",
+          "type": "derived count",
+          "value": "3",
+          "span": null
+        },
+        {
+          "id": "page-8",
+          "parentId": "page-0",
+          "name": "pageBytesCovered",
+          "type": "derived count",
+          "value": "1251",
+          "span": null
+        },
+        {
+          "id": "page-9",
+          "parentId": "page-0",
+          "name": "pageBytesRead",
+          "type": "derived count",
+          "value": "116",
+          "span": null
+        },
+        {
+          "id": "page-10",
+          "parentId": "page-0",
+          "name": "pageReadBudget",
+          "type": "derived count",
+          "value": "65536",
+          "span": null
+        },
+        {
+          "id": "page-11",
+          "parentId": "page-0",
+          "name": "replayPages",
+          "type": "derived count",
+          "value": "0",
+          "span": null
+        },
+        {
+          "id": "page-12",
+          "parentId": "page-0",
+          "name": "replayPageBudget",
+          "type": "derived count",
+          "value": "16",
+          "span": null
+        },
+        {
+          "id": "page-13",
+          "parentId": "page-0",
+          "name": "checkpointCount",
+          "type": "derived count",
+          "value": "0",
+          "span": null
+        },
+        {
+          "id": "page-14",
+          "parentId": "page-0",
+          "name": "nextPageStart",
+          "type": "derived index or none",
+          "value": "none",
+          "span": null
+        },
+        {
+          "id": "page-15",
+          "parentId": "page-0",
+          "name": "hasNext",
+          "type": "derived boolean",
+          "value": "false",
+          "span": null
+        },
+        {
+          "id": "page-16",
+          "parentId": "page-0",
+          "name": "canContinue",
+          "type": "derived boolean",
+          "value": "false",
+          "span": null
+        },
+        {
+          "id": "page-17",
+          "parentId": "page-0",
+          "name": "requestedFrameIndex",
+          "type": "derived selection",
+          "value": "2",
+          "span": null
+        },
+        {
+          "id": "page-18",
+          "parentId": "page-0",
+          "name": "pageScope",
+          "type": "scope",
+          "value": "64 sequential frames per page; original Tag-relative indices. Checkpoints preserve physical main-data history, not decoded reservoir state. Ready describes this page; whole-Tag coverage and summary event retention are separate.",
+          "span": null
+        },
+        {
           "id": "0",
           "parentId": "",
           "name": "tagId",

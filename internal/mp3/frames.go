@@ -79,6 +79,10 @@ type VBRHeader struct {
 // source range, plus first-frame VBR metadata and protected-frame side info.
 // Free-format stops without guessing a frame length.
 func ParseFrameSequence(source io.ReaderAt, payload cursor.Span, options Options) (FrameSequence, error) {
+	return parseFrameSequence(source, payload, options, nil)
+}
+
+func parseFrameSequence(source io.ReaderAt, payload cursor.Span, options Options, page *FrameCursor) (FrameSequence, error) {
 	out := FrameSequence{Span: payload, Frames: []Frame{}, StopReason: "end"}
 	options, err := options.Normalized()
 	if err != nil {
@@ -86,6 +90,12 @@ func ParseFrameSequence(source io.ReaderAt, payload cursor.Span, options Options
 	}
 	options.InspectFrames = true // Deep inspection preserves full-count non-EOF source errors.
 	out.MaxFrames, out.MaxBytes = options.MaxFrames, MaxFrameScanBytes
+	originalStart, _, _ := payload.ByteRange()
+	if page != nil {
+		_, end, _ := payload.ByteRange()
+		payload = byteSpan(page.offset, end-page.offset)
+		out.Span = payload
+	}
 	// Reuse the fixed-header parser's argument checks, including the 16 MiB cap.
 	first, err := ParseFrameHeader(source, payload, options)
 	if err != nil {
@@ -98,6 +108,10 @@ func ParseFrameSequence(source io.ReaderAt, payload cursor.Span, options Options
 	}
 	d := newDiagnosticCollector(options.MaxDiagnostics, end)
 	history := mainDataHistory{fromTagStart: true}
+	firstIndex := uint32(0)
+	if page != nil {
+		history, firstIndex = page.history, page.index
+	}
 	at := start
 	fail := func(code, message, reason string, off uint64) {
 		d.add(Diagnostic{Code: code, Severity: SeverityError, Offset: off, Message: message, RecoveryOffset: number(end)})
@@ -105,7 +119,11 @@ func ParseFrameSequence(source io.ReaderAt, payload cursor.Span, options Options
 	}
 	for at < end || (at == start && end == start) {
 		if uint32(len(out.Frames)) >= options.MaxFrames {
-			fail(CodeFrameLimitReached, "same-tag frame inspection limit reached", "frame_limit", at)
+			if page != nil {
+				out.StopReason = "page_limit"
+			} else {
+				fail(CodeFrameLimitReached, "same-tag frame inspection limit reached", "frame_limit", at)
+			}
 			break
 		}
 		if at < end && (at >= limit || limit-at < 4 && end-at >= 4) {
@@ -128,7 +146,7 @@ func ParseFrameSequence(source io.ReaderAt, payload cursor.Span, options Options
 			break
 		}
 		h := parsed.Header
-		f := Frame{Index: uint32(len(out.Frames)), Span: byteSpan(at, 4), Header: h, CRC: FrameCRC{Status: "not_checked"}}
+		f := Frame{Index: firstIndex + uint32(len(out.Frames)), Span: byteSpan(at, 4), Header: h, CRC: FrameCRC{Status: "not_checked"}}
 		if options.InspectSideInfo {
 			f.Dependency = &MainDataDependency{State: "unknown", MainDataSpan: byteSpan(at+4, 0)}
 		}
@@ -221,7 +239,7 @@ func ParseFrameSequence(source io.ReaderAt, payload cursor.Span, options Options
 			f.SideInfo = parseSideInfo(sideData, at+sideOffset, h, d, end)
 			history.inspect(&f, d, end)
 		}
-		if at == start {
+		if at == originalStart {
 			vbr, e := parseVBR(h, available, read, d, end)
 			if e != nil {
 				return out, e
@@ -234,8 +252,14 @@ func ParseFrameSequence(source io.ReaderAt, payload cursor.Span, options Options
 			break
 		}
 		out.CompleteFrames++
+		if page != nil {
+			page.retain(f)
+		}
 		at += length
 		out.BytesCovered = at - start
+	}
+	if page != nil {
+		page.offset, page.index, page.history = at, firstIndex+out.CompleteFrames, history
 	}
 	out.UninspectedSpan = byteSpan(at, end-at)
 	out.Diagnostics = d.items

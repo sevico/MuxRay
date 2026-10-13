@@ -9,6 +9,43 @@ function childValue(fields: DetailField[], parent: string, name: string): string
 
 export interface MP3FrameSelection { selected: number | null; selectable: number[]; checked: number }
 
+export interface MP3FramePage {
+  state: 'ready' | 'preparing' | 'stopped'; requested: number; start: number; next: number | null;
+  progress: number; frames: number; bytesCovered: number; bytesRead: number;
+  replayPages: number; checkpoints: number; canContinue: boolean; selected: number | null;
+}
+
+export function mp3FramePage(detail: Detail | null): MP3FramePage | null {
+  if (detail?.kind !== 'mp3Audio') return null;
+  const roots = detail.fields.filter(field => field.name === 'MP3 frame page' && field.type === 'bounded frame page');
+  if (roots.length !== 1) return null;
+  const value = (name: string) => childValue(detail.fields, roots[0].id, name);
+  const state = value('pageState'), next = value('nextPageStart'), selected = value('requestedFrameIndex');
+  const hasNext = value('hasNext'), canContinue = value('canContinue');
+  if (!['ready', 'preparing', 'stopped'].includes(state ?? '') || next === null || selected === null ||
+      !['true', 'false'].includes(hasNext ?? '') || !['true', 'false'].includes(canContinue ?? '') ||
+      value('pageSize') !== '64' || value('pageReadBudget') !== '65536' || value('replayPageBudget') !== '16') return null;
+  const number = (name: string, max: bigint) => {
+    const text = value(name);
+    if (text === null) throw Error('Missing page field.');
+    const n = unsigned(text);
+    if (n > max) throw Error('Page budget exceeded.');
+    return Number(n);
+  };
+  try {
+    const requested = number('requestedPageStart', 4294967295n), start = number('pageStartIndex', 4294967295n);
+    const frames = number('pageFrames', 64n), progress = number('nextFrameIndex', 4294967295n);
+    const nextIndex = next === 'none' ? null : Number(unsigned(next)), selectedIndex = selected === 'preview' ? null : Number(unsigned(selected));
+    if (requested % 64 || start % 64 || start > requested || (state === 'ready' && start !== requested) ||
+        (hasNext === 'true') !== (nextIndex !== null) || (nextIndex !== null && (nextIndex !== start + 64 || nextIndex > 4294967295 || frames !== 64)) ||
+        (canContinue === 'true') !== (state === 'preparing') || (state === 'preparing' && (progress <= 0 || progress > requested)) ||
+        (selectedIndex !== null && (selectedIndex < requested || selectedIndex >= requested + 64 || selectedIndex > 4294967295))) return null;
+    return { state: state as MP3FramePage['state'], requested, start, next: nextIndex, progress, frames,
+      bytesCovered: number('pageBytesCovered', 1048576n), bytesRead: number('pageBytesRead', 65536n),
+      replayPages: number('replayPages', 16n), checkpoints: number('checkpointCount', 64n), canContinue: canContinue === 'true', selected: selectedIndex };
+  } catch { return null; }
+}
+
 // Only backend-confirmed boundaries can be selected. Keep this separate from
 // the human-readable frame summaries, which can also include partial frames.
 export function mp3FrameSelection(detail: Detail | null): MP3FrameSelection | null {
@@ -22,10 +59,17 @@ export function mp3FrameSelection(detail: Detail | null): MP3FrameSelection | nu
   if (selected === null || choices === null || checked === null || !/^(0|[1-9][0-9]*)$/.test(checked)) return null;
   const count = Number(checked);
   if (!Number.isSafeInteger(count) || count > 64) return null;
-  const indices = choices === '' ? [] : choices.split(',');
+  const page = mp3FramePage(detail);
+  if (detail.fields.some(field => field.name === 'MP3 frame page' && field.type === 'bounded frame page') && !page) return null;
+  const first = page?.start ?? 0;
+  // A full page of large absolute indices would exceed the 256-byte field
+  // preview bound. Page-relative offsets preserve all 64 choices losslessly.
+  const offsets = page ? childValue(detail.fields, root, 'selectableFrameOffsets') : null;
+  const text = offsets ?? choices;
+  const indices = text === '' ? [] : text.split(',');
   if (indices.length > count || indices.some(value => !/^(0|[1-9][0-9]*)$/.test(value))) return null;
-  const selectable = indices.map(Number);
-  if (selectable.some((value, i) => value >= count || (i > 0 && value <= selectable[i - 1]))) return null;
+  const selectable = indices.map(value => Number(value) + (offsets === null ? 0 : first));
+  if (selectable.some((value, i) => value < first || value >= first + count || (i > 0 && value <= selectable[i - 1]))) return null;
   if (selected === 'preview') return { selected: null, selectable, checked: count };
   if (!/^(0|[1-9][0-9]*)$/.test(selected) || !selectable.includes(Number(selected))) return null;
   return { selected: Number(selected), selectable, checked: count };
@@ -49,7 +93,7 @@ export function mp3Dependency(detail: Detail | null): MP3Dependency | null {
       requested === null || resolved === null || missing === null || scannedTags === null || bytesRead === null || sourceCount === null) return null;
   try {
     unsigned(tagId);
-    if (unsigned(frameIndex) >= 64n || unsigned(scannedTags) > 512n || unsigned(bytesRead) > 1048576n || unsigned(sourceCount) > 64n) return null;
+    if (unsigned(frameIndex) > 4294967295n || unsigned(scannedTags) > 512n || unsigned(bytesRead) > 1048576n || unsigned(sourceCount) > 64n) return null;
     for (const n of [requested, resolved, missing]) if (n !== 'unknown' && unsigned(n) > 511n) return null;
     if (requested !== 'unknown' && resolved !== 'unknown' && missing !== 'unknown' && unsigned(requested) !== unsigned(resolved) + unsigned(missing)) return null;
     if (state === 'resolved' && (requested === 'unknown' || resolved === 'unknown' || missing !== '0')) return null;
@@ -62,7 +106,7 @@ export function mp3Dependency(detail: Detail | null): MP3Dependency | null {
       if (id === null || frame === null || (current !== 'true' && current !== 'false') || spans.length !== 1 || !spans[0].span) return null;
       const span = spans[0].span, offset = unsigned(span.byteOffset);
       validateSelection(selectionFromSpan(span, 'MP3 dependency'));
-      if (unsigned(id) > unsigned(tagId) || unsigned(frame) >= 64n || (id === tagId && unsigned(frame) > unsigned(frameIndex)) ||
+      if (unsigned(id) > unsigned(tagId) || unsigned(frame) > 4294967295n || (id === tagId && unsigned(frame) > unsigned(frameIndex)) ||
           span.bitOffset !== 0 || span.bitLength <= 0 || span.bitLength % 8 !== 0 || offset < previousEnd) return null;
       if (current === 'true') { currents++; if (id !== tagId || frame !== frameIndex) return null; }
       else { if (currents || (id === tagId && frame === frameIndex)) return null; previousBytes += BigInt(span.bitLength / 8); }

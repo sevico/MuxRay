@@ -21,6 +21,9 @@ type Options struct {
 	// ParseFullHeaders expands PPS syntax and the remainder of requested slice
 	// headers. ParseSliceHeaders must also be set to inspect slice NAL units.
 	ParseFullHeaders bool
+	// ParseSEI inspects selected SEI NAL units with independent byte/message
+	// budgets. It does not enable parameter-set or slice parsing.
+	ParseSEI bool
 	// ParameterSets is cloned for each parse; in-band updates never mutate it.
 	ParameterSets    *ParameterSetContext
 	MaxDiagnostics   uint32
@@ -328,6 +331,7 @@ type ParameterSet struct {
 	HeaderPresent        bool
 	SequenceParameterSet *SequenceParameterSet
 	PictureParameterSet  *PictureParameterSet
+	SEI                  *SEIMessageSequence
 	SummaryComplete      bool
 }
 
@@ -404,6 +408,7 @@ type NALUnit struct {
 	SequenceParameterSet *SequenceParameterSet
 	PictureParameterSet  *PictureParameterSet
 	SliceHeader          *SliceHeader
+	SEI                  *SEIMessageSequence
 	SummaryComplete      bool
 }
 

@@ -1,7 +1,19 @@
-import type { SummaryKind, SummaryMetric, SummaryOverview, SummaryPage, SummaryResponse } from './protocol.ts';
+import type { SummaryEvent, SummaryKind, SummaryMetric, SummaryOverview, SummaryPage, SummaryResponse } from './protocol.ts';
 import { unsigned } from './numbers.ts';
 
 export const SUMMARY_KINDS: SummaryKind[] = ['keyframes', 'aac', 'avc', 'mp3', 'diagnostics'];
+
+// Only complete, unambiguous frame boundaries open a specific deep detail.
+// Stop records and legacy first-header events still navigate to their Tag.
+export function summaryMP3Frame(event: SummaryEvent): number | undefined {
+  if (event.title !== 'mp3Frame' || event.tagId === null) return undefined;
+  const status = event.values.filter(value => value.section === '' && value.name === 'frameStatus');
+  const indices = event.values.filter(value => value.section === '' && value.name === 'frameIndex');
+  if (status.length !== 1 || status[0].value !== 'complete' || indices.length !== 1) return undefined;
+  const index = indices[0].value;
+  if (index === null || !/^(0|[1-9][0-9]*)$/.test(index) || BigInt(index) > 4294967295n) return undefined;
+  return Number(index);
+}
 export function summaryKind(value: string): SummaryKind {
   if (value === 'keyframes' || value === 'aac' || value === 'avc' || value === 'mp3' || value === 'diagnostics') return value;
   throw new Error('Invalid summary event kind.');

@@ -16,7 +16,6 @@ import (
 	"github.com/sevico/muxray/internal/avcsearch"
 	"github.com/sevico/muxray/internal/detailview"
 	"github.com/sevico/muxray/internal/flv"
-	"github.com/sevico/muxray/internal/mp3"
 	"github.com/sevico/muxray/internal/mp3context"
 	"github.com/sevico/muxray/internal/session"
 	"github.com/sevico/muxray/internal/summaryview"
@@ -60,6 +59,7 @@ type work struct {
 	offset        uint64
 	count         uint32
 	mp3Frame      *uint32
+	mp3Page       *uint32
 	mp3Dependency bool
 	filter        string
 }
@@ -81,6 +81,7 @@ type Document struct {
 	scan           *session.Session
 	avcIndex       *avccontext.CandidateIndex
 	avcParameters  avccontext.ParameterCheckpoints
+	mp3Pages       mp3PageCheckpoints
 	source         sourceFile
 	initial        os.FileInfo
 	parse          parseDetail
@@ -160,6 +161,7 @@ func (d *Document) run() {
 			d.summary.Overview, d.summaryReport = nil, nil
 			d.avcSearch.Page = nil
 			d.avcParameters.Clear()
+			d.mp3Pages = nil
 			d.mu.Unlock()
 			// This single worker owns closure. No read or parse remains active.
 			_ = d.scan.Close(context.Background())
@@ -195,6 +197,7 @@ func (d *Document) run() {
 		var summary *summaryview.Report
 		var searchPage *avcsearch.Page
 		var checkpoint *avccontext.ParameterCheckpoint
+		var mp3Checkpoints []mp3PageCheckpoint
 		var err error
 		if selected.kind == hexWork {
 			window, err = d.readHex(ctx, selected.offset, selected.count)
@@ -203,7 +206,7 @@ func (d *Document) run() {
 		} else if selected.kind == avcSearchWork {
 			searchPage, err = d.readAVCSearch(ctx, selected.offset, selected.filter)
 		} else {
-			detail, checkpoint, err = d.readDetail(ctx, selected.tag, selected.mp3Frame, selected.mp3Dependency)
+			detail, checkpoint, mp3Checkpoints, err = d.readDetail(ctx, selected.tag, selected.mp3Frame, selected.mp3Page, selected.mp3Dependency)
 		}
 		d.mu.Lock()
 		if err == nil {
@@ -249,6 +252,7 @@ func (d *Document) run() {
 			} else {
 				if err == nil && !d.changed {
 					d.avcParameters.Commit(checkpoint)
+					d.mp3Pages.commit(mp3Checkpoints)
 				}
 				d.latest.Detail, d.latest.Err, d.latest.State = detail, err, "ready"
 				if err != nil {
@@ -277,6 +281,7 @@ func (d *Document) sourceUnchanged() error {
 		d.mu.Lock()
 		d.changed = true
 		d.avcParameters.Clear()
+		d.mp3Pages = nil
 		d.clearSnapshotReadsLocked()
 		d.invalidateSummaryLocked(ErrSourceChanged)
 		d.invalidateAVCSearchLocked(ErrSourceChanged)
@@ -286,17 +291,20 @@ func (d *Document) sourceUnchanged() error {
 	return nil
 }
 
-func (d *Document) readDetail(ctx context.Context, tag flv.TagRecord, mp3Frame *uint32, mp3Dependency bool) (*detailview.Detail, *avccontext.ParameterCheckpoint, error) {
+func (d *Document) readDetail(ctx context.Context, tag flv.TagRecord, mp3Frame *uint32, mp3Page *uint32, mp3Dependency bool) (*detailview.Detail, *avccontext.ParameterCheckpoint, []mp3PageCheckpoint, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if err := d.sourceUnchanged(); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	var detail *detailview.Detail
 	var checkpoint *avccontext.ParameterCheckpoint
+	var mp3Checkpoints []mp3PageCheckpoint
 	var err error
-	if mp3Dependency {
+	if mp3Page != nil {
+		detail, mp3Checkpoints, err = d.readMP3Page(ctx, tag, mp3Frame, *mp3Page, mp3Dependency)
+	} else if mp3Dependency {
 		detail, err = detailview.ParseWithMP3Dependency(ctx, d.source, tag, *mp3Frame, d.scan.Tag, mp3context.Limits{})
 	} else if mp3Frame != nil {
 		detail, err = detailview.ParseWithMP3Frame(ctx, d.source, tag, *mp3Frame)
@@ -307,12 +315,15 @@ func (d *Document) readDetail(ctx context.Context, tag flv.TagRecord, mp3Frame *
 	}
 	// Detect changes during a read before publishing any parsed fields.
 	if changed := d.sourceUnchanged(); changed != nil {
-		return nil, nil, changed
+		return nil, nil, nil, changed
 	}
 	if canceled := ctx.Err(); canceled != nil {
-		return nil, nil, canceled
+		return nil, nil, nil, canceled
 	}
-	return detail, checkpoint, err
+	if err == nil && mp3Page == nil {
+		detailview.AnnotateMP3Preview(detail, mp3Frame)
+	}
+	return detail, checkpoint, mp3Checkpoints, err
 }
 
 // parseWithContext runs lookup and projection within the caller's single task
@@ -351,8 +362,16 @@ func (d *Document) StartDetailWithMP3Frame(id, tagID uint64, frameIndex *uint32)
 // StartDetailWithMP3Dependency explicitly opts in to bounded predecessor reads.
 // Enabling it without a frame index normalizes the request to frame zero.
 func (d *Document) StartDetailWithMP3Dependency(id, tagID uint64, frameIndex *uint32, enabled bool) (DetailResult, error) {
+	return d.StartDetailWithMP3Page(id, tagID, frameIndex, nil, enabled)
+}
+
+// StartDetailWithMP3Page opts into a 64-frame page; nil preserves the legacy preview.
+func (d *Document) StartDetailWithMP3Page(id, tagID uint64, frameIndex, pageStart *uint32, enabled bool) (DetailResult, error) {
 	if enabled && frameIndex == nil {
 		index := uint32(0)
+		if pageStart != nil {
+			index = *pageStart
+		}
 		frameIndex = &index
 	}
 
@@ -361,14 +380,14 @@ func (d *Document) StartDetailWithMP3Dependency(id, tagID uint64, frameIndex *ui
 	if d.closed || d.ctx.Err() != nil {
 		return DetailResult{}, session.ErrClosed
 	}
-	if id == 0 || (frameIndex != nil && *frameIndex >= mp3.DefaultMaxFrames) {
+	if id == 0 || !validMP3PageSelection(frameIndex, pageStart) {
 		return DetailResult{}, ErrInvalidRequest
 	}
 	if id < d.request.id {
 		return DetailResult{}, ErrStaleRequest
 	}
 	if id == d.request.id {
-		if d.request.kind != detailWork || tagID != d.request.tag.ID || !sameMP3Frame(d.request.mp3Frame, frameIndex) || d.request.mp3Dependency != enabled {
+		if d.request.kind != detailWork || tagID != d.request.tag.ID || !sameMP3Frame(d.request.mp3Frame, frameIndex) || !sameMP3Frame(d.request.mp3Page, pageStart) || d.request.mp3Dependency != enabled {
 			return DetailResult{}, ErrInvalidRequest
 		}
 		return cloneResult(d.latest), nil
@@ -380,14 +399,23 @@ func (d *Document) StartDetailWithMP3Dependency(id, tagID uint64, frameIndex *ui
 		}
 		return DetailResult{}, err
 	}
-	if frameIndex != nil {
+	if frameIndex != nil || pageStart != nil {
 		if tag.Type() != flv.TagTypeAudio {
 			return DetailResult{}, ErrInvalidRequest
 		}
-		index := *frameIndex
-		frameIndex = &index // Do not retain a caller-owned mutable pointer.
+		if pageStart != nil {
+			if *pageStart != 0 && (tag.DataSize <= 1 || uint64(*pageStart) >= uint64(tag.DataSize-1)/4) {
+				return DetailResult{}, ErrInvalidRequest
+			}
+			start := *pageStart
+			pageStart = &start
+		}
+		if frameIndex != nil {
+			index := *frameIndex
+			frameIndex = &index
+		}
 	}
-	d.admitLocked(work{id: id, kind: detailWork, tag: tag, mp3Frame: frameIndex, mp3Dependency: enabled})
+	d.admitLocked(work{id: id, kind: detailWork, tag: tag, mp3Frame: frameIndex, mp3Page: pageStart, mp3Dependency: enabled})
 	return cloneResult(d.latest), nil
 }
 

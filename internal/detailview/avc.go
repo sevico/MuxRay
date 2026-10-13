@@ -37,6 +37,7 @@ func (b *builder) avc(ctx context.Context, source io.ReaderAt, tag flv.TagRecord
 	options := DesktopAVCOptions()
 	options.AVC.ParseVUI = true
 	options.AVC.ParseFullHeaders = b.fullAVC
+	options.AVC.ParseSEI = b.fullAVC
 	if parameters != nil {
 		options.AVC.ParsePPS, options.AVC.ParseSliceHeaders = true, true
 		options.AVC.ParameterSets = parameters.Context
@@ -57,7 +58,7 @@ func (b *builder) avc(ctx context.Context, source io.ReaderAt, tag flv.TagRecord
 	}
 	b.detail.Kind, b.detail.Complete = string(flv.DetailKindAVCVideo), p.Complete
 	for _, d := range p.Diagnostics {
-		if d.Code == avc.CodeParameterSetTooLarge {
+		if d.Code == avc.CodeParameterSetTooLarge || d.Code == avc.CodeSEIByteLimit || d.Code == avc.CodeSEIMessageLimit {
 			b.detail.Truncated = true
 		}
 		b.diagnostic(d.Code, string(d.Severity), d.Offset, d.BitOffset, d.Message, d.Expected, d.Actual)
@@ -134,6 +135,9 @@ func (b *builder) avc(ctx context.Context, source io.ReaderAt, tag flv.TagRecord
 					b.avcSliceFull(id, n.Index, n.SliceHeader.Full)
 				}
 			}
+			if n.SEI != nil {
+				b.avcSEI(id, "NAL["+decimal(uint64(n.Index))+"]", n.SEI)
+			}
 		}
 		b.encoded(id, "unparsedNALData", "opaque", "NAL data not interpreted; see diagnostics", s.TrailingSpan)
 	} else if p.PacketTypePresent && p.PacketType == flv.AVCPacketTypeNALU {
@@ -207,6 +211,9 @@ func (b *builder) avcConfig(ctx context.Context, parent string, c avc.Configurat
 			}
 			if !b.avcUnit(id, group.name+"["+decimal(uint64(s.Index))+"]", s.Length, s.LengthSpan, s.Span, s.Header, s.HeaderPresent, s.SequenceParameterSet, s.PictureParameterSet, s.SummaryComplete) {
 				return nil
+			}
+			if s.SEI != nil {
+				b.avcSEI(id, group.name+"["+decimal(uint64(s.Index))+"]", s.SEI)
 			}
 		}
 	}

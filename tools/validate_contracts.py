@@ -12,6 +12,11 @@ from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parent.parent
 CONTRACTS = (
+    ("docs/schemas/flv-avc-tag-detail-v5.schema.json", "testdata/golden/flv-avc-detail-sei-v5.json"),
+    ("docs/schemas/flv-avc-tag-detail-v5.schema.json", "testdata/golden/flv-avc-detail-sei-config-v5.json"),
+    ("docs/schemas/flv-avc-tag-detail-v5.schema.json", "testdata/golden/flv-avc-detail-sei-truncated-v5.json"),
+    ("docs/schemas/flv-avc-tag-detail-v5.schema.json", "testdata/golden/flv-avc-detail-sei-budget-v5.json"),
+
     ("docs/schemas/flv-avc-tag-detail-v4.schema.json", "testdata/golden/flv-avc-detail-v4.json"),
     ("docs/schemas/flv-avc-tag-detail-v4.schema.json", "testdata/golden/flv-avc-detail-nalu-v4.json"),
     ("docs/schemas/flv-avc-tag-detail-v4.schema.json", "testdata/golden/flv-avc-detail-truncated-v4.json"),
@@ -1820,6 +1825,48 @@ def validate_full_codec_contracts() -> None:
     print("validated full codec versions, closed syntax, source positions and budgets")
 
 
+def validate_sei_v5_contracts() -> None:
+    validator = Draft202012Validator(load_json("docs/schemas/flv-avc-tag-detail-v5.schema.json"))
+    valid = load_json("testdata/golden/flv-avc-detail-sei-v5.json")
+    base = ["detail", "nalUnitSequence", "nalUnits", 0, "sei"]
+    messages = valid["detail"]["nalUnitSequence"]["nalUnits"][0]["sei"]["messages"]
+    for path, value in (
+        (["schemaVersion"], 4), (base + ["extra"], True),
+        (base + ["bytesRead"], 65537), (base + ["syntaxBits"], 524289),
+        (base + ["messages"], [messages[2]] * 65),
+        (base + ["rbspTrailingBits", "bitLength"], 7),
+        (base + ["messages", 0, "recoveryPoint", "recoveryFrameCnt", "value"], 65536),
+        (base + ["messages", 0, "recoveryPoint", "changingSliceGroupIdc", "value"], 3),
+        (base + ["messages", 1, "userDataUnregistered", "uuid", "hex"], "ab" * 15),
+        (base + ["messages", 1, "userDataUnregistered", "dataPreview", "hex"], "ab" * 65),
+        (base + ["messages", 2, "syntaxSupported"], True),
+        (base + ["messages", 2, "recoveryPoint"], messages[0]["recoveryPoint"]),
+    ):
+        changed = deepcopy(valid)
+        parent = changed
+        for key in path[:-1]:
+            parent = parent[key]
+        parent[path[-1]] = value
+        require_invalid(validator, changed, "SEI contract mutation: " + str(path))
+    for path in (
+        base + ["rbspTrailingBits"],
+        base + ["messages", 0, "recoveryPoint", "exactMatchFlag"],
+        base + ["messages", 1, "userDataUnregistered", "uuid"],
+    ):
+        changed = deepcopy(valid)
+        parent = changed
+        for key in path[:-1]:
+            parent = parent[key]
+        del parent[path[-1]]
+        require_invalid(validator, changed, "SEI complete syntax requires " + str(path))
+    for version in (1, 2, 3, 4):
+        legacy = Draft202012Validator(load_json(f"docs/schemas/flv-avc-tag-detail-v{version}.schema.json"))
+        downgraded = deepcopy(valid)
+        downgraded["schemaVersion"] = version
+        require_invalid(legacy, downgraded, f"SEI must not leak into legacy AVC v{version}")
+    print("validated SEI v5 budgets, supported syntax, partial contracts and legacy isolation")
+
+
 def main() -> None:
     manifest_schema = load_json("testdata/manifests/sample-manifest-v1.schema.json")
     Draft202012Validator.check_schema(manifest_schema)
@@ -1842,6 +1889,7 @@ def main() -> None:
     validate_avc_v3_edge_cases()
     validate_mp3_v3_edge_cases()
     validate_full_codec_contracts()
+    validate_sei_v5_contracts()
     print("validated MP3 v3 layouts, partial values, source fields, dependency states and version isolation")
     print("validated AVC v3 prefix presence, version isolation, closed fields and budgets")
     print("validated AVC/MP3 detail v2 version isolation, presence, bounds, CRC and VBR shapes")

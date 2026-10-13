@@ -99,11 +99,21 @@ func normalize(l Limits) (Limits, error) {
 // Errors and cancellation discard all output. Budget exhaustion is an explicit
 // unknown result, with only the already established suffix retained.
 func Resolve(ctx context.Context, source io.ReaderAt, selected flv.TagRecord, frameIndex uint32, lookup Lookup, limits Limits) (result Resolution, err error) {
+	return resolveSelection(ctx, source, selected, frameIndex, lookup, limits, nil, nil)
+}
+
+// ResolvePage reuses a paginated selected parse and its bounded physical suffix.
+// Cached slots are provenance only; they never imply decoded reservoir state.
+func ResolvePage(ctx context.Context, source io.ReaderAt, selected flv.TagRecord, frameIndex uint32, lookup Lookup, limits Limits, parsed flv.MP3Audio, page mp3.FramePage) (Resolution, error) {
+	return resolveSelection(ctx, source, selected, frameIndex, lookup, limits, &parsed, &page)
+}
+
+func resolveSelection(ctx context.Context, source io.ReaderAt, selected flv.TagRecord, frameIndex uint32, lookup Lookup, limits Limits, prepared *flv.MP3Audio, page *mp3.FramePage) (result Resolution, err error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	limits, err = normalize(limits)
-	if err != nil || source == nil || lookup == nil || frameIndex >= mp3.DefaultMaxFrames || selected.Type() != flv.TagTypeAudio {
+	if err != nil || source == nil || lookup == nil || (page == nil && frameIndex >= mp3.DefaultMaxFrames) || selected.Type() != flv.TagTypeAudio {
 		return Resolution{}, ErrInvalidInput
 	}
 	result = Resolution{State: "unknown", Reason: "target_unavailable", TargetTagID: selected.ID, TargetFrameIndex: frameIndex, Limits: limits, Sources: []Source{}}
@@ -152,6 +162,35 @@ func Resolve(ctx context.Context, source io.ReaderAt, selected flv.TagRecord, fr
 			return nil, "frame_budget", nil
 		}
 		result.CoverageBytes += coverage
+		if page != nil && tag.ID != selected.ID {
+			var checkpoint *mp3.FrameCursor
+			for {
+				if maximum < mp3.FramePageSize {
+					return nil, "frame_budget", nil
+				}
+				p, current, e := flv.ParseMP3AudioPage(ctx, reader, tag, checkpoint)
+				if reader.failure != nil {
+					return nil, "", reader.failure
+				}
+				if e != nil {
+					return nil, "", e
+				}
+				count := uint32(len(current.Sequence.Frames))
+				result.FramesInspected += count
+				maximum -= count
+				if current.Next == nil {
+					// Keep a bounded physical suffix, including the previous
+					// page when the terminal page contains only a few frames.
+					frames := append(append([]mp3.Frame{}, current.PriorFrames...), current.Sequence.Frames...)
+					if len(frames) > mp3.FramePageHistorySize {
+						frames = frames[len(frames)-mp3.FramePageHistorySize:]
+					}
+					p.Frames.Frames = frames
+					return &p, "", nil
+				}
+				checkpoint = current.Next
+			}
+		}
 		p, e := flv.ParseMP3Audio(reader, tag, mp3.Options{InspectSideInfo: true, MaxFrames: maximum})
 		if reader.failure != nil {
 			return nil, "", reader.failure
@@ -162,7 +201,21 @@ func Resolve(ctx context.Context, source io.ReaderAt, selected flv.TagRecord, fr
 		result.FramesInspected += uint32(len(p.Frames.Frames))
 		return &p, "", nil
 	}
-	parsed, reason, err := parse(selected, min(limits.MaxFrames, mp3.DefaultMaxFrames))
+	var parsed *flv.MP3Audio
+	var reason string
+	if page == nil {
+		parsed, reason, err = parse(selected, min(limits.MaxFrames, mp3.DefaultMaxFrames))
+	} else {
+		if prepared == nil || prepared.Frames == nil || prepared.TagID != selected.ID || page.StartIndex > frameIndex || uint64(frameIndex) >= uint64(page.StartIndex)+uint64(mp3.FramePageSize) {
+			return result, ErrInvalidInput
+		}
+		parsed = prepared
+		result.CoverageBytes, result.BytesRead = page.Sequence.BytesCovered, page.Sequence.BytesRead
+		result.FramesInspected = uint32(len(page.Sequence.Frames))
+		if result.CoverageBytes > limits.MaxBytes || result.BytesRead > limits.MaxReadBytes || result.FramesInspected > limits.MaxFrames {
+			return result, ErrInvalidInput
+		}
+	}
 	if errors.Is(err, errReadBudget) {
 		result.Reason = "read_budget"
 		return result, nil
@@ -175,13 +228,24 @@ func Resolve(ctx context.Context, source io.ReaderAt, selected flv.TagRecord, fr
 		return result, nil
 	}
 	result.Selected = parsed
-	if int(frameIndex) >= len(parsed.Frames.Frames) {
+	frames := parsed.Frames.Frames
+	if page != nil {
+		frames = append(append([]mp3.Frame{}, page.PriorFrames...), frames...)
+	}
+	targetPosition := -1
+	for i, frame := range frames {
+		if frame.Index == frameIndex {
+			targetPosition = i
+			break
+		}
+	}
+	if targetPosition < 0 {
 		if parsed.Frames.StopReason == "frame_limit" {
 			result.Reason = "frame_budget"
 		}
 		return result, nil
 	}
-	target := parsed.Frames.Frames[frameIndex]
+	target := frames[targetPosition]
 	if reason = usable(target); reason != "" {
 		result.Reason = reason
 		return result, nil
@@ -222,17 +286,21 @@ func Resolve(ctx context.Context, source io.ReaderAt, selected flv.TagRecord, fr
 		}
 		return true
 	}
-	for index := int(frameIndex) - 1; index >= 0; index-- {
+	for index := targetPosition - 1; index >= 0; index-- {
 		if err = ctx.Err(); err != nil {
 			return result, err
 		}
-		if !add(selected.ID, parsed.Frames.Frames[index]) {
+		if !add(selected.ID, frames[index]) {
 			return result, nil
 		}
 		if result.ResolvedPreviousBytes == back {
 			result.State, result.Reason = "resolved", "within_tag"
 			return result, nil
 		}
+	}
+	if page != nil && len(frames) != 0 && frames[0].Index != 0 {
+		result.Reason = "source_limit"
+		return result, nil
 	}
 	for id := selected.ID; id > 0; {
 		if err = ctx.Err(); err != nil {
@@ -267,7 +335,11 @@ func Resolve(ctx context.Context, source io.ReaderAt, selected flv.TagRecord, fr
 			result.Reason = "stream_changed"
 			return result, nil
 		}
-		previous, why, e := parse(tag, min(limits.MaxFrames-result.FramesInspected, mp3.DefaultMaxFrames))
+		maximum := limits.MaxFrames - result.FramesInspected
+		if page == nil {
+			maximum = min(maximum, mp3.DefaultMaxFrames)
+		}
+		previous, why, e := parse(tag, maximum)
 		if errors.Is(e, errReadBudget) {
 			result.Reason = "read_budget"
 			return result, nil
@@ -298,6 +370,10 @@ func Resolve(ctx context.Context, source io.ReaderAt, selected flv.TagRecord, fr
 				result.State, result.Reason = "resolved", "across_tags"
 				return result, nil
 			}
+		}
+		if page != nil && len(sequence.Frames) != 0 && sequence.Frames[0].Index != 0 {
+			result.Reason = "source_limit"
+			return result, nil
 		}
 	}
 	result.Reason = "start_of_file"

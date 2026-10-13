@@ -12,6 +12,10 @@ import (
 
 // mp3 projects bounded same-tag syntax; compressed audio is never decoded.
 func (b *builder) mp3(p flv.MP3Audio, selected *uint32) {
+	b.mp3Mode(p, selected, false)
+}
+
+func (b *builder) mp3Mode(p flv.MP3Audio, selected *uint32, paged bool) {
 	description := "FLV framing and first MPEG frame header only; audio and frame bodies are not decoded or validated"
 	if p.Frames != nil {
 		description = "Same-tag frame boundaries, first-frame VBR metadata and header/side-information CRC; compressed audio is not decoded or validated"
@@ -35,7 +39,7 @@ func (b *builder) mp3(p flv.MP3Audio, selected *uint32) {
 	b.add(root, "SoundData", "opaque", dataDescription, span(p.DataSpan))
 	if !p.FrameHeader.HeaderPresent {
 		if p.Frames != nil {
-			b.mp3Frames(root, p.Frames, selected)
+			b.mp3Frames(root, p.Frames, selected, paged)
 		}
 		return
 	}
@@ -74,7 +78,7 @@ func (b *builder) mp3(p flv.MP3Audio, selected *uint32) {
 		b.add(id, "frameLengthBytes", "derived bytes", decimal(uint64(h.FrameLengthBytes)), nil)
 	}
 	if p.Frames != nil {
-		b.mp3Frames(root, p.Frames, selected)
+		b.mp3Frames(root, p.Frames, selected, paged)
 	} else if p.DataSpan.BitLength > 32 {
 		rest := cursor.Span{ByteOffset: p.DataSpan.ByteOffset + 4, BitLength: p.DataSpan.BitLength - 32}
 		b.add(root, "unparsedData", "opaque", fmt.Sprintf("%d bytes; frame bodies, CRC, VBR headers and later frames are not inspected", rest.BitLength/8), span(rest))
@@ -92,7 +96,7 @@ func selectableMP3Frame(p *mp3.FrameSequence, index uint32) bool {
 	return false
 }
 
-func (b *builder) mp3Frames(root string, p *mp3.FrameSequence, selected *uint32) {
+func (b *builder) mp3Frames(root string, p *mp3.FrameSequence, selected *uint32, paged bool) {
 	id := b.add(root, "Frame inspection", "bounded sequence", fmt.Sprintf("%d complete frame boundaries; %d headers; stop=%s; audio main data is not decoded", p.CompleteFrames, len(p.Frames), p.StopReason), span(p.Span))
 	selection := "preview"
 	if selected != nil {
@@ -105,13 +109,45 @@ func (b *builder) mp3Frames(root string, p *mp3.FrameSequence, selected *uint32)
 		}
 	}
 	b.add(id, "selectedFrameIndex", "derived selection", selection, nil)
-	b.add(id, "selectableFrameIndices", "derived indices", strings.Join(indices, ","), nil)
+	joined := strings.Join(indices, ",")
+	if paged {
+		offsets := []string{}
+		for _, frame := range p.Frames {
+			if frame.BoundaryComplete && frame.SideInfo != nil {
+				offsets = append(offsets, decimal(uint64(frame.Index-p.Frames[0].Index)))
+			}
+		}
+		b.add(id, "selectableFrameOffsets", "derived page offsets", strings.Join(offsets, ","), nil)
+		if len(joined) > MaxPreviewBytes {
+			joined = ""
+		}
+	}
+	b.add(id, "selectableFrameIndices", "derived indices", joined, nil)
 	b.add(id, "checkedFrameCount", "derived count", decimal(uint64(len(p.Frames))), nil)
 	b.add(id, "frameBudget", "derived count", decimal(uint64(p.MaxFrames)), nil)
 	b.add(id, "byteCoverageBudget", "derived bytes", decimal(p.MaxBytes), nil)
 	b.add(id, "bytesCovered", "derived bytes", decimal(p.BytesCovered), nil)
 	b.add(id, "bytesRead", "derived bytes", decimal(p.BytesRead), nil)
-	for _, f := range p.Frames {
+	// A paged request gives the selected record priority over ordinary frame
+	// summaries when physical dependency sources consume the field budget.
+	frames := p.Frames
+	if paged && selected != nil {
+		frames = make([]mp3.Frame, 0, len(p.Frames))
+		for _, f := range p.Frames {
+			if f.Index == *selected {
+				if f.SideInfo != nil {
+					b.mp3SideInfo(id, f)
+				}
+				frames = append(frames, f)
+			}
+		}
+		for _, f := range p.Frames {
+			if f.Index != *selected {
+				frames = append(frames, f)
+			}
+		}
+	}
+	for _, f := range frames {
 		length, bitrate, frequency, channels, version := "unknown", "unknown", "unknown", "unknown", "unknown"
 		if f.Header.Complete {
 			version = f.Header.Version.String()
@@ -201,7 +237,9 @@ func (b *builder) mp3Frames(root string, p *mp3.FrameSequence, selected *uint32)
 		if f.SideInfo != nil {
 			total++
 			if (selected == nil && expanded < 2) || (selected != nil && f.Index == *selected) {
-				b.mp3SideInfo(id, f)
+				if !paged || selected == nil {
+					b.mp3SideInfo(id, f)
+				}
 				expanded++
 			}
 		}

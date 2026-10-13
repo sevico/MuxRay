@@ -81,6 +81,7 @@ func (p *ParameterCheckpoint) matches(framing Resolution, selected uint64, optio
 
 func parameterOptions(options avc.Options) (avc.Options, error) {
 	options.ParsePPS, options.ParseSliceHeaders, options.ParseVUI = true, false, false
+	options.ParseSEI = false
 	options.ParameterSets = nil
 	return options.Normalized()
 }

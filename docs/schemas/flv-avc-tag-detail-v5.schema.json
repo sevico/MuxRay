@@ -1,0 +1,6484 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "flv-avc-tag-detail-v5.schema.json",
+  "title": "MuxRay FLV AVC tag detail v5",
+  "description": "Opt-in bounded SEI framing, recovery_point syntax and user_data_unregistered UUID/hex preview, extending v4. Unknown payloads remain opaque; recovery state, HRD timing, slice bodies and DPB are not decoded.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "documentType",
+    "source",
+    "tag",
+    "detail",
+    "diagnostics"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 5
+    },
+    "documentType": {
+      "const": "flv-avc-tag-detail"
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "tag": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/tag"
+        },
+        {
+          "properties": {
+            "typeCode": {
+              "const": 9
+            },
+            "typeName": {
+              "const": "video"
+            },
+            "filter": {
+              "const": false
+            },
+            "payloadComplete": {
+              "const": true
+            }
+          }
+        }
+      ]
+    },
+    "detail": {
+      "$ref": "#/$defs/avcVideoDetail"
+    },
+    "diagnostics": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": {
+        "$ref": "#/$defs/diagnostic"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "detail": {
+            "properties": {
+              "complete": {
+                "const": false
+              }
+            },
+            "required": [
+              "complete"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "diagnostics": {
+            "contains": {
+              "properties": {
+                "severity": {
+                  "const": "error"
+                }
+              },
+              "required": [
+                "severity"
+              ]
+            },
+            "minContains": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "detail": {
+            "properties": {
+              "complete": {
+                "const": true
+              }
+            },
+            "required": [
+              "complete"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "diagnostics": {
+            "not": {
+              "contains": {
+                "properties": {
+                  "severity": {
+                    "const": "error"
+                  }
+                },
+                "required": [
+                  "severity"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "cpb": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bitRateValueMinus1": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "cpbSizeValueMinus1": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "cbrFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        }
+      }
+    },
+    "hrd": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cpb",
+        "complete"
+      ],
+      "properties": {
+        "cpbCntMinus1": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "bitRateScale": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "cpbSizeScale": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "initialCpbRemovalDelayLengthMinus1": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "cpbRemovalDelayLengthMinus1": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "dpbOutputDelayLengthMinus1": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "timeOffsetLength": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "cpb": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/cpb"
+          }
+        },
+        "complete": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "complete": {
+                "const": true
+              }
+            },
+            "required": [
+              "complete"
+            ]
+          },
+          "then": {
+            "required": [
+              "cpbCntMinus1",
+              "bitRateScale",
+              "cpbSizeScale",
+              "initialCpbRemovalDelayLengthMinus1",
+              "cpbRemovalDelayLengthMinus1",
+              "dpbOutputDelayLengthMinus1",
+              "timeOffsetLength"
+            ],
+            "properties": {
+              "cpb": {
+                "minItems": 1,
+                "items": {
+                  "required": [
+                    "bitRateValueMinus1",
+                    "cpbSizeValueMinus1",
+                    "cbrFlag"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "vui": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "present",
+        "rbspBitOffset",
+        "syntaxBits",
+        "remainingRbspBits",
+        "trailingBitsValid",
+        "complete"
+      ],
+      "properties": {
+        "present": {
+          "type": "boolean"
+        },
+        "rbspBitOffset": {
+          "$ref": "#/$defs/uint32"
+        },
+        "syntaxBits": {
+          "$ref": "#/$defs/uint32"
+        },
+        "remainingRbspBits": {
+          "$ref": "#/$defs/uint32"
+        },
+        "trailingBitsValid": {
+          "type": "boolean"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "aspectRatioInfoPresentFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "aspectRatioIdc": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "sarWidth": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "sarHeight": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "overscanInfoPresentFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "overscanAppropriateFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "videoSignalTypePresentFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "videoFormat": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "videoFullRangeFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "colourDescriptionPresentFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "colourPrimaries": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "transferCharacteristics": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "matrixCoefficients": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "chromaLocInfoPresentFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "chromaSampleLocTypeTopField": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "chromaSampleLocTypeBottomField": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "timingInfoPresentFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "numUnitsInTick": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "timeScale": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "fixedFrameRateFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "nalHrdParametersPresentFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "vclHrdParametersPresentFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "lowDelayHrdFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "picStructPresentFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "bitstreamRestrictionFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "motionVectorsOverPicBoundariesFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "maxBytesPerPicDenom": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "maxBitsPerMbDenom": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "log2MaxMvLengthHorizontal": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "log2MaxMvLengthVertical": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "maxNumReorderFrames": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "maxDecFrameBuffering": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "nalHrd": {
+          "$ref": "#/$defs/hrd"
+        },
+        "vclHrd": {
+          "$ref": "#/$defs/hrd"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "complete": {
+                "const": true
+              }
+            },
+            "required": [
+              "complete"
+            ]
+          },
+          "then": {
+            "properties": {
+              "trailingBitsValid": {
+                "const": true
+              },
+              "remainingRbspBits": {
+                "const": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "present": {
+                "const": true
+              },
+              "complete": {
+                "const": true
+              }
+            },
+            "required": [
+              "present",
+              "complete"
+            ]
+          },
+          "then": {
+            "required": [
+              "aspectRatioInfoPresentFlag",
+              "overscanInfoPresentFlag",
+              "videoSignalTypePresentFlag",
+              "chromaLocInfoPresentFlag",
+              "timingInfoPresentFlag",
+              "nalHrdParametersPresentFlag",
+              "vclHrdParametersPresentFlag",
+              "picStructPresentFlag",
+              "bitstreamRestrictionFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "present": {
+                "const": false
+              }
+            },
+            "required": [
+              "present"
+            ]
+          },
+          "then": {
+            "properties": {
+              "syntaxBits": {
+                "const": 0
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "aspectRatioInfoPresentFlag"
+                  ]
+                },
+                {
+                  "required": [
+                    "aspectRatioIdc"
+                  ]
+                },
+                {
+                  "required": [
+                    "sarWidth"
+                  ]
+                },
+                {
+                  "required": [
+                    "sarHeight"
+                  ]
+                },
+                {
+                  "required": [
+                    "overscanInfoPresentFlag"
+                  ]
+                },
+                {
+                  "required": [
+                    "overscanAppropriateFlag"
+                  ]
+                },
+                {
+                  "required": [
+                    "videoSignalTypePresentFlag"
+                  ]
+                },
+                {
+                  "required": [
+                    "videoFormat"
+                  ]
+                },
+                {
+                  "required": [
+                    "videoFullRangeFlag"
+                  ]
+                },
+                {
+                  "required": [
+                    "colourDescriptionPresentFlag"
+                  ]
+                },
+                {
+                  "required": [
+                    "colourPrimaries"
+                  ]
+                },
+                {
+                  "required": [
+                    "transferCharacteristics"
+                  ]
+                },
+                {
+                  "required": [
+                    "matrixCoefficients"
+                  ]
+                },
+                {
+                  "required": [
+                    "chromaLocInfoPresentFlag"
+                  ]
+                },
+                {
+                  "required": [
+                    "chromaSampleLocTypeTopField"
+                  ]
+                },
+                {
+                  "required": [
+                    "chromaSampleLocTypeBottomField"
+                  ]
+                },
+                {
+                  "required": [
+                    "timingInfoPresentFlag"
+                  ]
+                },
+                {
+                  "required": [
+                    "numUnitsInTick"
+                  ]
+                },
+                {
+                  "required": [
+                    "timeScale"
+                  ]
+                },
+                {
+                  "required": [
+                    "fixedFrameRateFlag"
+                  ]
+                },
+                {
+                  "required": [
+                    "nalHrdParametersPresentFlag"
+                  ]
+                },
+                {
+                  "required": [
+                    "vclHrdParametersPresentFlag"
+                  ]
+                },
+                {
+                  "required": [
+                    "lowDelayHrdFlag"
+                  ]
+                },
+                {
+                  "required": [
+                    "picStructPresentFlag"
+                  ]
+                },
+                {
+                  "required": [
+                    "bitstreamRestrictionFlag"
+                  ]
+                },
+                {
+                  "required": [
+                    "motionVectorsOverPicBoundariesFlag"
+                  ]
+                },
+                {
+                  "required": [
+                    "maxBytesPerPicDenom"
+                  ]
+                },
+                {
+                  "required": [
+                    "maxBitsPerMbDenom"
+                  ]
+                },
+                {
+                  "required": [
+                    "log2MaxMvLengthHorizontal"
+                  ]
+                },
+                {
+                  "required": [
+                    "log2MaxMvLengthVertical"
+                  ]
+                },
+                {
+                  "required": [
+                    "maxNumReorderFrames"
+                  ]
+                },
+                {
+                  "required": [
+                    "maxDecFrameBuffering"
+                  ]
+                },
+                {
+                  "required": [
+                    "nalHrd"
+                  ]
+                },
+                {
+                  "required": [
+                    "vclHrd"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "allOf": [
+              {
+                "properties": {
+                  "complete": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "complete"
+                ]
+              },
+              {
+                "properties": {
+                  "aspectRatioInfoPresentFlag": {
+                    "properties": {
+                      "value": {
+                        "const": true
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ]
+                  }
+                },
+                "required": [
+                  "aspectRatioInfoPresentFlag"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "aspectRatioIdc"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "aspectRatioIdc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "aspectRatioInfoPresentFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "aspectRatioInfoPresentFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "allOf": [
+              {
+                "properties": {
+                  "complete": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "complete"
+                ]
+              },
+              {
+                "properties": {
+                  "overscanInfoPresentFlag": {
+                    "properties": {
+                      "value": {
+                        "const": true
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ]
+                  }
+                },
+                "required": [
+                  "overscanInfoPresentFlag"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "overscanAppropriateFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "overscanAppropriateFlag"
+            ]
+          },
+          "then": {
+            "properties": {
+              "overscanInfoPresentFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "overscanInfoPresentFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "allOf": [
+              {
+                "properties": {
+                  "complete": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "complete"
+                ]
+              },
+              {
+                "properties": {
+                  "videoSignalTypePresentFlag": {
+                    "properties": {
+                      "value": {
+                        "const": true
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ]
+                  }
+                },
+                "required": [
+                  "videoSignalTypePresentFlag"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "videoFormat",
+              "videoFullRangeFlag",
+              "colourDescriptionPresentFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "videoFormat"
+            ]
+          },
+          "then": {
+            "properties": {
+              "videoSignalTypePresentFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "videoSignalTypePresentFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "videoFullRangeFlag"
+            ]
+          },
+          "then": {
+            "properties": {
+              "videoSignalTypePresentFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "videoSignalTypePresentFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "colourDescriptionPresentFlag"
+            ]
+          },
+          "then": {
+            "properties": {
+              "videoSignalTypePresentFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "videoSignalTypePresentFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "allOf": [
+              {
+                "properties": {
+                  "complete": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "complete"
+                ]
+              },
+              {
+                "properties": {
+                  "colourDescriptionPresentFlag": {
+                    "properties": {
+                      "value": {
+                        "const": true
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ]
+                  }
+                },
+                "required": [
+                  "colourDescriptionPresentFlag"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "colourPrimaries",
+              "transferCharacteristics",
+              "matrixCoefficients"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "colourPrimaries"
+            ]
+          },
+          "then": {
+            "properties": {
+              "colourDescriptionPresentFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "colourDescriptionPresentFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "transferCharacteristics"
+            ]
+          },
+          "then": {
+            "properties": {
+              "colourDescriptionPresentFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "colourDescriptionPresentFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "matrixCoefficients"
+            ]
+          },
+          "then": {
+            "properties": {
+              "colourDescriptionPresentFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "colourDescriptionPresentFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "allOf": [
+              {
+                "properties": {
+                  "complete": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "complete"
+                ]
+              },
+              {
+                "properties": {
+                  "chromaLocInfoPresentFlag": {
+                    "properties": {
+                      "value": {
+                        "const": true
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ]
+                  }
+                },
+                "required": [
+                  "chromaLocInfoPresentFlag"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "chromaSampleLocTypeTopField",
+              "chromaSampleLocTypeBottomField"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "chromaSampleLocTypeTopField"
+            ]
+          },
+          "then": {
+            "properties": {
+              "chromaLocInfoPresentFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "chromaLocInfoPresentFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "chromaSampleLocTypeBottomField"
+            ]
+          },
+          "then": {
+            "properties": {
+              "chromaLocInfoPresentFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "chromaLocInfoPresentFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "allOf": [
+              {
+                "properties": {
+                  "complete": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "complete"
+                ]
+              },
+              {
+                "properties": {
+                  "timingInfoPresentFlag": {
+                    "properties": {
+                      "value": {
+                        "const": true
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ]
+                  }
+                },
+                "required": [
+                  "timingInfoPresentFlag"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "numUnitsInTick",
+              "timeScale",
+              "fixedFrameRateFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "numUnitsInTick"
+            ]
+          },
+          "then": {
+            "properties": {
+              "timingInfoPresentFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "timingInfoPresentFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "timeScale"
+            ]
+          },
+          "then": {
+            "properties": {
+              "timingInfoPresentFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "timingInfoPresentFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "fixedFrameRateFlag"
+            ]
+          },
+          "then": {
+            "properties": {
+              "timingInfoPresentFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "timingInfoPresentFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "allOf": [
+              {
+                "properties": {
+                  "complete": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "complete"
+                ]
+              },
+              {
+                "properties": {
+                  "nalHrdParametersPresentFlag": {
+                    "properties": {
+                      "value": {
+                        "const": true
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ]
+                  }
+                },
+                "required": [
+                  "nalHrdParametersPresentFlag"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "nalHrd"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "nalHrd"
+            ]
+          },
+          "then": {
+            "properties": {
+              "nalHrdParametersPresentFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "nalHrdParametersPresentFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "allOf": [
+              {
+                "properties": {
+                  "complete": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "complete"
+                ]
+              },
+              {
+                "properties": {
+                  "vclHrdParametersPresentFlag": {
+                    "properties": {
+                      "value": {
+                        "const": true
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ]
+                  }
+                },
+                "required": [
+                  "vclHrdParametersPresentFlag"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "vclHrd"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "vclHrd"
+            ]
+          },
+          "then": {
+            "properties": {
+              "vclHrdParametersPresentFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "vclHrdParametersPresentFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "allOf": [
+              {
+                "properties": {
+                  "complete": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "complete"
+                ]
+              },
+              {
+                "properties": {
+                  "bitstreamRestrictionFlag": {
+                    "properties": {
+                      "value": {
+                        "const": true
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ]
+                  }
+                },
+                "required": [
+                  "bitstreamRestrictionFlag"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "motionVectorsOverPicBoundariesFlag",
+              "maxBytesPerPicDenom",
+              "maxBitsPerMbDenom",
+              "log2MaxMvLengthHorizontal",
+              "log2MaxMvLengthVertical",
+              "maxNumReorderFrames",
+              "maxDecFrameBuffering"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "motionVectorsOverPicBoundariesFlag"
+            ]
+          },
+          "then": {
+            "properties": {
+              "bitstreamRestrictionFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "bitstreamRestrictionFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "maxBytesPerPicDenom"
+            ]
+          },
+          "then": {
+            "properties": {
+              "bitstreamRestrictionFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "bitstreamRestrictionFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "maxBitsPerMbDenom"
+            ]
+          },
+          "then": {
+            "properties": {
+              "bitstreamRestrictionFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "bitstreamRestrictionFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "log2MaxMvLengthHorizontal"
+            ]
+          },
+          "then": {
+            "properties": {
+              "bitstreamRestrictionFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "bitstreamRestrictionFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "log2MaxMvLengthVertical"
+            ]
+          },
+          "then": {
+            "properties": {
+              "bitstreamRestrictionFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "bitstreamRestrictionFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "maxNumReorderFrames"
+            ]
+          },
+          "then": {
+            "properties": {
+              "bitstreamRestrictionFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "bitstreamRestrictionFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "maxDecFrameBuffering"
+            ]
+          },
+          "then": {
+            "properties": {
+              "bitstreamRestrictionFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "bitstreamRestrictionFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "allOf": [
+              {
+                "properties": {
+                  "complete": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "complete"
+                ]
+              },
+              {
+                "properties": {
+                  "aspectRatioIdc": {
+                    "properties": {
+                      "value": {
+                        "const": 255
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ]
+                  }
+                },
+                "required": [
+                  "aspectRatioIdc"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "sarWidth",
+              "sarHeight"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "sarWidth"
+            ]
+          },
+          "then": {
+            "properties": {
+              "aspectRatioIdc": {
+                "properties": {
+                  "value": {
+                    "const": 255
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "aspectRatioIdc"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "sarHeight"
+            ]
+          },
+          "then": {
+            "properties": {
+              "aspectRatioIdc": {
+                "properties": {
+                  "value": {
+                    "const": 255
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "aspectRatioIdc"
+            ]
+          }
+        },
+        {
+          "if": {
+            "allOf": [
+              {
+                "properties": {
+                  "complete": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "complete"
+                ]
+              },
+              {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "nalHrdParametersPresentFlag": {
+                        "properties": {
+                          "value": {
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "value"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "nalHrdParametersPresentFlag"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "vclHrdParametersPresentFlag": {
+                        "properties": {
+                          "value": {
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "value"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "vclHrdParametersPresentFlag"
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "lowDelayHrdFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "lowDelayHrdFlag"
+            ]
+          },
+          "then": {
+            "anyOf": [
+              {
+                "properties": {
+                  "nalHrdParametersPresentFlag": {
+                    "properties": {
+                      "value": {
+                        "const": true
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ]
+                  }
+                },
+                "required": [
+                  "nalHrdParametersPresentFlag"
+                ]
+              },
+              {
+                "properties": {
+                  "vclHrdParametersPresentFlag": {
+                    "properties": {
+                      "value": {
+                        "const": true
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ]
+                  }
+                },
+                "required": [
+                  "vclHrdParametersPresentFlag"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "uint8": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255
+    },
+    "uint24": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 16777215
+    },
+    "uint32": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "uint64": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615
+    },
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "byteOffset",
+        "bitOffset",
+        "bitLength"
+      ],
+      "properties": {
+        "byteOffset": {
+          "$ref": "#/$defs/uint64"
+        },
+        "bitOffset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7
+        },
+        "bitLength": {
+          "$ref": "#/$defs/uint32"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sizeBytes"
+      ],
+      "properties": {
+        "sizeBytes": {
+          "$ref": "#/$defs/uint64"
+        }
+      }
+    },
+    "previousTagSize": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "present",
+        "value",
+        "expected",
+        "valid"
+      ],
+      "properties": {
+        "present": {
+          "type": "boolean"
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        },
+        "value": {
+          "$ref": "#/$defs/uint32"
+        },
+        "expected": {
+          "$ref": "#/$defs/uint32"
+        },
+        "valid": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "present": {
+                "const": true
+              }
+            },
+            "required": [
+              "present"
+            ]
+          },
+          "then": {
+            "required": [
+              "span"
+            ]
+          },
+          "else": {
+            "properties": {
+              "value": {
+                "const": 0
+              },
+              "valid": {
+                "const": false
+              }
+            },
+            "not": {
+              "required": [
+                "span"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "tag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "typeCode",
+        "typeName",
+        "offset",
+        "span",
+        "headerSpan",
+        "payloadSpan",
+        "rawTypeFlags",
+        "filter",
+        "dataSize",
+        "availableDataSize",
+        "dts",
+        "streamId",
+        "payloadComplete",
+        "previousTagSize"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/uint64"
+        },
+        "typeCode": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 31
+        },
+        "typeName": {
+          "enum": [
+            "audio",
+            "video",
+            "script",
+            "unknown"
+          ]
+        },
+        "offset": {
+          "$ref": "#/$defs/uint64"
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        },
+        "headerSpan": {
+          "$ref": "#/$defs/span"
+        },
+        "payloadSpan": {
+          "$ref": "#/$defs/span"
+        },
+        "rawTypeFlags": {
+          "$ref": "#/$defs/uint8"
+        },
+        "filter": {
+          "type": "boolean"
+        },
+        "dataSize": {
+          "$ref": "#/$defs/uint24"
+        },
+        "availableDataSize": {
+          "$ref": "#/$defs/uint24"
+        },
+        "dts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "streamId": {
+          "$ref": "#/$defs/uint24"
+        },
+        "payloadComplete": {
+          "type": "boolean"
+        },
+        "previousTagSize": {
+          "$ref": "#/$defs/previousTagSize"
+        }
+      }
+    },
+    "namedField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "name",
+        "span"
+      ],
+      "properties": {
+        "value": {
+          "$ref": "#/$defs/uint8"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        }
+      }
+    },
+    "frameTypeField": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/namedField"
+        },
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "value": {
+                  "const": 1
+                },
+                "name": {
+                  "const": "keyFrame"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "const": 2
+                },
+                "name": {
+                  "const": "interFrame"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "const": 3
+                },
+                "name": {
+                  "const": "disposableInterFrame"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "const": 4
+                },
+                "name": {
+                  "const": "generatedKeyFrame"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "enum": [
+                    0,
+                    6,
+                    7,
+                    8,
+                    9,
+                    10,
+                    11,
+                    12,
+                    13,
+                    14,
+                    15
+                  ]
+                },
+                "name": {
+                  "const": "reserved"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "codecIDField": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/namedField"
+        },
+        {
+          "properties": {
+            "value": {
+              "const": 7
+            },
+            "name": {
+              "const": "AVC"
+            }
+          }
+        }
+      ]
+    },
+    "videoTagHeader": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw",
+        "span",
+        "frameType",
+        "codecId"
+      ],
+      "properties": {
+        "raw": {
+          "$ref": "#/$defs/uint8"
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        },
+        "frameType": {
+          "$ref": "#/$defs/frameTypeField"
+        },
+        "codecId": {
+          "$ref": "#/$defs/codecIDField"
+        }
+      }
+    },
+    "packetType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "name",
+        "span"
+      ],
+      "properties": {
+        "value": {
+          "$ref": "#/$defs/uint8"
+        },
+        "name": {
+          "enum": [
+            "sequenceHeader",
+            "nalu",
+            "endOfSequence",
+            "unknown"
+          ]
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "value": {
+              "const": 0
+            },
+            "name": {
+              "const": "sequenceHeader"
+            }
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "const": 1
+            },
+            "name": {
+              "const": "nalu"
+            }
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "const": 2
+            },
+            "name": {
+              "const": "endOfSequence"
+            }
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "minimum": 3
+            },
+            "name": {
+              "const": "unknown"
+            }
+          }
+        }
+      ]
+    },
+    "compositionTime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw",
+        "value",
+        "span"
+      ],
+      "properties": {
+        "raw": {
+          "$ref": "#/$defs/uint24"
+        },
+        "value": {
+          "type": "integer",
+          "minimum": -8388608,
+          "maximum": 8388607
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        }
+      }
+    },
+    "nalUnitTypeField": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/namedField"
+        },
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "value": {
+                  "const": 0
+                },
+                "name": {
+                  "const": "unspecified"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "const": 1
+                },
+                "name": {
+                  "const": "nonIDRSlice"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "const": 2
+                },
+                "name": {
+                  "const": "dataPartitionA"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "const": 3
+                },
+                "name": {
+                  "const": "dataPartitionB"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "const": 4
+                },
+                "name": {
+                  "const": "dataPartitionC"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "const": 5
+                },
+                "name": {
+                  "const": "idrSlice"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "const": 6
+                },
+                "name": {
+                  "const": "sei"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "const": 7
+                },
+                "name": {
+                  "const": "sequenceParameterSet"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "const": 8
+                },
+                "name": {
+                  "const": "pictureParameterSet"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "const": 9
+                },
+                "name": {
+                  "const": "accessUnitDelimiter"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "const": 10
+                },
+                "name": {
+                  "const": "endOfSequence"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "const": 11
+                },
+                "name": {
+                  "const": "endOfStream"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "const": 12
+                },
+                "name": {
+                  "const": "fillerData"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "const": 13
+                },
+                "name": {
+                  "const": "sequenceParameterSetExtension"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "const": 14
+                },
+                "name": {
+                  "const": "prefix"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "const": 15
+                },
+                "name": {
+                  "const": "subsetSequenceParameterSet"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "const": 16
+                },
+                "name": {
+                  "const": "depthParameterSet"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "enum": [
+                    17,
+                    18
+                  ]
+                },
+                "name": {
+                  "const": "reserved"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "const": 19
+                },
+                "name": {
+                  "const": "auxiliaryCodedSlice"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "const": 20
+                },
+                "name": {
+                  "const": "codedSliceExtension"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "const": 21
+                },
+                "name": {
+                  "const": "depthViewCodedSliceExtension"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "enum": [
+                    22,
+                    23
+                  ]
+                },
+                "name": {
+                  "const": "reserved"
+                }
+              }
+            },
+            {
+              "properties": {
+                "value": {
+                  "minimum": 24,
+                  "maximum": 31
+                },
+                "name": {
+                  "const": "unspecified"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "unsignedField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "span"
+      ],
+      "properties": {
+        "value": {
+          "$ref": "#/$defs/uint64"
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        }
+      }
+    },
+    "uint8Field": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/unsignedField"
+        },
+        {
+          "properties": {
+            "value": {
+              "maximum": 255
+            }
+          }
+        }
+      ]
+    },
+    "sixBitField": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/unsignedField"
+        },
+        {
+          "properties": {
+            "value": {
+              "maximum": 63
+            }
+          }
+        }
+      ]
+    },
+    "fiveBitField": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/unsignedField"
+        },
+        {
+          "properties": {
+            "value": {
+              "maximum": 31
+            }
+          }
+        }
+      ]
+    },
+    "threeBitField": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/unsignedField"
+        },
+        {
+          "properties": {
+            "value": {
+              "maximum": 7
+            }
+          }
+        }
+      ]
+    },
+    "twoBitField": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/unsignedField"
+        },
+        {
+          "properties": {
+            "value": {
+              "maximum": 3
+            }
+          }
+        }
+      ]
+    },
+    "booleanField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "span"
+      ],
+      "properties": {
+        "value": {
+          "type": "boolean"
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        }
+      }
+    },
+    "mappedSpan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rbspBitOffset",
+        "bitLength",
+        "sourceSpans"
+      ],
+      "properties": {
+        "rbspBitOffset": {
+          "$ref": "#/$defs/uint32"
+        },
+        "bitLength": {
+          "$ref": "#/$defs/uint32"
+        },
+        "sourceSpans": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 65536,
+          "items": {
+            "$ref": "#/$defs/span"
+          }
+        }
+      }
+    },
+    "mappedUnsignedField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "span"
+      ],
+      "properties": {
+        "value": {
+          "$ref": "#/$defs/uint32"
+        },
+        "span": {
+          "$ref": "#/$defs/mappedSpan"
+        }
+      }
+    },
+    "mappedSignedField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "span"
+      ],
+      "properties": {
+        "value": {
+          "type": "integer",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        "span": {
+          "$ref": "#/$defs/mappedSpan"
+        }
+      }
+    },
+    "mappedBooleanField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "span"
+      ],
+      "properties": {
+        "value": {
+          "type": "boolean"
+        },
+        "span": {
+          "$ref": "#/$defs/mappedSpan"
+        }
+      }
+    },
+    "rbspSourceSegment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rbspByteOffset",
+        "rbspByteLength",
+        "sourceSpan"
+      ],
+      "properties": {
+        "rbspByteOffset": {
+          "$ref": "#/$defs/uint32"
+        },
+        "rbspByteLength": {
+          "$ref": "#/$defs/uint32"
+        },
+        "sourceSpan": {
+          "$ref": "#/$defs/span"
+        }
+      }
+    },
+    "rbspView": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ebspSpan",
+        "byteLength",
+        "sourceSegments",
+        "emulationPreventionBytes"
+      ],
+      "properties": {
+        "ebspSpan": {
+          "$ref": "#/$defs/span"
+        },
+        "byteLength": {
+          "$ref": "#/$defs/uint32"
+        },
+        "sourceSegments": {
+          "type": "array",
+          "maxItems": 65536,
+          "items": {
+            "$ref": "#/$defs/rbspSourceSegment"
+          }
+        },
+        "emulationPreventionBytes": {
+          "type": "array",
+          "maxItems": 65536,
+          "items": {
+            "$ref": "#/$defs/span"
+          }
+        }
+      }
+    },
+    "nalHeader": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw",
+        "span",
+        "forbiddenZeroBit",
+        "nalRefIdc",
+        "nalUnitType",
+        "complete"
+      ],
+      "properties": {
+        "raw": {
+          "$ref": "#/$defs/uint8"
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        },
+        "forbiddenZeroBit": {
+          "$ref": "#/$defs/booleanField"
+        },
+        "nalRefIdc": {
+          "$ref": "#/$defs/twoBitField"
+        },
+        "nalUnitType": {
+          "$ref": "#/$defs/nalUnitTypeField"
+        },
+        "complete": {
+          "type": "boolean"
+        }
+      }
+    },
+    "spsHighProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "chromaFormatIdc": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "separateColourPlaneFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "bitDepthLumaMinus8": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "bitDepthChromaMinus8": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "qpPrimeYZeroTransformBypassFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "sequenceScalingMatrixPresentFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        }
+      },
+      "dependentRequired": {
+        "bitDepthLumaMinus8": [
+          "chromaFormatIdc"
+        ],
+        "bitDepthChromaMinus8": [
+          "chromaFormatIdc",
+          "bitDepthLumaMinus8"
+        ],
+        "qpPrimeYZeroTransformBypassFlag": [
+          "chromaFormatIdc",
+          "bitDepthLumaMinus8",
+          "bitDepthChromaMinus8"
+        ],
+        "sequenceScalingMatrixPresentFlag": [
+          "chromaFormatIdc",
+          "bitDepthLumaMinus8",
+          "bitDepthChromaMinus8",
+          "qpPrimeYZeroTransformBypassFlag"
+        ]
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "separateColourPlaneFlag"
+            ]
+          },
+          "then": {
+            "required": [
+              "chromaFormatIdc"
+            ],
+            "properties": {
+              "chromaFormatIdc": {
+                "properties": {
+                  "value": {
+                    "const": 3
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "chromaFormatIdc": {
+                "properties": {
+                  "value": {
+                    "const": 3
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "chromaFormatIdc",
+              "bitDepthLumaMinus8"
+            ]
+          },
+          "then": {
+            "required": [
+              "separateColourPlaneFlag"
+            ]
+          }
+        }
+      ]
+    },
+    "sequenceParameterSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rbsp",
+        "syntaxBits",
+        "remainingRbspBits",
+        "complete"
+      ],
+      "properties": {
+        "rbsp": {
+          "$ref": "#/$defs/rbspView"
+        },
+        "vui": {
+          "$ref": "#/$defs/vui"
+        },
+        "profileIdc": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "constraintSetFlags": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "reservedZero2Bits": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "levelIdc": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "sequenceParameterSetId": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "highProfile": {
+          "$ref": "#/$defs/spsHighProfile"
+        },
+        "log2MaxFrameNumMinus4": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "picOrderCntType": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "log2MaxPicOrderCntLsbMinus4": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "deltaPicOrderAlwaysZeroFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "offsetForNonRefPic": {
+          "$ref": "#/$defs/mappedSignedField"
+        },
+        "offsetForTopToBottomField": {
+          "$ref": "#/$defs/mappedSignedField"
+        },
+        "numRefFramesInPicOrderCntCycle": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "maxNumRefFrames": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "gapsInFrameNumValueAllowedFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "picWidthInMbsMinus1": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "picHeightInMapUnitsMinus1": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "frameMbsOnlyFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "mbAdaptiveFrameFieldFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "direct8x8InferenceFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "frameCroppingFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "frameCropLeftOffset": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "frameCropRightOffset": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "frameCropTopOffset": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "frameCropBottomOffset": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "vuiParametersPresentFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "chromaArrayType": {
+          "$ref": "#/$defs/uint32"
+        },
+        "cropUnitX": {
+          "$ref": "#/$defs/uint32"
+        },
+        "cropUnitY": {
+          "$ref": "#/$defs/uint32"
+        },
+        "codedWidth": {
+          "$ref": "#/$defs/uint64",
+          "minimum": 1
+        },
+        "codedHeight": {
+          "$ref": "#/$defs/uint64",
+          "minimum": 1
+        },
+        "displayWidth": {
+          "$ref": "#/$defs/uint64",
+          "minimum": 1
+        },
+        "displayHeight": {
+          "$ref": "#/$defs/uint64",
+          "minimum": 1
+        },
+        "syntaxBits": {
+          "$ref": "#/$defs/uint32"
+        },
+        "remainingRbspBits": {
+          "$ref": "#/$defs/uint32"
+        },
+        "complete": {
+          "type": "boolean"
+        }
+      },
+      "dependentRequired": {
+        "offsetForNonRefPic": [
+          "deltaPicOrderAlwaysZeroFlag"
+        ],
+        "offsetForTopToBottomField": [
+          "deltaPicOrderAlwaysZeroFlag",
+          "offsetForNonRefPic"
+        ],
+        "numRefFramesInPicOrderCntCycle": [
+          "deltaPicOrderAlwaysZeroFlag",
+          "offsetForNonRefPic",
+          "offsetForTopToBottomField"
+        ],
+        "frameCropRightOffset": [
+          "frameCropLeftOffset"
+        ],
+        "frameCropTopOffset": [
+          "frameCropLeftOffset",
+          "frameCropRightOffset"
+        ],
+        "frameCropBottomOffset": [
+          "frameCropLeftOffset",
+          "frameCropRightOffset",
+          "frameCropTopOffset"
+        ],
+        "displayWidth": [
+          "displayHeight",
+          "chromaArrayType",
+          "cropUnitX",
+          "cropUnitY",
+          "codedWidth",
+          "codedHeight"
+        ],
+        "displayHeight": [
+          "displayWidth",
+          "chromaArrayType",
+          "cropUnitX",
+          "cropUnitY",
+          "codedWidth",
+          "codedHeight"
+        ]
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "complete": {
+                "const": true
+              }
+            },
+            "required": [
+              "complete"
+            ]
+          },
+          "then": {
+            "required": [
+              "profileIdc",
+              "constraintSetFlags",
+              "reservedZero2Bits",
+              "levelIdc",
+              "sequenceParameterSetId",
+              "log2MaxFrameNumMinus4",
+              "picOrderCntType",
+              "maxNumRefFrames",
+              "gapsInFrameNumValueAllowedFlag",
+              "picWidthInMbsMinus1",
+              "picHeightInMapUnitsMinus1",
+              "frameMbsOnlyFlag",
+              "direct8x8InferenceFlag",
+              "frameCroppingFlag",
+              "vuiParametersPresentFlag",
+              "chromaArrayType",
+              "cropUnitX",
+              "cropUnitY",
+              "codedWidth",
+              "codedHeight",
+              "displayWidth",
+              "displayHeight"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "highProfile"
+            ]
+          },
+          "then": {
+            "required": [
+              "profileIdc",
+              "sequenceParameterSetId"
+            ],
+            "properties": {
+              "profileIdc": {
+                "properties": {
+                  "value": {
+                    "enum": [
+                      44,
+                      83,
+                      86,
+                      100,
+                      110,
+                      118,
+                      122,
+                      128,
+                      134,
+                      135,
+                      138,
+                      139,
+                      144,
+                      244
+                    ]
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "profileIdc": {
+                "properties": {
+                  "value": {
+                    "enum": [
+                      44,
+                      83,
+                      86,
+                      100,
+                      110,
+                      118,
+                      122,
+                      128,
+                      134,
+                      135,
+                      138,
+                      139,
+                      144,
+                      244
+                    ]
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "profileIdc",
+              "sequenceParameterSetId"
+            ]
+          },
+          "then": {
+            "required": [
+              "highProfile"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "complete": {
+                "const": true
+              },
+              "profileIdc": {
+                "properties": {
+                  "value": {
+                    "enum": [
+                      44,
+                      83,
+                      86,
+                      100,
+                      110,
+                      118,
+                      122,
+                      128,
+                      134,
+                      135,
+                      138,
+                      139,
+                      144,
+                      244
+                    ]
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "complete",
+              "profileIdc"
+            ]
+          },
+          "then": {
+            "required": [
+              "highProfile"
+            ],
+            "properties": {
+              "highProfile": {
+                "required": [
+                  "chromaFormatIdc",
+                  "bitDepthLumaMinus8",
+                  "bitDepthChromaMinus8",
+                  "qpPrimeYZeroTransformBypassFlag",
+                  "sequenceScalingMatrixPresentFlag"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "log2MaxPicOrderCntLsbMinus4"
+            ]
+          },
+          "then": {
+            "required": [
+              "picOrderCntType"
+            ],
+            "properties": {
+              "picOrderCntType": {
+                "properties": {
+                  "value": {
+                    "const": 0
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "anyOf": [
+              {
+                "required": [
+                  "deltaPicOrderAlwaysZeroFlag"
+                ]
+              },
+              {
+                "required": [
+                  "offsetForNonRefPic"
+                ]
+              },
+              {
+                "required": [
+                  "offsetForTopToBottomField"
+                ]
+              },
+              {
+                "required": [
+                  "numRefFramesInPicOrderCntCycle"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "picOrderCntType"
+            ],
+            "properties": {
+              "picOrderCntType": {
+                "properties": {
+                  "value": {
+                    "const": 1
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "picOrderCntType": {
+                "properties": {
+                  "value": {
+                    "const": 0
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "picOrderCntType"
+            ]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "deltaPicOrderAlwaysZeroFlag"
+                  ]
+                },
+                {
+                  "required": [
+                    "offsetForNonRefPic"
+                  ]
+                },
+                {
+                  "required": [
+                    "offsetForTopToBottomField"
+                  ]
+                },
+                {
+                  "required": [
+                    "numRefFramesInPicOrderCntCycle"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "picOrderCntType": {
+                "properties": {
+                  "value": {
+                    "const": 1
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "picOrderCntType"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "log2MaxPicOrderCntLsbMinus4"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "picOrderCntType": {
+                "properties": {
+                  "value": {
+                    "const": 2
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "picOrderCntType"
+            ]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "log2MaxPicOrderCntLsbMinus4"
+                  ]
+                },
+                {
+                  "required": [
+                    "deltaPicOrderAlwaysZeroFlag"
+                  ]
+                },
+                {
+                  "required": [
+                    "offsetForNonRefPic"
+                  ]
+                },
+                {
+                  "required": [
+                    "offsetForTopToBottomField"
+                  ]
+                },
+                {
+                  "required": [
+                    "numRefFramesInPicOrderCntCycle"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "picOrderCntType": {
+                "properties": {
+                  "value": {
+                    "const": 0
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "picOrderCntType",
+              "maxNumRefFrames"
+            ]
+          },
+          "then": {
+            "required": [
+              "log2MaxPicOrderCntLsbMinus4"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "picOrderCntType": {
+                "properties": {
+                  "value": {
+                    "const": 1
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "picOrderCntType",
+              "maxNumRefFrames"
+            ]
+          },
+          "then": {
+            "required": [
+              "deltaPicOrderAlwaysZeroFlag",
+              "offsetForNonRefPic",
+              "offsetForTopToBottomField",
+              "numRefFramesInPicOrderCntCycle"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "mbAdaptiveFrameFieldFlag"
+            ]
+          },
+          "then": {
+            "required": [
+              "frameMbsOnlyFlag"
+            ],
+            "properties": {
+              "frameMbsOnlyFlag": {
+                "properties": {
+                  "value": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "frameMbsOnlyFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "frameMbsOnlyFlag"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "mbAdaptiveFrameFieldFlag"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "frameMbsOnlyFlag": {
+                "properties": {
+                  "value": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "frameMbsOnlyFlag",
+              "direct8x8InferenceFlag"
+            ]
+          },
+          "then": {
+            "required": [
+              "mbAdaptiveFrameFieldFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "complete": {
+                "const": true
+              },
+              "frameMbsOnlyFlag": {
+                "properties": {
+                  "value": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "complete",
+              "frameMbsOnlyFlag"
+            ]
+          },
+          "then": {
+            "required": [
+              "mbAdaptiveFrameFieldFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "anyOf": [
+              {
+                "required": [
+                  "frameCropLeftOffset"
+                ]
+              },
+              {
+                "required": [
+                  "frameCropRightOffset"
+                ]
+              },
+              {
+                "required": [
+                  "frameCropTopOffset"
+                ]
+              },
+              {
+                "required": [
+                  "frameCropBottomOffset"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "frameCroppingFlag"
+            ],
+            "properties": {
+              "frameCroppingFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "frameCroppingFlag": {
+                "properties": {
+                  "value": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "frameCroppingFlag"
+            ]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "frameCropLeftOffset"
+                  ]
+                },
+                {
+                  "required": [
+                    "frameCropRightOffset"
+                  ]
+                },
+                {
+                  "required": [
+                    "frameCropTopOffset"
+                  ]
+                },
+                {
+                  "required": [
+                    "frameCropBottomOffset"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "frameCroppingFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "frameCroppingFlag",
+              "vuiParametersPresentFlag"
+            ]
+          },
+          "then": {
+            "required": [
+              "frameCropLeftOffset",
+              "frameCropRightOffset",
+              "frameCropTopOffset",
+              "frameCropBottomOffset"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "complete": {
+                "const": true
+              },
+              "frameCroppingFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "complete",
+              "frameCroppingFlag"
+            ]
+          },
+          "then": {
+            "required": [
+              "frameCropLeftOffset",
+              "frameCropRightOffset",
+              "frameCropTopOffset",
+              "frameCropBottomOffset"
+            ]
+          }
+        },
+        {
+          "if": {
+            "anyOf": [
+              {
+                "required": [
+                  "chromaArrayType"
+                ]
+              },
+              {
+                "required": [
+                  "cropUnitX"
+                ]
+              },
+              {
+                "required": [
+                  "cropUnitY"
+                ]
+              },
+              {
+                "required": [
+                  "codedWidth"
+                ]
+              },
+              {
+                "required": [
+                  "codedHeight"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "chromaArrayType",
+              "cropUnitX",
+              "cropUnitY",
+              "codedWidth",
+              "codedHeight"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "complete": {
+                "const": true
+              }
+            },
+            "required": [
+              "complete"
+            ]
+          },
+          "then": {
+            "required": [
+              "vui"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "vui"
+            ]
+          },
+          "then": {
+            "properties": {
+              "complete": {
+                "const": true
+              }
+            },
+            "required": [
+              "vuiParametersPresentFlag"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "vui": {
+                "properties": {
+                  "present": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "present"
+                ]
+              }
+            },
+            "required": [
+              "vui"
+            ]
+          },
+          "then": {
+            "properties": {
+              "vuiParametersPresentFlag": {
+                "properties": {
+                  "value": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "vui": {
+                "properties": {
+                  "present": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "present"
+                ]
+              }
+            },
+            "required": [
+              "vui"
+            ]
+          },
+          "then": {
+            "properties": {
+              "vuiParametersPresentFlag": {
+                "properties": {
+                  "value": {
+                    "const": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "pictureParameterSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rbsp",
+        "syntaxBits",
+        "remainingRbspBits",
+        "complete"
+      ],
+      "properties": {
+        "rbsp": {
+          "$ref": "#/$defs/rbspView"
+        },
+        "pictureParameterSetId": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "sequenceParameterSetId": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "entropyCodingModeFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "bottomFieldPicOrderInFramePresentFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "syntaxBits": {
+          "$ref": "#/$defs/uint32"
+        },
+        "remainingRbspBits": {
+          "$ref": "#/$defs/uint32"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "prefix": {
+          "$ref": "#/$defs/ppsPrefix"
+        },
+        "full": {
+          "$ref": "#/$defs/ppsFullDetails"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "complete": {
+                "const": true
+              }
+            },
+            "required": [
+              "complete"
+            ]
+          },
+          "then": {
+            "required": [
+              "pictureParameterSetId",
+              "sequenceParameterSetId",
+              "entropyCodingModeFlag",
+              "bottomFieldPicOrderInFramePresentFlag",
+              "prefix"
+            ]
+          }
+        }
+      ]
+    },
+    "nalUnit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "index",
+        "length",
+        "lengthSpan",
+        "span",
+        "summaryComplete"
+      ],
+      "properties": {
+        "index": {
+          "$ref": "#/$defs/uint32"
+        },
+        "length": {
+          "$ref": "#/$defs/uint32"
+        },
+        "lengthSpan": {
+          "$ref": "#/$defs/span"
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        },
+        "header": {
+          "$ref": "#/$defs/nalHeader"
+        },
+        "sequenceParameterSet": {
+          "$ref": "#/$defs/sequenceParameterSet"
+        },
+        "pictureParameterSet": {
+          "$ref": "#/$defs/pictureParameterSet"
+        },
+        "summaryComplete": {
+          "type": "boolean"
+        },
+        "sliceHeaderPrefix": {
+          "$ref": "#/$defs/slicePrefix"
+        },
+        "sliceHeaderFull": {
+          "$ref": "#/$defs/sliceHeaderDetails"
+        },
+        "sei": {
+          "$ref": "#/$defs/seiSequence"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "summaryComplete": {
+                "const": true
+              }
+            },
+            "required": [
+              "summaryComplete"
+            ]
+          },
+          "then": {
+            "required": [
+              "header"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "summaryComplete": {
+                "const": true
+              },
+              "header": {
+                "properties": {
+                  "nalUnitType": {
+                    "properties": {
+                      "value": {
+                        "const": 7
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ]
+                  }
+                },
+                "required": [
+                  "nalUnitType"
+                ]
+              }
+            },
+            "required": [
+              "summaryComplete",
+              "header"
+            ]
+          },
+          "then": {
+            "required": [
+              "sequenceParameterSet"
+            ],
+            "not": {
+              "required": [
+                "pictureParameterSet"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "summaryComplete": {
+                "const": true
+              },
+              "header": {
+                "properties": {
+                  "nalUnitType": {
+                    "properties": {
+                      "value": {
+                        "const": 8
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ]
+                  }
+                },
+                "required": [
+                  "nalUnitType"
+                ]
+              }
+            },
+            "required": [
+              "summaryComplete",
+              "header"
+            ]
+          },
+          "then": {
+            "required": [
+              "pictureParameterSet"
+            ],
+            "not": {
+              "required": [
+                "sequenceParameterSet"
+              ]
+            }
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "sequenceParameterSet",
+              "pictureParameterSet"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "sliceHeaderPrefix"
+            ]
+          },
+          "then": {
+            "required": [
+              "header"
+            ],
+            "properties": {
+              "header": {
+                "properties": {
+                  "nalUnitType": {
+                    "properties": {
+                      "value": {
+                        "enum": [
+                          1,
+                          5
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "summaryComplete": {
+                "const": true
+              },
+              "header": {
+                "properties": {
+                  "nalUnitType": {
+                    "properties": {
+                      "value": {
+                        "enum": [
+                          1,
+                          5
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ]
+                  }
+                },
+                "required": [
+                  "nalUnitType"
+                ]
+              }
+            },
+            "required": [
+              "summaryComplete",
+              "header"
+            ]
+          },
+          "then": {
+            "required": [
+              "sliceHeaderPrefix"
+            ],
+            "properties": {
+              "sliceHeaderPrefix": {
+                "properties": {
+                  "prefixComplete": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "summaryComplete": {
+                "const": true
+              },
+              "header": {
+                "properties": {
+                  "nalUnitType": {
+                    "properties": {
+                      "value": {
+                        "enum": [
+                          8
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ]
+                  }
+                },
+                "required": [
+                  "nalUnitType"
+                ]
+              }
+            },
+            "required": [
+              "summaryComplete",
+              "header"
+            ]
+          },
+          "then": {
+            "required": [
+              "pictureParameterSet"
+            ],
+            "properties": {
+              "pictureParameterSet": {
+                "properties": {
+                  "prefix": {
+                    "properties": {
+                      "prefixComplete": {
+                        "const": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "header": {
+                "properties": {
+                  "nalUnitType": {
+                    "properties": {
+                      "value": {
+                        "const": 5
+                      }
+                    }
+                  }
+                }
+              },
+              "sliceHeaderPrefix": {
+                "properties": {
+                  "prefixComplete": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "prefixComplete"
+                ]
+              }
+            },
+            "required": [
+              "header",
+              "sliceHeaderPrefix"
+            ]
+          },
+          "then": {
+            "properties": {
+              "sliceHeaderPrefix": {
+                "required": [
+                  "idrPicId"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "sei"
+            ],
+            "properties": {
+              "sei": {}
+            }
+          },
+          "then": {
+            "required": [
+              "header"
+            ],
+            "properties": {
+              "header": {
+                "properties": {
+                  "nalUnitType": {
+                    "properties": {
+                      "value": {
+                        "const": 6
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "sequenceParameterSet"
+                  ]
+                },
+                {
+                  "required": [
+                    "pictureParameterSet"
+                  ]
+                },
+                {
+                  "required": [
+                    "sliceHeaderPrefix"
+                  ]
+                },
+                {
+                  "required": [
+                    "sliceHeaderFull"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "summaryComplete",
+              "sei"
+            ],
+            "properties": {
+              "summaryComplete": {
+                "const": true
+              },
+              "sei": {}
+            }
+          },
+          "then": {
+            "properties": {
+              "sei": {
+                "properties": {
+                  "complete": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "highProfileExtension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sequenceParameterSetExts"
+      ],
+      "properties": {
+        "chromaFormatReserved": {
+          "$ref": "#/$defs/sixBitField"
+        },
+        "chromaFormat": {
+          "$ref": "#/$defs/twoBitField"
+        },
+        "bitDepthLumaReserved": {
+          "$ref": "#/$defs/fiveBitField"
+        },
+        "bitDepthLumaMinus8": {
+          "$ref": "#/$defs/threeBitField"
+        },
+        "bitDepthChromaReserved": {
+          "$ref": "#/$defs/fiveBitField"
+        },
+        "bitDepthChromaMinus8": {
+          "$ref": "#/$defs/threeBitField"
+        },
+        "numSequenceParameterSetExt": {
+          "$ref": "#/$defs/uint8Field"
+        },
+        "sequenceParameterSetExts": {
+          "type": "array",
+          "maxItems": 255,
+          "items": {
+            "$ref": "#/$defs/nalUnit"
+          }
+        }
+      },
+      "dependentRequired": {
+        "chromaFormatReserved": [
+          "chromaFormat"
+        ],
+        "chromaFormat": [
+          "chromaFormatReserved"
+        ],
+        "bitDepthLumaReserved": [
+          "chromaFormatReserved",
+          "chromaFormat",
+          "bitDepthLumaMinus8"
+        ],
+        "bitDepthLumaMinus8": [
+          "chromaFormatReserved",
+          "chromaFormat",
+          "bitDepthLumaReserved"
+        ],
+        "bitDepthChromaReserved": [
+          "chromaFormatReserved",
+          "chromaFormat",
+          "bitDepthLumaReserved",
+          "bitDepthLumaMinus8",
+          "bitDepthChromaMinus8"
+        ],
+        "bitDepthChromaMinus8": [
+          "chromaFormatReserved",
+          "chromaFormat",
+          "bitDepthLumaReserved",
+          "bitDepthLumaMinus8",
+          "bitDepthChromaReserved"
+        ],
+        "numSequenceParameterSetExt": [
+          "chromaFormatReserved",
+          "chromaFormat",
+          "bitDepthLumaReserved",
+          "bitDepthLumaMinus8",
+          "bitDepthChromaReserved",
+          "bitDepthChromaMinus8"
+        ]
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "sequenceParameterSetExts": {
+                "minItems": 1
+              }
+            },
+            "required": [
+              "sequenceParameterSetExts"
+            ]
+          },
+          "then": {
+            "required": [
+              "numSequenceParameterSetExt"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "numSequenceParameterSetExt": {
+                "properties": {
+                  "value": {
+                    "const": 0
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "numSequenceParameterSetExt"
+            ]
+          },
+          "then": {
+            "properties": {
+              "sequenceParameterSetExts": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "configurationRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "span",
+        "syntaxSpan",
+        "trailingSpan",
+        "bytesConsumed",
+        "framingComplete",
+        "complete",
+        "sequenceParameterSets",
+        "pictureParameterSets"
+      ],
+      "properties": {
+        "span": {
+          "$ref": "#/$defs/span"
+        },
+        "syntaxSpan": {
+          "$ref": "#/$defs/span"
+        },
+        "trailingSpan": {
+          "$ref": "#/$defs/span"
+        },
+        "bytesConsumed": {
+          "$ref": "#/$defs/uint64"
+        },
+        "framingComplete": {
+          "type": "boolean"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "configurationVersion": {
+          "$ref": "#/$defs/uint8Field"
+        },
+        "avcProfileIndication": {
+          "$ref": "#/$defs/uint8Field"
+        },
+        "profileCompatibility": {
+          "$ref": "#/$defs/uint8Field"
+        },
+        "avcLevelIndication": {
+          "$ref": "#/$defs/uint8Field"
+        },
+        "lengthSizeReserved": {
+          "$ref": "#/$defs/sixBitField"
+        },
+        "lengthSizeMinusOne": {
+          "$ref": "#/$defs/twoBitField"
+        },
+        "lengthSize": {
+          "enum": [
+            1,
+            2,
+            4
+          ]
+        },
+        "spsCountReserved": {
+          "$ref": "#/$defs/threeBitField"
+        },
+        "numSequenceParameterSets": {
+          "$ref": "#/$defs/fiveBitField"
+        },
+        "sequenceParameterSets": {
+          "type": "array",
+          "maxItems": 31,
+          "items": {
+            "$ref": "#/$defs/nalUnit"
+          }
+        },
+        "numPictureParameterSets": {
+          "$ref": "#/$defs/uint8Field"
+        },
+        "pictureParameterSets": {
+          "type": "array",
+          "maxItems": 255,
+          "items": {
+            "$ref": "#/$defs/nalUnit"
+          }
+        },
+        "highProfileExtension": {
+          "$ref": "#/$defs/highProfileExtension"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "complete": {
+                "const": true
+              }
+            },
+            "required": [
+              "complete"
+            ]
+          },
+          "then": {
+            "properties": {
+              "framingComplete": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "framingComplete": {
+                "const": true
+              }
+            },
+            "required": [
+              "framingComplete"
+            ]
+          },
+          "then": {
+            "required": [
+              "configurationVersion",
+              "avcProfileIndication",
+              "profileCompatibility",
+              "avcLevelIndication",
+              "lengthSizeReserved",
+              "lengthSizeMinusOne",
+              "spsCountReserved",
+              "numSequenceParameterSets",
+              "numPictureParameterSets"
+            ],
+            "properties": {
+              "configurationVersion": {
+                "properties": {
+                  "value": {
+                    "const": 1
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "complete": {
+                "const": true
+              }
+            },
+            "required": [
+              "complete"
+            ]
+          },
+          "then": {
+            "properties": {
+              "lengthSizeMinusOne": {
+                "properties": {
+                  "value": {
+                    "enum": [
+                      0,
+                      1,
+                      3
+                    ]
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              },
+              "highProfileExtension": {
+                "properties": {
+                  "bitDepthLumaMinus8": {
+                    "properties": {
+                      "value": {
+                        "maximum": 4
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ]
+                  },
+                  "bitDepthChromaMinus8": {
+                    "properties": {
+                      "value": {
+                        "maximum": 4
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "avcProfileIndication": {
+                "properties": {
+                  "value": {
+                    "enum": [
+                      66,
+                      77,
+                      88
+                    ]
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "avcProfileIndication"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "highProfileExtension"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "highProfileExtension"
+            ]
+          },
+          "then": {
+            "required": [
+              "avcProfileIndication"
+            ],
+            "properties": {
+              "avcProfileIndication": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "enum": [
+                        66,
+                        77,
+                        88
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "framingComplete": {
+                "const": true
+              },
+              "avcProfileIndication": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "enum": [
+                        66,
+                        77,
+                        88
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "framingComplete",
+              "avcProfileIndication"
+            ]
+          },
+          "then": {
+            "required": [
+              "highProfileExtension"
+            ],
+            "properties": {
+              "highProfileExtension": {
+                "required": [
+                  "chromaFormatReserved",
+                  "chromaFormat",
+                  "bitDepthLumaReserved",
+                  "bitDepthLumaMinus8",
+                  "bitDepthChromaReserved",
+                  "bitDepthChromaMinus8",
+                  "numSequenceParameterSetExt",
+                  "sequenceParameterSetExts"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "lengthSizeMinusOne": {
+                "properties": {
+                  "value": {
+                    "const": 0
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "lengthSizeMinusOne"
+            ]
+          },
+          "then": {
+            "properties": {
+              "lengthSize": {
+                "const": 1
+              }
+            },
+            "required": [
+              "lengthSize"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "lengthSizeMinusOne": {
+                "properties": {
+                  "value": {
+                    "const": 1
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "lengthSizeMinusOne"
+            ]
+          },
+          "then": {
+            "properties": {
+              "lengthSize": {
+                "const": 2
+              }
+            },
+            "required": [
+              "lengthSize"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "lengthSizeMinusOne": {
+                "properties": {
+                  "value": {
+                    "const": 3
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "lengthSizeMinusOne"
+            ]
+          },
+          "then": {
+            "properties": {
+              "lengthSize": {
+                "const": 4
+              }
+            },
+            "required": [
+              "lengthSize"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "lengthSizeMinusOne": {
+                "properties": {
+                  "value": {
+                    "const": 2
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            },
+            "required": [
+              "lengthSizeMinusOne"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "lengthSize"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nalUnitSequence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "span",
+        "syntaxSpan",
+        "trailingSpan",
+        "bytesConsumed",
+        "lengthSize",
+        "nalUnits",
+        "framingComplete",
+        "complete"
+      ],
+      "properties": {
+        "span": {
+          "$ref": "#/$defs/span"
+        },
+        "syntaxSpan": {
+          "$ref": "#/$defs/span"
+        },
+        "trailingSpan": {
+          "$ref": "#/$defs/span"
+        },
+        "bytesConsumed": {
+          "$ref": "#/$defs/uint64"
+        },
+        "lengthSize": {
+          "enum": [
+            1,
+            2,
+            4
+          ]
+        },
+        "nalUnits": {
+          "type": "array",
+          "maxItems": 16384,
+          "items": {
+            "$ref": "#/$defs/nalUnit"
+          }
+        },
+        "framingComplete": {
+          "type": "boolean"
+        },
+        "complete": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "complete": {
+                "const": true
+              }
+            },
+            "required": [
+              "complete"
+            ]
+          },
+          "then": {
+            "properties": {
+              "framingComplete": {
+                "const": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    "avcVideoDetail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "span",
+        "bitsConsumed",
+        "complete",
+        "parameterContext"
+      ],
+      "properties": {
+        "kind": {
+          "const": "avcVideo"
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        },
+        "bitsConsumed": {
+          "$ref": "#/$defs/uint64"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "videoTagHeader": {
+          "$ref": "#/$defs/videoTagHeader"
+        },
+        "packetType": {
+          "$ref": "#/$defs/packetType"
+        },
+        "compositionTime": {
+          "$ref": "#/$defs/compositionTime"
+        },
+        "dataSpan": {
+          "$ref": "#/$defs/span"
+        },
+        "avcDecoderConfigurationRecord": {
+          "$ref": "#/$defs/configurationRecord"
+        },
+        "nalUnitSequence": {
+          "$ref": "#/$defs/nalUnitSequence"
+        },
+        "endOfSequenceSpan": {
+          "$ref": "#/$defs/span"
+        },
+        "parameterContext": {
+          "$ref": "#/$defs/parameterContext"
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "bitsConsumed": {
+              "const": 0
+            },
+            "complete": {
+              "const": false
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "videoTagHeader"
+                ]
+              },
+              {
+                "required": [
+                  "packetType"
+                ]
+              },
+              {
+                "required": [
+                  "compositionTime"
+                ]
+              },
+              {
+                "required": [
+                  "dataSpan"
+                ]
+              },
+              {
+                "required": [
+                  "avcDecoderConfigurationRecord"
+                ]
+              },
+              {
+                "required": [
+                  "nalUnitSequence"
+                ]
+              },
+              {
+                "required": [
+                  "endOfSequenceSpan"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "videoTagHeader"
+          ],
+          "properties": {
+            "complete": {
+              "const": false
+            }
+          },
+          "oneOf": [
+            {
+              "properties": {
+                "bitsConsumed": {
+                  "const": 8
+                }
+              },
+              "not": {
+                "required": [
+                  "packetType"
+                ]
+              }
+            },
+            {
+              "properties": {
+                "bitsConsumed": {
+                  "const": 16
+                }
+              },
+              "required": [
+                "packetType"
+              ]
+            }
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "compositionTime"
+                ]
+              },
+              {
+                "required": [
+                  "dataSpan"
+                ]
+              },
+              {
+                "required": [
+                  "avcDecoderConfigurationRecord"
+                ]
+              },
+              {
+                "required": [
+                  "nalUnitSequence"
+                ]
+              },
+              {
+                "required": [
+                  "endOfSequenceSpan"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "videoTagHeader",
+            "packetType",
+            "compositionTime",
+            "dataSpan",
+            "avcDecoderConfigurationRecord"
+          ],
+          "properties": {
+            "bitsConsumed": {
+              "minimum": 40
+            },
+            "packetType": {
+              "properties": {
+                "value": {
+                  "const": 0
+                },
+                "name": {
+                  "const": "sequenceHeader"
+                }
+              }
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "nalUnitSequence"
+                ]
+              },
+              {
+                "required": [
+                  "endOfSequenceSpan"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "videoTagHeader",
+            "packetType",
+            "compositionTime",
+            "dataSpan"
+          ],
+          "properties": {
+            "bitsConsumed": {
+              "minimum": 40
+            },
+            "packetType": {
+              "properties": {
+                "value": {
+                  "const": 1
+                },
+                "name": {
+                  "const": "nalu"
+                }
+              }
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "avcDecoderConfigurationRecord"
+                ]
+              },
+              {
+                "required": [
+                  "endOfSequenceSpan"
+                ]
+              }
+            ]
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "complete": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "complete"
+                ]
+              },
+              "then": {
+                "required": [
+                  "nalUnitSequence"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "required": [
+            "videoTagHeader",
+            "packetType",
+            "compositionTime",
+            "dataSpan",
+            "endOfSequenceSpan"
+          ],
+          "properties": {
+            "bitsConsumed": {
+              "const": 40
+            },
+            "packetType": {
+              "properties": {
+                "value": {
+                  "const": 2
+                },
+                "name": {
+                  "const": "endOfSequence"
+                }
+              }
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "avcDecoderConfigurationRecord"
+                ]
+              },
+              {
+                "required": [
+                  "nalUnitSequence"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "videoTagHeader",
+            "packetType",
+            "compositionTime",
+            "dataSpan"
+          ],
+          "properties": {
+            "bitsConsumed": {
+              "const": 40
+            },
+            "complete": {
+              "const": false
+            },
+            "packetType": {
+              "properties": {
+                "value": {
+                  "minimum": 3
+                },
+                "name": {
+                  "const": "unknown"
+                }
+              }
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "avcDecoderConfigurationRecord"
+                ]
+              },
+              {
+                "required": [
+                  "nalUnitSequence"
+                ]
+              },
+              {
+                "required": [
+                  "endOfSequenceSpan"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "severity",
+        "offset",
+        "bitOffset",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "enum": [
+            "AVC_FLV_VIDEO_HEADER_TRUNCATED",
+            "AVC_FLV_FRAME_TYPE_RESERVED",
+            "AVC_FLV_FRAME_TYPE_UNEXPECTED",
+            "AVC_FLV_PACKET_TYPE_TRUNCATED",
+            "AVC_FLV_COMPOSITION_TIME_TRUNCATED",
+            "AVC_FLV_COMPOSITION_TIME_NON_ZERO",
+            "AVC_FLV_PACKET_TYPE_UNKNOWN",
+            "AVC_NAL_LENGTH_SIZE_UNAVAILABLE",
+            "AVC_FLV_END_OF_SEQUENCE_PAYLOAD_UNEXPECTED",
+            "AVC_CONFIGURATION_RECORD_HEADER_TRUNCATED",
+            "AVC_CONFIGURATION_VERSION_UNEXPECTED",
+            "AVC_RESERVED_BITS_UNEXPECTED",
+            "AVC_LENGTH_SIZE_RESERVED",
+            "AVC_CONFIGURATION_BIT_DEPTH_INVALID",
+            "AVC_PARAMETER_SET_COUNT_TRUNCATED",
+            "AVC_PARAMETER_SET_LENGTH_TRUNCATED",
+            "AVC_PARAMETER_SET_DATA_TRUNCATED",
+            "AVC_PARAMETER_SET_LIMIT_REACHED",
+            "AVC_PARAMETER_SET_TOO_LARGE",
+            "AVC_PARAMETER_SET_NAL_TYPE_UNEXPECTED",
+            "AVC_HIGH_PROFILE_EXTENSION_TRUNCATED",
+            "AVC_NAL_LENGTH_TRUNCATED",
+            "AVC_NAL_PAYLOAD_TRUNCATED",
+            "AVC_NAL_UNIT_LIMIT_REACHED",
+            "AVC_NAL_UNIT_ZERO_LENGTH",
+            "AVC_NAL_HEADER_TRUNCATED",
+            "AVC_FORBIDDEN_ZERO_BIT_SET",
+            "AVC_EMULATION_PREVENTION_INVALID",
+            "AVC_RBSP_MAPPING_LIMIT_REACHED",
+            "AVC_RBSP_SYNTAX_TRUNCATED",
+            "AVC_EXP_GOLOMB_OVERFLOW",
+            "AVC_SPS_ID_OUT_OF_RANGE",
+            "AVC_PPS_ID_OUT_OF_RANGE",
+            "AVC_PPS_REFERENCED_SPS_ID_OUT_OF_RANGE",
+            "AVC_SPS_RESERVED_BITS_UNEXPECTED",
+            "AVC_SPS_CHROMA_FORMAT_INVALID",
+            "AVC_SPS_BIT_DEPTH_INVALID",
+            "AVC_SPS_LOG2_MAX_FRAME_NUM_INVALID",
+            "AVC_SPS_LOG2_MAX_PIC_ORDER_CNT_INVALID",
+            "AVC_SPS_PIC_ORDER_CNT_TYPE_INVALID",
+            "AVC_SPS_REFERENCE_CYCLE_TOO_LARGE",
+            "AVC_SPS_CROP_INVALID",
+            "AVC_VUI_SAR_INVALID",
+            "AVC_VUI_CHROMA_LOCATION_INVALID",
+            "AVC_VUI_TIMING_INVALID",
+            "AVC_VUI_HRD_COUNT_INVALID",
+            "AVC_VUI_HRD_VALUE_INVALID",
+            "AVC_VUI_RESTRICTION_INVALID",
+            "AVC_RBSP_TRAILING_BITS_INVALID",
+            "AVC_DIAGNOSTIC_LIMIT_REACHED",
+            "AVC_PPS_SLICE_GROUPS_UNSUPPORTED",
+            "AVC_PPS_VALUE_INVALID",
+            "AVC_SLICE_VALUE_INVALID",
+            "AVC_SLICE_PARAMETER_SET_MISSING",
+            "AVC_SLICE_HEADER_BUDGET_REACHED",
+            "AVC_SEI_BYTE_LIMIT_REACHED",
+            "AVC_SEI_MESSAGE_LIMIT_REACHED",
+            "AVC_SEI_HEADER_TRUNCATED",
+            "AVC_SEI_PAYLOAD_TRUNCATED",
+            "AVC_SEI_SYNTAX_INVALID",
+            "AVC_SEI_TRAILING_BITS_INVALID"
+          ]
+        },
+        "severity": {
+          "enum": [
+            "warning",
+            "error"
+          ]
+        },
+        "offset": {
+          "$ref": "#/$defs/uint64"
+        },
+        "bitOffset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expected": {
+          "$ref": "#/$defs/uint64"
+        },
+        "actual": {
+          "$ref": "#/$defs/uint64"
+        },
+        "recoveryOffset": {
+          "$ref": "#/$defs/uint64"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "severity": {
+                "const": "error"
+              }
+            },
+            "required": [
+              "severity"
+            ]
+          },
+          "then": {
+            "required": [
+              "recoveryOffset"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "recoveryOffset"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "parameterContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "startTagId",
+        "nextTagId",
+        "selectedTagId",
+        "scannedTags",
+        "videoTags",
+        "configurations",
+        "nalPackets",
+        "bytesRead",
+        "barrierCount",
+        "spsCount",
+        "ppsCount"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "not_needed",
+            "found",
+            "missing",
+            "invalidated",
+            "budget_exhausted"
+          ]
+        },
+        "startTagId": {
+          "$ref": "#/$defs/uint64"
+        },
+        "nextTagId": {
+          "$ref": "#/$defs/uint64"
+        },
+        "selectedTagId": {
+          "$ref": "#/$defs/uint64"
+        },
+        "scannedTags": {
+          "$ref": "#/$defs/uint64"
+        },
+        "videoTags": {
+          "$ref": "#/$defs/uint64"
+        },
+        "configurations": {
+          "$ref": "#/$defs/uint64"
+        },
+        "nalPackets": {
+          "$ref": "#/$defs/uint64"
+        },
+        "bytesRead": {
+          "$ref": "#/$defs/uint64"
+        },
+        "barrierCount": {
+          "$ref": "#/$defs/uint64"
+        },
+        "spsCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32
+        },
+        "ppsCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 256
+        }
+      }
+    },
+    "ppsPrefix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rbspBitOffset",
+        "syntaxBits",
+        "remainingRbspBits",
+        "prefixComplete"
+      ],
+      "properties": {
+        "numSliceGroupsMinus1": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "numRefIdxL0DefaultActiveMinus1": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "numRefIdxL1DefaultActiveMinus1": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "weightedBipredIdc": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "weightedPredFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "deblockingFilterControlPresentFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "constrainedIntraPredFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "redundantPicCntPresentFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "picInitQpMinus26": {
+          "$ref": "#/$defs/mappedSignedField"
+        },
+        "picInitQsMinus26": {
+          "$ref": "#/$defs/mappedSignedField"
+        },
+        "chromaQpIndexOffset": {
+          "$ref": "#/$defs/mappedSignedField"
+        },
+        "rbspBitOffset": {
+          "$ref": "#/$defs/uint32"
+        },
+        "syntaxBits": {
+          "$ref": "#/$defs/uint32"
+        },
+        "remainingRbspBits": {
+          "$ref": "#/$defs/uint32"
+        },
+        "prefixComplete": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "prefixComplete": {
+                "const": true
+              }
+            },
+            "required": [
+              "prefixComplete"
+            ]
+          },
+          "then": {
+            "required": [
+              "numSliceGroupsMinus1",
+              "numRefIdxL0DefaultActiveMinus1",
+              "numRefIdxL1DefaultActiveMinus1",
+              "weightedBipredIdc",
+              "weightedPredFlag",
+              "deblockingFilterControlPresentFlag",
+              "constrainedIntraPredFlag",
+              "redundantPicCntPresentFlag",
+              "picInitQpMinus26",
+              "picInitQsMinus26",
+              "chromaQpIndexOffset",
+              "rbspBitOffset",
+              "syntaxBits",
+              "remainingRbspBits",
+              "prefixComplete"
+            ],
+            "properties": {
+              "numSliceGroupsMinus1": {
+                "properties": {
+                  "value": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 7
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "slicePrefix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rbsp",
+        "syntaxBits",
+        "bytesRead",
+        "prefixComplete"
+      ],
+      "properties": {
+        "firstMbInSlice": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "sliceType": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "pictureParameterSetId": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "colourPlaneId": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "frameNum": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "idrPicId": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "picOrderCntLsb": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "redundantPicCnt": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "fieldPicFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "bottomFieldFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "deltaPicOrderCntBottom": {
+          "$ref": "#/$defs/mappedSignedField"
+        },
+        "deltaPicOrderCnt0": {
+          "$ref": "#/$defs/mappedSignedField"
+        },
+        "deltaPicOrderCnt1": {
+          "$ref": "#/$defs/mappedSignedField"
+        },
+        "sliceTypeName": {
+          "enum": [
+            "P",
+            "B",
+            "I",
+            "SP",
+            "SI"
+          ]
+        },
+        "rbsp": {
+          "$ref": "#/$defs/rbspView"
+        },
+        "referencedSpsId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 31
+        },
+        "referencedSpsSpan": {
+          "$ref": "#/$defs/span"
+        },
+        "referencedPpsSpan": {
+          "$ref": "#/$defs/span"
+        },
+        "syntaxBits": {
+          "$ref": "#/$defs/uint32"
+        },
+        "bytesRead": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 256
+        },
+        "prefixComplete": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "prefixComplete": {
+                "const": true
+              }
+            },
+            "required": [
+              "prefixComplete"
+            ]
+          },
+          "then": {
+            "required": [
+              "firstMbInSlice",
+              "sliceType",
+              "sliceTypeName",
+              "pictureParameterSetId",
+              "frameNum",
+              "referencedSpsId",
+              "referencedSpsSpan",
+              "referencedPpsSpan"
+            ]
+          }
+        }
+      ],
+      "dependentRequired": {
+        "bottomFieldFlag": [
+          "fieldPicFlag"
+        ],
+        "referencedSpsId": [
+          "referencedSpsSpan",
+          "referencedPpsSpan"
+        ]
+      }
+    },
+    "sliceGroupRectangle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "topLeft": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "bottomRight": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        }
+      }
+    },
+    "scalingList": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "index",
+        "useDefault"
+      ],
+      "properties": {
+        "index": {
+          "$ref": "#/$defs/uint32"
+        },
+        "presentFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "deltaScales": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mappedSignedField"
+          },
+          "maxItems": 64
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/uint32"
+          },
+          "maxItems": 64
+        },
+        "useDefault": {
+          "type": "boolean"
+        }
+      }
+    },
+    "referenceListModification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "modificationOfPicNumsIdc": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "absDiffPicNumMinus1": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "longTermPicNum": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        }
+      }
+    },
+    "predictionWeight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "lumaWeightFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "chromaWeightFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "lumaWeight": {
+          "$ref": "#/$defs/mappedSignedField"
+        },
+        "lumaOffset": {
+          "$ref": "#/$defs/mappedSignedField"
+        },
+        "chromaWeight": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mappedSignedField"
+          },
+          "maxItems": 2
+        },
+        "chromaOffset": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mappedSignedField"
+          },
+          "maxItems": 2
+        }
+      }
+    },
+    "memoryManagementOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "operation": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "differenceOfPicNumsMinus1": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "longTermPicNum": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "longTermFrameIdx": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "maxLongTermFrameIdxPlus1": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        }
+      }
+    },
+    "sliceHeaderDetails": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rbsp",
+        "numRefIdxL0Active",
+        "numRefIdxL1Active",
+        "rbspBitOffset",
+        "syntaxBits",
+        "headerBits",
+        "bytesRead",
+        "complete",
+        "referenceCountsKnown"
+      ],
+      "properties": {
+        "directSpatialMvPredFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "numRefIdxActiveOverrideFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "numRefIdxL0ActiveMinus1": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "numRefIdxL1ActiveMinus1": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "numRefIdxL0Active": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32
+        },
+        "numRefIdxL1Active": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32
+        },
+        "refPicListModificationFlagL0": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "refPicListModificationFlagL1": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "refPicListModificationsL0": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/referenceListModification"
+          },
+          "maxItems": 64
+        },
+        "refPicListModificationsL1": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/referenceListModification"
+          },
+          "maxItems": 64
+        },
+        "lumaLog2WeightDenom": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "chromaLog2WeightDenom": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "predictionWeightsL0": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/predictionWeight"
+          },
+          "maxItems": 32
+        },
+        "predictionWeightsL1": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/predictionWeight"
+          },
+          "maxItems": 32
+        },
+        "noOutputOfPriorPicsFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "longTermReferenceFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "adaptiveRefPicMarkingModeFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "memoryManagementOperations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/memoryManagementOperation"
+          },
+          "maxItems": 64
+        },
+        "cabacInitIdc": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "sliceQpDelta": {
+          "$ref": "#/$defs/mappedSignedField"
+        },
+        "spForSwitchFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "sliceQsDelta": {
+          "$ref": "#/$defs/mappedSignedField"
+        },
+        "disableDeblockingFilterIdc": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "sliceAlphaC0OffsetDiv2": {
+          "$ref": "#/$defs/mappedSignedField"
+        },
+        "sliceBetaOffsetDiv2": {
+          "$ref": "#/$defs/mappedSignedField"
+        },
+        "sliceGroupChangeCycle": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "rbspBitOffset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32768
+        },
+        "syntaxBits": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32768
+        },
+        "headerBits": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32768
+        },
+        "bytesRead": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "rbsp": {
+          "$ref": "#/$defs/rbspView"
+        },
+        "referenceCountsKnown": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "complete": {
+                "const": true
+              }
+            },
+            "required": [
+              "complete"
+            ]
+          },
+          "then": {
+            "required": [
+              "sliceQpDelta"
+            ]
+          }
+        }
+      ]
+    },
+    "ppsFullDetails": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "extensionPresent",
+        "syntaxBits",
+        "complete"
+      ],
+      "properties": {
+        "sliceGroupMapType": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "runLengthMinus1": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mappedUnsignedField"
+          },
+          "maxItems": 8
+        },
+        "rectangles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/sliceGroupRectangle"
+          },
+          "maxItems": 7
+        },
+        "sliceGroupChangeDirectionFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "sliceGroupChangeRateMinus1": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "picSizeInMapUnitsMinus1": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "sliceGroupId": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mappedUnsignedField"
+          },
+          "maxItems": 4096
+        },
+        "extensionPresent": {
+          "type": "boolean"
+        },
+        "transform8x8ModeFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "picScalingMatrixPresentFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "scalingLists": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/scalingList"
+          },
+          "maxItems": 12
+        },
+        "secondChromaQpIndexOffset": {
+          "$ref": "#/$defs/mappedSignedField"
+        },
+        "rbspTrailingBits": {
+          "$ref": "#/$defs/mappedSpan"
+        },
+        "syntaxBits": {
+          "$ref": "#/$defs/uint32"
+        },
+        "complete": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "complete": {
+                "const": true
+              }
+            },
+            "required": [
+              "complete"
+            ]
+          },
+          "then": {
+            "required": [
+              "rbspTrailingBits"
+            ]
+          }
+        }
+      ]
+    },
+    "seiMappedSpan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rbspBitOffset",
+        "bitLength",
+        "sourceSpans"
+      ],
+      "properties": {
+        "rbspBitOffset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 524288
+        },
+        "bitLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 524288
+        },
+        "sourceSpans": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 65536,
+          "items": {
+            "$ref": "#/$defs/span"
+          }
+        }
+      }
+    },
+    "seiHeaderField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "span"
+      ],
+      "properties": {
+        "value": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16711680
+        },
+        "span": {
+          "$ref": "#/$defs/seiMappedSpan"
+        }
+      }
+    },
+    "seiHexBytes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hex",
+        "span"
+      ],
+      "properties": {
+        "hex": {
+          "type": "string",
+          "pattern": "^(?:[0-9a-f]{2})+$",
+          "maxLength": 128
+        },
+        "span": {
+          "$ref": "#/$defs/seiMappedSpan"
+        }
+      }
+    },
+    "seiUUID": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/seiHexBytes"
+        },
+        {
+          "properties": {
+            "hex": {
+              "minLength": 32,
+              "maxLength": 32
+            },
+            "span": {
+              "properties": {
+                "bitLength": {
+                  "const": 128
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "seiUserData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dataBytes",
+        "previewTruncated"
+      ],
+      "properties": {
+        "uuid": {
+          "$ref": "#/$defs/seiUUID"
+        },
+        "dataPreview": {
+          "$ref": "#/$defs/seiHexBytes"
+        },
+        "dataBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16711664
+        },
+        "previewTruncated": {
+          "type": "boolean"
+        }
+      }
+    },
+    "seiRecoveryPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "recoveryFrameCnt": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "exactMatchFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "brokenLinkFlag": {
+          "$ref": "#/$defs/mappedBooleanField"
+        },
+        "changingSliceGroupIdc": {
+          "$ref": "#/$defs/mappedUnsignedField"
+        },
+        "payloadExtensionBits": {
+          "$ref": "#/$defs/seiMappedSpan"
+        },
+        "payloadAlignmentBits": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/seiMappedSpan"
+            },
+            {
+              "properties": {
+                "bitLength": {
+                  "maximum": 8
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "seiMessage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "index",
+        "kind",
+        "syntaxSupported",
+        "payloadComplete",
+        "complete"
+      ],
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 63
+        },
+        "payloadType": {
+          "$ref": "#/$defs/seiHeaderField"
+        },
+        "payloadSize": {
+          "$ref": "#/$defs/seiHeaderField"
+        },
+        "payloadSpan": {
+          "$ref": "#/$defs/seiMappedSpan"
+        },
+        "kind": {
+          "enum": [
+            "unknown",
+            "recoveryPoint",
+            "userDataUnregistered"
+          ]
+        },
+        "syntaxSupported": {
+          "type": "boolean"
+        },
+        "recoveryPoint": {
+          "$ref": "#/$defs/seiRecoveryPoint"
+        },
+        "userDataUnregistered": {
+          "$ref": "#/$defs/seiUserData"
+        },
+        "payloadComplete": {
+          "type": "boolean"
+        },
+        "complete": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "complete"
+            ],
+            "properties": {
+              "complete": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "payloadType",
+              "payloadSize"
+            ],
+            "properties": {
+              "payloadComplete": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "payloadComplete"
+            ],
+            "properties": {
+              "payloadComplete": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "payloadType",
+              "payloadSize"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "unknown"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "syntaxSupported": {
+                "const": false
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "recoveryPoint"
+                  ]
+                },
+                {
+                  "required": [
+                    "userDataUnregistered"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "recoveryPoint"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "payloadType"
+            ],
+            "properties": {
+              "syntaxSupported": {
+                "const": true
+              },
+              "payloadType": {
+                "properties": {
+                  "value": {
+                    "const": 6
+                  }
+                }
+              }
+            },
+            "not": {
+              "required": [
+                "userDataUnregistered"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "userDataUnregistered"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "payloadType"
+            ],
+            "properties": {
+              "syntaxSupported": {
+                "const": true
+              },
+              "payloadType": {
+                "properties": {
+                  "value": {
+                    "const": 5
+                  }
+                }
+              }
+            },
+            "not": {
+              "required": [
+                "recoveryPoint"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "kind",
+              "payloadType"
+            ],
+            "properties": {
+              "kind": {
+                "const": "unknown"
+              },
+              "payloadType": {}
+            }
+          },
+          "then": {
+            "properties": {
+              "payloadType": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "enum": [
+                        5,
+                        6
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "kind",
+              "complete"
+            ],
+            "properties": {
+              "kind": {
+                "const": "recoveryPoint"
+              },
+              "complete": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "recoveryPoint"
+            ],
+            "properties": {
+              "recoveryPoint": {
+                "required": [
+                  "recoveryFrameCnt",
+                  "exactMatchFlag",
+                  "brokenLinkFlag",
+                  "changingSliceGroupIdc"
+                ],
+                "properties": {
+                  "recoveryFrameCnt": {
+                    "properties": {
+                      "value": {
+                        "maximum": 65535
+                      }
+                    }
+                  },
+                  "changingSliceGroupIdc": {
+                    "properties": {
+                      "value": {
+                        "maximum": 2
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "kind",
+              "complete"
+            ],
+            "properties": {
+              "kind": {
+                "const": "userDataUnregistered"
+              },
+              "complete": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "userDataUnregistered"
+            ],
+            "properties": {
+              "payloadSize": {
+                "properties": {
+                  "value": {
+                    "minimum": 16
+                  }
+                }
+              },
+              "userDataUnregistered": {
+                "required": [
+                  "uuid"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "payloadComplete",
+              "payloadSize"
+            ],
+            "properties": {
+              "payloadComplete": {
+                "const": true
+              },
+              "payloadSize": {
+                "properties": {
+                  "value": {
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "payloadSpan"
+            ]
+          }
+        }
+      ]
+    },
+    "seiSequence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rbsp",
+        "messages",
+        "bytesRead",
+        "syntaxBits",
+        "framingComplete",
+        "complete"
+      ],
+      "properties": {
+        "rbsp": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/rbspView"
+            },
+            {
+              "properties": {
+                "byteLength": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 65536
+                },
+                "ebspSpan": {
+                  "properties": {
+                    "bitLength": {
+                      "maximum": 524288
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "messages": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/seiMessage"
+          }
+        },
+        "rbspTrailingBits": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/seiMappedSpan"
+            },
+            {
+              "properties": {
+                "bitLength": {
+                  "const": 8
+                }
+              }
+            }
+          ]
+        },
+        "bytesRead": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65536
+        },
+        "syntaxBits": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 524288
+        },
+        "framingComplete": {
+          "type": "boolean"
+        },
+        "complete": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "complete"
+            ],
+            "properties": {
+              "complete": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "framingComplete": {
+                "const": true
+              },
+              "messages": {
+                "items": {
+                  "properties": {
+                    "complete": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "framingComplete"
+            ],
+            "properties": {
+              "framingComplete": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "rbspTrailingBits"
+            ],
+            "properties": {
+              "messages": {
+                "minItems": 1,
+                "items": {
+                  "properties": {
+                    "payloadComplete": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

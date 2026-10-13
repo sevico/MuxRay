@@ -69,3 +69,50 @@ test('MP3 source projection rejects inconsistent byte counts, targets, overlappi
   ];
   for (const change of changes) { const d = dependencyDetail(); change(d); assert.equal(mp3Dependency(d), null); }
 });
+
+import { mp3FramePage } from '../src/codec-details.ts';
+import { mp3PageDetail } from './mp3-page-fixture.ts';
+import { summaryMP3Frame } from '../src/summary.ts';
+import type { SummaryEvent } from '../src/protocol.ts';
+
+test('MP3 page selections preserve global indices and bounded replay progress', () => {
+  const detail = mp3PageDetail(192, 255);
+  assert.equal(mp3FramePage(detail)?.next, 256);
+  assert.equal(mp3FrameSelection(detail)?.selected, 255);
+  assert.equal(mp3FrameSelection(detail)?.selectable[0], 192);
+  const preparing = mp3PageDetail(2560, 2600, 'preparing', 1024);
+  assert.equal(mp3FramePage(preparing)?.canContinue, true);
+  assert.equal(mp3FrameSelection(preparing), null);
+});
+test('MP3 pages reject shifted selections, forged continuation and expanded budgets', () => {
+  for (const [name, value] of [['pageStartIndex', '191'], ['requestedPageStart', '256'], ['pageFrames', '65'], ['pageBytesRead', '65537'],
+    ['replayPages', '17'], ['checkpointCount', '65'], ['nextPageStart', '320'], ['canContinue', 'true'], ['requestedFrameIndex', '256']]) {
+    const detail = mp3PageDetail(192, 255);
+    detail.fields.find(f => f.name === name)!.value = value;
+    assert.equal(mp3FramePage(detail), null, name);
+    assert.equal(mp3FrameSelection(detail), null, name);
+  }
+  const detail = mp3PageDetail(192, 255);
+  detail.fields.find(f => f.name === 'selectableFrameOffsets')!.value = '64,65';
+  assert.equal(mp3FrameSelection(detail), null);
+});
+test('MP3 summary frame link requires a complete canonical unique frame observation', () => {
+  const event: SummaryEvent = { id: '255', tagId: '0', offset: '106360', bitOffset: 0, dts: '0', title: 'mp3Frame', severity: '', message: '', values: [
+    { section: '', name: 'frameStatus', value: 'complete', unit: '' }, { section: '', name: 'frameIndex', value: '255', unit: 'index' },
+  ] };
+  assert.equal(summaryMP3Frame(event), 255);
+  for (const value of ['0255', '-1', '4294967296', null]) {
+    event.values[1].value = value; assert.equal(summaryMP3Frame(event), undefined);
+  }
+  event.values[1].value = '255'; event.values[0].value = 'truncated_frame'; assert.equal(summaryMP3Frame(event), undefined);
+  event.values[0].value = 'complete'; event.values.push({ ...event.values[1] }); assert.equal(summaryMP3Frame(event), undefined);
+});
+
+
+test('MP3 late-page offsets retain 64 global choices without oversized text fields', () => {
+  const detail = mp3PageDetail(2560, 2600);
+  assert.equal(detail.fields.find(f => f.name === 'selectableFrameIndices')!.value, '');
+  assert.equal(mp3FrameSelection(detail)?.selectable.length, 64);
+  assert.equal(mp3FrameSelection(detail)?.selectable.at(-1), 2623);
+  assert.equal(mp3FrameSelection(detail)?.selected, 2600);
+});

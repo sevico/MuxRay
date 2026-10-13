@@ -50,7 +50,7 @@ export interface TagTrendPage {
 }
 export interface DiagnosticPage { sessionId: string; bounds: Bounds; diagnostics: Diagnostic[] }
 export interface PageResponse<P> { apiVersion: number; page: P | null; error: Fault | null }
-export interface DetailRequest { sessionId: string; requestId: string; tagId: string; mp3FrameIndex?: number; mp3Dependency?: boolean }
+export interface DetailRequest { sessionId: string; requestId: string; tagId: string; mp3FrameIndex?: number; mp3PageStart?: number; mp3Dependency?: boolean }
 export interface DetailQuery { sessionId: string; requestId: string }
 export type AVCSearchFilter = 'mismatches' | 'unknown' | 'all';
 export interface AVCSearchRequest extends DetailQuery { start: string; filter: AVCSearchFilter }

@@ -1,0 +1,291 @@
+{
+  "schemaVersion": 5,
+  "documentType": "flv-avc-tag-detail",
+  "source": {
+    "sizeBytes": 42
+  },
+  "tag": {
+    "id": 0,
+    "typeCode": 9,
+    "typeName": "video",
+    "offset": 13,
+    "span": {
+      "byteOffset": 13,
+      "bitOffset": 0,
+      "bitLength": 200
+    },
+    "headerSpan": {
+      "byteOffset": 13,
+      "bitOffset": 0,
+      "bitLength": 88
+    },
+    "payloadSpan": {
+      "byteOffset": 24,
+      "bitOffset": 0,
+      "bitLength": 112
+    },
+    "rawTypeFlags": 9,
+    "filter": false,
+    "dataSize": 14,
+    "availableDataSize": 14,
+    "dts": 0,
+    "streamId": 0,
+    "payloadComplete": true,
+    "previousTagSize": {
+      "present": true,
+      "span": {
+        "byteOffset": 38,
+        "bitOffset": 0,
+        "bitLength": 32
+      },
+      "value": 25,
+      "expected": 25,
+      "valid": true
+    }
+  },
+  "detail": {
+    "parameterContext": {
+      "state": "not_needed",
+      "startTagId": 0,
+      "nextTagId": 0,
+      "selectedTagId": 0,
+      "scannedTags": 0,
+      "videoTags": 0,
+      "configurations": 0,
+      "nalPackets": 0,
+      "bytesRead": 0,
+      "barrierCount": 0,
+      "spsCount": 0,
+      "ppsCount": 0
+    },
+    "kind": "avcVideo",
+    "span": {
+      "byteOffset": 24,
+      "bitOffset": 0,
+      "bitLength": 112
+    },
+    "bitsConsumed": 112,
+    "complete": false,
+    "videoTagHeader": {
+      "raw": 39,
+      "span": {
+        "byteOffset": 24,
+        "bitOffset": 0,
+        "bitLength": 8
+      },
+      "frameType": {
+        "value": 2,
+        "name": "interFrame",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 0,
+          "bitLength": 4
+        }
+      },
+      "codecId": {
+        "value": 7,
+        "name": "AVC",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 4,
+          "bitLength": 4
+        }
+      }
+    },
+    "packetType": {
+      "value": 1,
+      "name": "nalu",
+      "span": {
+        "byteOffset": 25,
+        "bitOffset": 0,
+        "bitLength": 8
+      }
+    },
+    "compositionTime": {
+      "raw": 0,
+      "value": 0,
+      "span": {
+        "byteOffset": 26,
+        "bitOffset": 0,
+        "bitLength": 24
+      }
+    },
+    "dataSpan": {
+      "byteOffset": 29,
+      "bitOffset": 0,
+      "bitLength": 72
+    },
+    "nalUnitSequence": {
+      "span": {
+        "byteOffset": 29,
+        "bitOffset": 0,
+        "bitLength": 72
+      },
+      "syntaxSpan": {
+        "byteOffset": 29,
+        "bitOffset": 0,
+        "bitLength": 72
+      },
+      "trailingSpan": {
+        "byteOffset": 38,
+        "bitOffset": 0,
+        "bitLength": 0
+      },
+      "bytesConsumed": 9,
+      "lengthSize": 4,
+      "nalUnits": [
+        {
+          "sei": {
+            "rbsp": {
+              "ebspSpan": {
+                "byteOffset": 34,
+                "bitOffset": 0,
+                "bitLength": 32
+              },
+              "byteLength": 4,
+              "sourceSegments": [
+                {
+                  "rbspByteOffset": 0,
+                  "rbspByteLength": 4,
+                  "sourceSpan": {
+                    "byteOffset": 34,
+                    "bitOffset": 0,
+                    "bitLength": 32
+                  }
+                }
+              ],
+              "emulationPreventionBytes": []
+            },
+            "messages": [
+              {
+                "index": 0,
+                "payloadType": {
+                  "value": 5,
+                  "span": {
+                    "rbspBitOffset": 0,
+                    "bitLength": 8,
+                    "sourceSpans": [
+                      {
+                        "byteOffset": 34,
+                        "bitOffset": 0,
+                        "bitLength": 8
+                      }
+                    ]
+                  }
+                },
+                "payloadSize": {
+                  "value": 17,
+                  "span": {
+                    "rbspBitOffset": 8,
+                    "bitLength": 8,
+                    "sourceSpans": [
+                      {
+                        "byteOffset": 35,
+                        "bitOffset": 0,
+                        "bitLength": 8
+                      }
+                    ]
+                  }
+                },
+                "payloadSpan": {
+                  "rbspBitOffset": 16,
+                  "bitLength": 16,
+                  "sourceSpans": [
+                    {
+                      "byteOffset": 36,
+                      "bitOffset": 0,
+                      "bitLength": 16
+                    }
+                  ]
+                },
+                "kind": "userDataUnregistered",
+                "syntaxSupported": true,
+                "userDataUnregistered": {
+                  "dataBytes": 1,
+                  "previewTruncated": true
+                },
+                "payloadComplete": false,
+                "complete": false
+              }
+            ],
+            "bytesRead": 4,
+            "syntaxBits": 32,
+            "framingComplete": false,
+            "complete": false
+          },
+          "index": 0,
+          "length": 5,
+          "lengthSpan": {
+            "byteOffset": 29,
+            "bitOffset": 0,
+            "bitLength": 32
+          },
+          "span": {
+            "byteOffset": 33,
+            "bitOffset": 0,
+            "bitLength": 40
+          },
+          "header": {
+            "raw": 6,
+            "span": {
+              "byteOffset": 33,
+              "bitOffset": 0,
+              "bitLength": 8
+            },
+            "forbiddenZeroBit": {
+              "value": false,
+              "span": {
+                "byteOffset": 33,
+                "bitOffset": 0,
+                "bitLength": 1
+              }
+            },
+            "nalRefIdc": {
+              "value": 0,
+              "span": {
+                "byteOffset": 33,
+                "bitOffset": 1,
+                "bitLength": 2
+              }
+            },
+            "nalUnitType": {
+              "value": 6,
+              "name": "sei",
+              "span": {
+                "byteOffset": 33,
+                "bitOffset": 3,
+                "bitLength": 5
+              }
+            },
+            "complete": true
+          },
+          "summaryComplete": false
+        }
+      ],
+      "framingComplete": true,
+      "complete": false
+    }
+  },
+  "diagnostics": [
+    {
+      "code": "AVC_SEI_PAYLOAD_TRUNCATED",
+      "severity": "error",
+      "offset": 36,
+      "bitOffset": 0,
+      "message": "user_data_unregistered UUID is truncated",
+      "expected": 128,
+      "actual": 16,
+      "recoveryOffset": 38
+    },
+    {
+      "code": "AVC_SEI_PAYLOAD_TRUNCATED",
+      "severity": "error",
+      "offset": 38,
+      "bitOffset": 0,
+      "message": "SEI declared payload exceeds the available inspected RBSP bytes",
+      "expected": 17,
+      "actual": 2,
+      "recoveryOffset": 38
+    }
+  ]
+}

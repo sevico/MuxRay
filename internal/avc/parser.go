@@ -233,6 +233,10 @@ func (p *configurationParser) readParameterSets(count uint32, expected NALUnitTy
 		item.Header, item.HeaderPresent = header, header.Complete
 		item.SequenceParameterSet, item.PictureParameterSet = sps, pps
 		item.SummaryComplete = summaryComplete
+		if p.options.ParseSEI && err == nil && header.Complete && header.NALUnitType == NALUnitTypeSEI {
+			item.SEI, err = parseSEI(p.source, span, header, p.options, p.budget, p.diagnostics)
+			item.SummaryComplete = item.SEI.Complete
+		}
 		items = append(items, item)
 		p.parameterSets++
 		if p.options.ParseFullHeaders {
@@ -413,6 +417,10 @@ func ParseLengthPrefixedNALUnits(source io.ReaderAt, payload cursor.Span, length
 			unit.Header, unit.HeaderPresent = header, header.Complete
 			unit.SequenceParameterSet, unit.PictureParameterSet = sps, pps
 			unit.SummaryComplete = summaryComplete
+			if normalized.ParseSEI && parseErr == nil && header.Complete && header.NALUnitType == NALUnitTypeSEI {
+				unit.SEI, parseErr = parseSEI(source, span, header, normalized, budget, diagnostics)
+				unit.SummaryComplete = unit.SEI.Complete
+			}
 			if normalized.ParseSliceHeaders && parseErr == nil && header.Complete &&
 				(header.NALUnitType == NALUnitTypeNonIDRSlice || header.NALUnitType == NALUnitTypeIDRSlice) {
 				unit.SliceHeader, parseErr = parseSliceHeader(source, span, header, parameterContext, budget, diagnostics, normalized.ParseFullHeaders)

@@ -32,6 +32,8 @@ def arguments(argv=None):
     parser.add_argument('--revisit-tag', type=int, help='after replay, visit an earlier Tag then return to the selected Tag')
     parser.add_argument('--mp3-browse', action='store_true', help='select frame 2 then last selectable frame, exporting each')
     parser.add_argument('--mp3-summary', action='store_true', help='inspect all retained MP3 summary event pages and a late-frame Hex source')
+    parser.add_argument('--mp3-summary-link', action='store_true', help='open the last retained complete MP3 event in paginated frame details')
+    parser.add_argument('--mp3-page-steps', type=int, default=0, help='explicit next-frame-page actions, 0 through 64; retain each UI state')
     parser.add_argument('--field-name', help='click one uniquely named source-backed detail field and retain Hex evidence')
     parser.add_argument('--avc-evidence', action='store_true', help='click AVC declaration/NAL/slice source buttons and save each Hex selection UI')
     parser.add_argument('--avc-search', choices=['mismatches', 'unknown', 'all'], help='inspect real bounded AVC search pages and source/detail navigation')
@@ -40,7 +42,7 @@ def arguments(argv=None):
     parser.add_argument('--avc-search-gate', type=Path, help='explicit controlled overlay build directory; requires --avc-search-action')
     parser.add_argument('--avc-search-action', choices=['cancel', 'close'], help='native action while the controlled first source read is blocked')
     parser.add_argument('--mp3-history', action='store_true', help='inspect and export bounded MP3 dependency sources and click their source ranges')
-    parser.add_argument('--mp3-frame', type=int, help='select a specific inspected MP3 frame before resolving history, 0 through 63')
+    parser.add_argument('--mp3-frame', type=int, help='select a global MP3 frame index on the inspected page')
     parser.add_argument('--media-curves', choices=['audio', 'video', 'mp3', 'gopAverage', 'gopMax'], help='analyze media and load the current curve page before details')
     parser.add_argument('--max-source-bytes', type=int, default=MIN_SOURCE_LIMIT, help='16 MiB default; at most 1 GiB')
     parser.add_argument('--timeout-seconds', type=int, default=180, help='whole session deadline, 30–1800 seconds; cleanup gets up to 10 more')
@@ -73,8 +75,12 @@ def arguments(argv=None):
         validate_build(args.avc_search_gate, args.binary)
         if not args.worker and (args.avc_search_gate / 'entered.json').exists():
             parser.error('controlled gate has already run; prepare a fresh build directory')
-    if args.mp3_frame is not None and (not args.mp3_history or not 0 <= args.mp3_frame < 64):
-        parser.error('--mp3-frame requires history and must be 0 through 63')
+    if args.mp3_summary_link and not args.mp3_summary:
+        parser.error('--mp3-summary-link requires --mp3-summary')
+    if not 0 <= args.mp3_page_steps <= 64 or (args.mp3_page_steps and (args.mp3_browse or args.avc_search)):
+        parser.error('--mp3-page-steps must be 0 through 64 and cannot combine with browse or AVC search')
+    if args.mp3_frame is not None and (not (args.mp3_history or args.mp3_page_steps or args.mp3_summary_link) or not 0 <= args.mp3_frame <= 4294967295):
+        parser.error('--mp3-frame requires history, pages or summary link and must fit uint32')
     if args.avc_search and args.mp3_history:
         parser.error('AVC search and MP3 history are separate native rounds')
     args.binary = args.binary.resolve()
@@ -348,6 +354,29 @@ def run_worker(args):
         click(f'查看 Tag {tag} 详情', 'toggle button')
         wait_text('详情诊断 (')
 
+    def mp3_page_start():
+        starts = set()
+        for node, _, _, name in rows():
+            for text in (name, node_text(node)):
+                starts.update(int(m[1]) for m in re.finditer(r'MP3 帧页 (\d+) · 本页 ', text))
+        require(len(starts) == 1, 'MP3 ready page identity missing or ambiguous')
+        return starts.pop()
+
+    def move_mp3_page(target):
+        current = mp3_page_start()
+        require(target % 64 == 0 and abs(target - current) // 64 <= 64, 'MP3 page navigation budget exceeded')
+        while current != target:
+            step = 64 if target > current else -64
+            click('下一 MP3 帧页' if step > 0 else '上一 MP3 帧页')
+            current += step
+            wait_text(f'MP3 帧页 {current} · 本页 ')
+
+    def select_mp3_frame(index):
+        start = mp3_page_start()
+        require(start <= index < start + 64, 'selected MP3 frame is outside the ready page')
+        choose('MP3 帧选择', index - start + 1)
+        wait_text(f'当前展开 MP3 帧 {index} ·')
+
     def export_snapshot(name, tag=None):
         if tag is not None:
             click(f'查看 Tag {tag} 原始字节')
@@ -420,6 +449,14 @@ def run_worker(args):
                                            'uiSHA256': digest(out / 'mp3-summary-source-ui.json'),
                                            'file': 'mp3-summary-source.json', 'snapshotCheck': checked,
                                            'eventId': last['id'], 'offset': last['offset']}
+            if args.mp3_summary_link:
+                values = {item['name']: item['value'] for item in last['values'] if item['section'] == ''}
+                require(values.get('frameStatus') == 'complete' and int(last['tagId']) == args.tag, 'summary link requires a complete event in the requested Tag')
+                frame = int(values['frameIndex'])
+                click(f'从媒体事件跳转 Tag {last["tagId"]} 帧 {frame}')
+                wait_text(f'当前展开 MP3 帧 {frame} ·')
+                _, checked = export_snapshot('mp3-summary-detail.json', args.tag)
+                result['mp3SummaryDetail'] = {'file': 'mp3-summary-detail.json', 'snapshotCheck': checked, 'frameIndex': frame, 'pageStart': frame // 64 * 64}
         if args.media_curves:
             click('查看媒体曲线')
             wait_text(' · 本页 ')
@@ -535,11 +572,24 @@ def run_worker(args):
                 wait_text('详情诊断 (')
                 _, checked = export_snapshot('avc-search-selected.json', target)
                 result['avcSearchSelected'] = {'tagId': target, 'file': 'avc-search-selected.json', 'snapshotCheck': checked}
-        select_tag(args.tag)
+        if not args.mp3_summary_link:
+            select_tag(args.tag)
+        if args.mp3_page_steps:
+            start = mp3_page_start()
+            result['mp3FramePages'] = []
+            for index in range(args.mp3_page_steps):
+                target = start + 64 * (index + 1)
+                move_mp3_page(target)
+                name = f'mp3-frame-page-{target}-ui.json'
+                dump(name)
+                result['mp3FramePages'].append({'start': target, 'uiFile': name, 'uiSHA256': digest(out / name)})
+        if args.mp3_frame is not None:
+            select_mp3_frame(args.mp3_frame)
+            if args.mp3_page_steps or args.mp3_summary_link:
+                _, checked = export_snapshot('mp3-page-selected.json', args.tag)
+                result['mp3PageSelected'] = {'file': 'mp3-page-selected.json', 'snapshotCheck': checked}
         if args.mp3_history:
-            if args.mp3_frame is not None:
-                choose('MP3 帧选择', args.mp3_frame + 1)
-                wait_text(f'当前展开 MP3 帧 {args.mp3_frame} ·')
+            target_page = mp3_page_start()
             click('定位 MP3 依赖来源')
             wait_text('MP3 依赖定位完成：')
             initial, checked = export_snapshot('mp3-history-initial.json', args.tag)
@@ -567,10 +617,10 @@ def run_worker(args):
                 _, checked = export_snapshot('mp3-history-source-detail.json', int(first['tagId']))
                 result['mp3HistorySourceDetail'] = {'file': 'mp3-history-source-detail.json', 'snapshotCheck': checked,
                                                   'tagId': first['tagId'], 'frameIndex': first['frameIndex']}
-                select_tag(args.tag)
-                if args.mp3_frame is not None:
-                    choose('MP3 帧选择', args.mp3_frame + 1)
-                    wait_text(f'当前展开 MP3 帧 {args.mp3_frame} ·')
+                if int(first['tagId']) != args.tag:
+                    select_tag(args.tag)
+                move_mp3_page(target_page)
+                select_mp3_frame(args.mp3_frame if args.mp3_frame is not None else target_page)
                 click('定位 MP3 依赖来源')
                 wait_text('MP3 依赖定位完成：')
         if args.mp3_browse:
@@ -712,6 +762,10 @@ def launch(args):
         command.append('--mp3-browse')
     if args.mp3_summary:
         command.append('--mp3-summary')
+    if args.mp3_summary_link:
+        command.append('--mp3-summary-link')
+    if args.mp3_page_steps:
+        command.extend(['--mp3-page-steps', str(args.mp3_page_steps)])
     if args.field_name:
         command.extend(['--field-name', args.field_name])
     if args.avc_evidence:
@@ -734,7 +788,8 @@ def launch(args):
               'sourceBytes': args.source.stat().st_size, 'origin': 'generated' if generated else 'user-supplied',
               'tag': args.tag, 'maxSourceBytes': args.max_source_bytes, 'timeoutSeconds': args.timeout_seconds,
               'continueContext': args.continue_context, 'revisitTag': args.revisit_tag,
-              'mp3Browse': args.mp3_browse, 'mp3Summary': args.mp3_summary, 'fieldName': args.field_name, 'avcEvidence': args.avc_evidence, 'mediaCurves': args.media_curves,
+              'mp3Browse': args.mp3_browse, 'mp3Summary': args.mp3_summary, 'mp3SummaryLink': args.mp3_summary_link, 'mp3PageSteps': args.mp3_page_steps,
+              'fieldName': args.field_name, 'avcEvidence': args.avc_evidence, 'mediaCurves': args.media_curves,
               'avcSearch': args.avc_search, 'avcSearchPages': args.avc_search_pages, 'avcSearchLong': args.avc_search_long,
               'avcSearchGate': str(args.avc_search_gate) if args.avc_search_gate else None, 'avcSearchAction': args.avc_search_action, 'mp3History': args.mp3_history, 'mp3Frame': args.mp3_frame,
               'argv': command, 'environment': {key: env[key] for key in env if key.startswith('XDG_') or key in

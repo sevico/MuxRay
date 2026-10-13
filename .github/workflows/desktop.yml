@@ -236,7 +236,7 @@ jobs:
           if-no-files-found: ignore
 
   linux-full-codec:
-    name: Desktop Linux complete H264 headers and MP3 frame summary
+    name: Desktop Linux full codec headers, MP3 pages and SEI
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     defaults:
@@ -280,6 +280,12 @@ jobs:
         run: /usr/bin/python3 -B tools/codec-regression/native_full_h264.py --input-dir "$PWD/.cache/fc-ci/samples" --binary "$PWD/desktop/build/bin/MuxRay" --output-dir "$PWD/.cache/fc-ci/h264" --timeout-seconds 240 2>&1 | tee .cache/fc-ci/h264.log
       - name: Native all-frame MP3 summary, retained pages and source links
         run: /usr/bin/python3 -B tools/codec-regression/native_full_summary.py --binary "$PWD/desktop/build/bin/MuxRay" --output-dir "$PWD/.cache/fc-ci/mp3" --timeout-seconds 420 2>&1 | tee .cache/fc-ci/mp3.log
+      - name: Generate independent MP3 page and SEI expectations
+        run: /usr/bin/python3 -B tools/codec-regression/paged_codec_oracle.py --output-dir "$PWD/.cache/fc-ci/ps-samples" 2>&1 | tee .cache/fc-ci/ps-generation.log
+      - name: Validate SEI v5 and legacy CLI contracts
+        run: /usr/bin/python3 -B tools/codec-regression/verify_paged_codec.py --input-dir "$PWD/.cache/fc-ci/ps-samples" --cli "$PWD/.cache/fc-ci/muxray" --output-dir "$PWD/.cache/fc-ci/ps-cli" 2>&1 | tee .cache/fc-ci/ps-cli.log
+      - name: Eight native MP3 page, summary-link and SEI source rounds
+        run: /usr/bin/python3 -B tools/codec-regression/native_paged_codec.py --input-dir "$PWD/.cache/fc-ci/ps-samples" --binary "$PWD/desktop/build/bin/MuxRay" --output-dir "$PWD/.cache/fc-ci/ps" --timeout-seconds 600 2>&1 | tee .cache/fc-ci/ps-native.log
       - name: Verify binaries unchanged
         if: always()
         run: |

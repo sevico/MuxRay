@@ -12,7 +12,7 @@ MuxRay 是一个面向 FLV 和音视频码流的跨平台诊断工具。项目�
 - 独立 Wails/React 最小桌面壳：原生文件选择、进度、取消/关闭和有界结果页；
 - 独立文件生命周期及 AMF0/AAC/AVC/MP3 桌面详情：取消后完整前缀可读、请求恢复、字段与位级源位置；
 - 有界 Hex 桌面窗口、字段/诊断源位置联动及 Tag ID 跳转，共用保留源文件与读取任务；
-- 媒体概览 v2 桌面视图：可取消分析、精确时间/码率指标、有界事件分页与 Tag/Hex 联动；
+- 媒体概览 v3 桌面视图：可取消分析、精确时间/码率指标、有界事件分页与 Tag/Hex 联动；
 - 分页媒体曲线：每 256 个源 Tag 聚合音频/视频/MP3 码率与声明 GOP 时长，覆盖全部已索引窗口并可定位 Tag/Hex；
 - 有界 Tag 趋势窗口：原始 DTS、声明/实际载荷、同类型及 Stream ID 前驱时间差，异常观察项可定位详情与 Hex；
 - 桌面诊断快照 JSON v3 导出：冻结已有有界详情、Hex、概览、趋势、当前媒体曲线页及 H.264 检索页，通过原生保存对话框写出并恢复丢失的保存回复；
@@ -28,7 +28,7 @@ MuxRay 是一个面向 FLV 和音视频码流的跨平台诊断工具。项目�
 - 正常、边界、损坏样本的 unit、Golden 与 fuzz 测试；
 - 离线语料身份/差分校验与实际落盘大文件的扫描测量工具。
 
-AVC/MP3 详情 v2 和桌面详情增加了 SPS VUI、Tag 内 MP3 多帧边界、Xing/Info/VBRI 声明及头部/side-info CRC 检查。AVC 详情 v3 和桌面进一步支持 PPS 必要字段、I/P/B slice 头前缀、参数集来源与长文件分段上下文复用；MP3 v3 增加 side-info 字段及同 Tag 主数据回溯窗口分析。完整 slice 头、图像解码、MP3 主数据解码/bit-reservoir 重建、分页帧级曲线和实时 RTMP/HTTP-FLV 仍未实现。
+AVC/MP3 详情 v2 和桌面详情增加了 SPS VUI、Tag 内 MP3 多帧边界、Xing/Info/VBRI 声明及头部/side-info CRC 检查。AVC 详情 v3 和桌面进一步支持 PPS 必要字段、I/P/B slice 头前缀、参数集来源与长文件分段上下文复用；MP3 v3 增加 side-info 字段及同 Tag 主数据回溯窗口分析。AVC v4 已支持普通 NAL 1/5 的完整 slice 头，v5 增加 SEI 消息解析；桌面 MP3 详情支持分页与汇总帧联动。图像解码、MP3 主数据解码/bit-reservoir 重建、SEI picture timing/HRD 时序求值、分页帧级曲线和实时 RTMP/HTTP-FLV 仍未实现。
 
 当前媒体曲线采用源 Tag 窗口，不是解码帧或固定时间桶。完成媒体概览后，每页按需
 读取 64 点；未知时长不补零，最后未闭合区间不猜时长。口径与边界见
@@ -46,9 +46,9 @@ go test -race ./...
 go run ./cmd/muxray inspect sample.flv
 go run ./cmd/muxray tags --start 1024 --count 256 --pretty sample.flv
 go run ./cmd/muxray summary --pretty sample.flv
-go run ./cmd/muxray summary --schema-version 2 --pretty sample.flv
+go run ./cmd/muxray summary --schema-version 3 --pretty sample.flv
 go run ./cmd/muxray detail --schema-version 2 --tag 1 --pretty sample.flv
-go run ./cmd/muxray detail --schema-version 3 --tag 2 --pretty sample.flv
+go run ./cmd/muxray detail --schema-version 5 --tag 2 --pretty sample.flv
 go run ./cmd/muxray detail --tag 0 --pretty sample.flv
 ```
 
@@ -58,7 +58,7 @@ go run ./cmd/muxray detail --tag 0 --pretty sample.flv
 
 `summary` 的退出码为：`0` 表示成功且没有 diagnostics 状态（不影响完整性的 warning 可以共存）；`2` 表示扫描或分析不完整/有 error，或 unsupported、filtered 等 warning 使摘要无法完整分类，此时仍会先输出 JSON；`1` 表示打开、读取、分析或写出等运行失败；`64` 表示参数或用法错误。
 
-`summary --schema-version 2` 显式启用 AAC/AVC/MP3 汇总，新增 `audioCodecs` 和 `mp3` 统计。MP3 每个 Tag 仅读取首帧头；参数变化与声明码率变化分别计数，编码切换、损坏或参数变化会中断相应码率覆盖区间。Free-format 可参与 DTS 和区间码率统计，但不输出无法推导的声明码率。`--max-mp3-header-events` 限制保留的事件前缀（默认 256，最多 65,536），超出后继续准确计数；此参数仅适用于 v2。默认版本仍为 1。完整口径与示例见 [`media-summary-v2.md`](docs/media-summary-v2.md) 和 [`ADR-007`](docs/decisions/007-mp3-media-summary-v2.md)。
+`summary --schema-version 2` 显式启用 AAC/AVC/MP3 汇总，新增 `audioCodecs` 和 `mp3` 统计。MP3 每个 Tag 仅读取首帧头；参数变化与声明码率变化分别计数，编码切换、损坏或参数变化会中断相应码率覆盖区间。Free-format 可参与 DTS 和区间码率统计，但不输出无法推导的声明码率。`--max-mp3-header-events` 限制保留的事件前缀（默认 256，最多 65,536），超出后继续准确计数；此参数适用于 v2/v3。默认版本仍为 1。完整口径与示例见 [`media-summary-v2.md`](docs/media-summary-v2.md) 和 [`ADR-007`](docs/decisions/007-mp3-media-summary-v2.md)。
 
 `detail --tag <id>` 在容器索引完整时，按 Tag 类型分发到对应的有界解析器，不改变默认扫描结果，也不会把所有 payload 或递归对象树保留在内存。ScriptData、AAC Audio、AVC Video 与 MP3 Audio 分别使用 [`flv-tag-detail-v1.schema.json`](docs/schemas/flv-tag-detail-v1.schema.json)、[`flv-aac-tag-detail-v1.schema.json`](docs/schemas/flv-aac-tag-detail-v1.schema.json)、[`flv-avc-tag-detail-v1.schema.json`](docs/schemas/flv-avc-tag-detail-v1.schema.json) 和 [`flv-mp3-tag-detail-v1.schema.json`](docs/schemas/flv-mp3-tag-detail-v1.schema.json)，由 `documentType` 区分，现有 AMF0/AAC/AVC v1 输出保持不变。AAC sequence header 会解析 AudioSpecificConfig，raw AAC 只报告源 Span。AVC sequence header 会解析 avcC 与 SPS/PPS 基础摘要；raw NALU 的长度字段宽度由 `--avc-nal-length-size 1|2|4` 明确指定，或在默认值 0 时从最近的有效 sequence header 自动取得，不会猜测四字节宽度。MP3 第一阶段仅解析 `SoundFormat=2` 的首个固定帧头，余下数据只报告源 Span；free-format 会保留完整详情但不虚构码率或帧长。
 
@@ -66,9 +66,13 @@ go run ./cmd/muxray detail --tag 0 --pretty sample.flv
 
 `detail --schema-version 3` 的 AVC 结果使用独立的 [AVC v3 schema](docs/schemas/flv-avc-tag-detail-v3.schema.json)。PPS 解析到 `redundant_pic_cnt_present_flag`，slice 头前缀解析到 `redundant_pic_cnt`，显示 I/P/B 类型、帧号、条件 POC 字段和原始 SPS/PPS 引用。每个 slice 最多读取 256 字节，每包累计 64 KiB；上下文从来源配置分段顺序回放，每段最多 8,192 个 Tag / 1 MiB 实际读取，CLI 自动推进最多 128 段，桌面用“继续准备参数”推进并复用最多 8 个检查点。参数集缺失、失效或预算不足时保留已知字段，不沿用旧配置；NAL 长度查找仍独立有效。FMO 明确报告不支持，前缀完整不表示完整头部或图像可解码。详见 [ADR-024](docs/decisions/024-bounded-pps-slice-prefix.md)。
 
-`detail --schema-version 3` 也支持 [MP3 v3 schema](docs/schemas/flv-mp3-tag-detail-v3.schema.json)：解析 MPEG-1/2/2.5 单双声道 side-info，保留每个字段的原始 bit 位置，区分本 Tag 内回溯、需要 Tag 之前数据及未知依赖。它检查主数据槽位的长度关系，不解码 Huffman 或重建 reservoir；缺少 Tag 前历史不算损坏。桌面默认展开前两帧，也可在同一 64 帧 / 1 MiB 检查范围内选择完整边界的帧，只展开所选 side-info，并保留同 Tag 前序依赖历史及省略提示；CLI 保留全部已检查帧。详见 [ADR-025](docs/decisions/025-avc-checkpoints-mp3-side-info.md) 与 [ADR-026](docs/decisions/026-desktop-codec-evidence-snapshot-v2.md)。
+`detail --schema-version 3` 也支持 [MP3 v3 schema](docs/schemas/flv-mp3-tag-detail-v3.schema.json)：解析 MPEG-1/2/2.5 单双声道 side-info，保留每个字段的原始 bit 位置，区分本 Tag 内回溯、需要 Tag 之前数据及未知依赖。它检查主数据槽位的长度关系，不解码 Huffman 或重建 reservoir；缺少 Tag 前历史不算损坏。CLI 保留至多 64 帧 / 1 MiB 检查范围内的 side-info；桌面逐页检查，每页保留前两帧预览或展开所选帧，并保留跨页前序依赖历史及省略提示。详见 [ADR-025](docs/decisions/025-avc-checkpoints-mp3-side-info.md) 与 [ADR-026](docs/decisions/026-desktop-codec-evidence-snapshot-v2.md)。
 
 `detail --schema-version 4` 支持 AVC 普通 NAL 1/5 的完整 slice 头，包括参考列表修改、加权预测、MMCO、CABAC/QP/QS 与去块滤波字段；PPS 支持有界 FMO 0–6、可选缩放矩阵和尾位。桌面默认使用此深度，字段可定位原始 bit。`summary --schema-version 3` 顺序汇总所有已索引 MP3 帧，提供完整帧数、样本数、精确分数时长、逐帧参数/码率变化和未解析字节；默认检查最多 100 万帧头、独立保留 256 条事件。超限、缺失上下文和损坏均保留部分状态，不代表图像或音频可解码。旧 CLI 版本保持兼容；边界见 [ADR-029](docs/decisions/029-full-codec-headers-and-frame-summary.md)。
+
+`detail --schema-version 5` 使用独立的 [AVC v5 schema](docs/schemas/flv-avc-tag-detail-v5.schema.json)，解析 SEI 消息的类型、声明长度、恢复点和 UUID 用户数据（最多 64 字节数据预览）。未知消息保留源范围；跨防竞争字节的字段保留分段映射。每 NAL 最多读取 64 KiB / 保留 64 消息，每包累计 256 KiB / 256 消息；参数上下文回放不解析 SEI。恢复点仅为声明，不保证能独立解码。
+
+桌面 **MP3 分页详情**每页最多 64 帧 / 1 MiB 覆盖 / 64 KiB 实际读取，支持上一页、下一页及汇总完整帧记录直接定位。帧号与位位置保持 Tag 内原始值；远页每次最多推进 16 页，并可显式继续，文档最多缓存 64 个紧凑检查点。MP3 逐帧汇总仍独立保留 256 条事件，详情可以继续查看更晚的帧。源变化、取消或过期请求不能提交检查点。详见 [ADR-030](docs/decisions/030-mp3-frame-pages-and-sei.md)。
 
 桌面 H.264 详情对照所选 Tag 的 FLV 关键帧声明、已观察 IDR NAL 和 slice 类型集合，分别说明 NAL 头与 slice 类型覆盖，并可定位原始声明和代表证据。I slice 不等于 IDR，多 slice 不代表多个完整图像；覆盖不全时不会把未观察到当作不存在。此对照复用已有解析结果，不增加源读取，也不改变 Summary 按声明统计的 GOP。
 

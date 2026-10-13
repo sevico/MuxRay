@@ -132,3 +132,29 @@ test('mismatched page source_changed error cannot invalidate the active session'
   await controller.open(); await settle(); controller.startSummary(); await settle();
   assert.equal(controller.getSnapshot().sourceChanged, false); assert.notEqual(controller.getSnapshot().summary, null); assert.equal(controller.getSnapshot().summaryPageError, 'invalid_response');
 });
+
+import { mp3PageDetail } from './mp3-page-fixture.ts';
+import type { DetailRequest } from '../src/protocol.ts';
+
+test('complete MP3 summary events open the original frame on its page without rerunning summary', async () => {
+  const starts: DetailRequest[] = [];
+  const { controller, reads } = setup({
+    summaryEvents: async request => {
+      const response = summaryPage(request);
+      const event = response.page!.events[0];
+      event.title = 'mp3Frame';
+      event.values = [{ section: '', name: 'frameIndex', value: '255', unit: 'index' }, { section: '', name: 'frameStatus', value: 'complete', unit: '' }];
+      return response;
+    },
+    startDetail: async request => {
+      starts.push(request);
+      return { apiVersion: 1, ...request, state: 'ready', error: null, detail: mp3PageDetail(request.mp3PageStart, request.mp3FrameIndex) };
+    },
+  });
+  await controller.open(); await settle(); controller.startSummary(); await settle();
+  const retained = controller.getSnapshot().summary;
+  controller.locateSummaryEvent(controller.getSnapshot().summaryPage!.events[0], 'tag'); await settle();
+  assert.equal(starts[0].tagId, '105'); assert.equal(starts[0].mp3FrameIndex, 255); assert.equal(starts[0].mp3PageStart, 192);
+  assert.equal(controller.getSnapshot().detailError, null); assert.equal(controller.getSnapshot().summary, retained);
+  assert.equal(reads.filter(r => r.kind === 'summary').length, 1); controller.dispose();
+});

@@ -89,7 +89,7 @@ func runDetailWithSource(ctx context.Context, args []string, stdout, stderr io.W
 	flags := flag.NewFlagSet("muxray detail", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	pretty := flags.Bool("pretty", false, "indent JSON output")
-	schemaVersion := flags.Uint("schema-version", 1, "detail schema version (1: original; 2: AVC VUI/MP3 frames; 3: AVC PPS/slice prefixes or MP3 side info; 4: AVC full ordinary headers)")
+	schemaVersion := flags.Uint("schema-version", 1, "detail schema version (1: original; 2: AVC VUI/MP3 frames; 3: AVC PPS/slice prefixes or MP3 side info; 4: AVC full ordinary headers; 5: AVC SEI messages)")
 	tagID := flags.Uint64("tag", ^uint64(0), "zero-based tag ID to parse (required)")
 	maxTags := flags.Uint64("max-tags", 0, fmt.Sprintf("maximum tags to index (0 uses %d; hard maximum %d)", flv.DefaultMaxTags, flv.HardMaxTags))
 	maxDiagnostics := flags.Uint64("max-diagnostics", 0, fmt.Sprintf("maximum scan diagnostics to retain (0 uses %d; range %d-%d)", flv.DefaultMaxDiagnostics, flv.MinDiagnostics, flv.HardMaxDiagnostics))
@@ -122,8 +122,8 @@ func runDetailWithSource(ctx context.Context, args []string, stdout, stderr io.W
 		flags.Usage()
 		return exitUsage
 	}
-	if *schemaVersion != 1 && *schemaVersion != 2 && *schemaVersion != 3 && *schemaVersion != 4 {
-		_, _ = fmt.Fprintln(stderr, "muxray: --schema-version must be 1, 2, 3 or 4")
+	if *schemaVersion < 1 || *schemaVersion > 5 {
+		_, _ = fmt.Fprintln(stderr, "muxray: --schema-version must be 1, 2, 3, 4 or 5")
 		return exitUsage
 	}
 	if *tagID >= flv.HardMaxTags {
@@ -229,7 +229,7 @@ func runDetailWithSource(ctx context.Context, args []string, stdout, stderr io.W
 		}
 		framing, resolveErr := avccontext.ResolveIndexed(ctx, source, tag, lookup, avcIndex, avcOptions, avccontext.Limits{})
 		if resolveErr == nil {
-			avcOptions.AVC.ParseFullHeaders = *schemaVersion == 4
+			avcOptions.AVC.ParseFullHeaders = *schemaVersion >= 4
 			parameters, resolveErr = resolveAVCParameterSegments(ctx, source, tag, lookup, framing, avcOptions)
 		}
 		if resolveErr != nil {
@@ -252,7 +252,8 @@ func runDetailWithSource(ctx context.Context, args []string, stdout, stderr io.W
 	avcOptions.AVC.ParseVUI = *schemaVersion >= 2
 	avcOptions.AVC.ParsePPS = *schemaVersion >= 3
 	avcOptions.AVC.ParseSliceHeaders = *schemaVersion >= 3
-	avcOptions.AVC.ParseFullHeaders = *schemaVersion == 4
+	avcOptions.AVC.ParseFullHeaders = *schemaVersion >= 4
+	avcOptions.AVC.ParseSEI = *schemaVersion == 5
 	avcOptions.AVC.ParameterSets = parameters.Context
 	mp3Options.InspectFrames = *schemaVersion >= 2
 	mp3Options.InspectSideInfo = *schemaVersion == 3
@@ -265,7 +266,9 @@ func runDetailWithSource(ctx context.Context, args []string, stdout, stderr io.W
 		return exitFailure
 	}
 	var document report.ParsedTagDetailDocument
-	if *schemaVersion == 4 {
+	if *schemaVersion == 5 {
+		document, err = report.NewTagDetailV5(uint64(info.Size()), tag, detail, parameters)
+	} else if *schemaVersion == 4 {
 		document, err = report.NewTagDetailV4(uint64(info.Size()), tag, detail, parameters)
 	} else if *schemaVersion == 3 {
 		document, err = report.NewTagDetailV3(uint64(info.Size()), tag, detail, parameters)
@@ -276,7 +279,7 @@ func runDetailWithSource(ctx context.Context, args []string, stdout, stderr io.W
 	}
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "muxray: map tag %d detail report: %v\n", *tagID, err)
-		if errors.Is(err, report.ErrDetailV2Unsupported) || errors.Is(err, report.ErrDetailV3Unsupported) || errors.Is(err, report.ErrDetailV4Unsupported) {
+		if errors.Is(err, report.ErrDetailV2Unsupported) || errors.Is(err, report.ErrDetailV3Unsupported) || errors.Is(err, report.ErrDetailV4Unsupported) || errors.Is(err, report.ErrDetailV5Unsupported) {
 			return exitUsage
 		}
 		return exitFailure

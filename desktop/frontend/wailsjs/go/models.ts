@@ -182,6 +182,7 @@ export namespace desktop {
 	    requestId: string;
 	    tagId: string;
 	    mp3FrameIndex?: number;
+	    mp3PageStart?: number;
 	    mp3Dependency?: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -194,6 +195,7 @@ export namespace desktop {
 	        this.requestId = source["requestId"];
 	        this.tagId = source["tagId"];
 	        this.mp3FrameIndex = source["mp3FrameIndex"];
+	        this.mp3PageStart = source["mp3PageStart"];
 	        this.mp3Dependency = source["mp3Dependency"];
 	    }
 	}

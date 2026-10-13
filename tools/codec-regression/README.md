@@ -364,3 +364,39 @@ event status/order, source spans and rates with the independent oracle.
 Saved results include input, executable, schema and report hashes. These new
 contract checks complement the baseline v1/v2/v3 codec suite and the native UI
 rounds above; run the baseline separately when checking old export contracts.
+
+## MP3 frame pages and AVC SEI v5
+
+`paged_codec_oracle.py` authors five MP3 and thirteen SEI structural inputs with
+independent raw-byte/bit expectations. It requires no downloaded media or
+encoder. MP3 includes a 3,000-frame Tag exceeding 1 MiB, later parameter changes,
+physical dependency windows, split/video-interleaved Tags and an AAC barrier.
+SEI covers recovery points, UUID data/preview, unknown and extended type/size,
+emulation prevention, truncation, syntax ranges and per-NAL/packet budgets.
+
+```sh
+python3 -B tools/codec-regression/paged_codec_oracle.py \
+  --output-dir "$PWD/.cache/ps-samples"
+GOTOOLCHAIN=go1.27.0 go build -trimpath -o "$PWD/.cache/ps-cli" ./cmd/muxray
+python3 -B tools/codec-regression/verify_paged_codec.py \
+  --input-dir "$PWD/.cache/ps-samples" --cli "$PWD/.cache/ps-cli" \
+  --output-dir "$PWD/.cache/ps-cli-check"
+/usr/bin/python3 -B tools/codec-regression/native_paged_codec.py \
+  --input-dir "$PWD/.cache/ps-samples" --binary "$PWD/desktop/build/bin/MuxRay" \
+  --output-dir "$PWD/.cache/ps-native" --timeout-seconds 600
+```
+
+The CLI checker validates opt-in AVC v5 schemas, values, source mapping and
+legacy versions. MP3 CLI versions 1–3 keep their existing contract; pagination
+is checked through document tests and real desktop snapshots. Eight native
+rounds check summary frame 255 → page 192, 37 further page transitions → frame
+2600 on page 2560, same-Tag/cross-Tag dependency source frames and Hex, SEI
+recovery/UUID source segments and truncated/budget-limited reports. Each page
+transition retains UI evidence; final snapshots are verified against the
+independent source expectations. `--case` can select one native case for a
+focused rerun. Failed output directories are preserved; use a fresh, short
+absolute output path for each run because D-Bus socket paths have a size limit.
+
+All native rounds use the shared isolated Linux helper and verify source/binary
+hashes, exported snapshots, source descriptor release and normal process exit.
+They do not validate audio/video decoding or Windows/macOS native behavior.

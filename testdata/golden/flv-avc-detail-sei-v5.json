@@ -1,0 +1,470 @@
+{
+  "schemaVersion": 5,
+  "documentType": "flv-avc-tag-detail",
+  "source": {
+    "sizeBytes": 65
+  },
+  "tag": {
+    "id": 0,
+    "typeCode": 9,
+    "typeName": "video",
+    "offset": 13,
+    "span": {
+      "byteOffset": 13,
+      "bitOffset": 0,
+      "bitLength": 384
+    },
+    "headerSpan": {
+      "byteOffset": 13,
+      "bitOffset": 0,
+      "bitLength": 88
+    },
+    "payloadSpan": {
+      "byteOffset": 24,
+      "bitOffset": 0,
+      "bitLength": 296
+    },
+    "rawTypeFlags": 9,
+    "filter": false,
+    "dataSize": 37,
+    "availableDataSize": 37,
+    "dts": 0,
+    "streamId": 0,
+    "payloadComplete": true,
+    "previousTagSize": {
+      "present": true,
+      "span": {
+        "byteOffset": 61,
+        "bitOffset": 0,
+        "bitLength": 32
+      },
+      "value": 48,
+      "expected": 48,
+      "valid": true
+    }
+  },
+  "detail": {
+    "parameterContext": {
+      "state": "not_needed",
+      "startTagId": 0,
+      "nextTagId": 0,
+      "selectedTagId": 0,
+      "scannedTags": 0,
+      "videoTags": 0,
+      "configurations": 0,
+      "nalPackets": 0,
+      "bytesRead": 0,
+      "barrierCount": 0,
+      "spsCount": 0,
+      "ppsCount": 0
+    },
+    "kind": "avcVideo",
+    "span": {
+      "byteOffset": 24,
+      "bitOffset": 0,
+      "bitLength": 296
+    },
+    "bitsConsumed": 296,
+    "complete": true,
+    "videoTagHeader": {
+      "raw": 39,
+      "span": {
+        "byteOffset": 24,
+        "bitOffset": 0,
+        "bitLength": 8
+      },
+      "frameType": {
+        "value": 2,
+        "name": "interFrame",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 0,
+          "bitLength": 4
+        }
+      },
+      "codecId": {
+        "value": 7,
+        "name": "AVC",
+        "span": {
+          "byteOffset": 24,
+          "bitOffset": 4,
+          "bitLength": 4
+        }
+      }
+    },
+    "packetType": {
+      "value": 1,
+      "name": "nalu",
+      "span": {
+        "byteOffset": 25,
+        "bitOffset": 0,
+        "bitLength": 8
+      }
+    },
+    "compositionTime": {
+      "raw": 0,
+      "value": 0,
+      "span": {
+        "byteOffset": 26,
+        "bitOffset": 0,
+        "bitLength": 24
+      }
+    },
+    "dataSpan": {
+      "byteOffset": 29,
+      "bitOffset": 0,
+      "bitLength": 256
+    },
+    "nalUnitSequence": {
+      "span": {
+        "byteOffset": 29,
+        "bitOffset": 0,
+        "bitLength": 256
+      },
+      "syntaxSpan": {
+        "byteOffset": 29,
+        "bitOffset": 0,
+        "bitLength": 256
+      },
+      "trailingSpan": {
+        "byteOffset": 61,
+        "bitOffset": 0,
+        "bitLength": 0
+      },
+      "bytesConsumed": 32,
+      "lengthSize": 4,
+      "nalUnits": [
+        {
+          "sei": {
+            "rbsp": {
+              "ebspSpan": {
+                "byteOffset": 34,
+                "bitOffset": 0,
+                "bitLength": 216
+              },
+              "byteLength": 27,
+              "sourceSegments": [
+                {
+                  "rbspByteOffset": 0,
+                  "rbspByteLength": 27,
+                  "sourceSpan": {
+                    "byteOffset": 34,
+                    "bitOffset": 0,
+                    "bitLength": 216
+                  }
+                }
+              ],
+              "emulationPreventionBytes": []
+            },
+            "messages": [
+              {
+                "index": 0,
+                "payloadType": {
+                  "value": 6,
+                  "span": {
+                    "rbspBitOffset": 0,
+                    "bitLength": 8,
+                    "sourceSpans": [
+                      {
+                        "byteOffset": 34,
+                        "bitOffset": 0,
+                        "bitLength": 8
+                      }
+                    ]
+                  }
+                },
+                "payloadSize": {
+                  "value": 1,
+                  "span": {
+                    "rbspBitOffset": 8,
+                    "bitLength": 8,
+                    "sourceSpans": [
+                      {
+                        "byteOffset": 35,
+                        "bitOffset": 0,
+                        "bitLength": 8
+                      }
+                    ]
+                  }
+                },
+                "payloadSpan": {
+                  "rbspBitOffset": 16,
+                  "bitLength": 8,
+                  "sourceSpans": [
+                    {
+                      "byteOffset": 36,
+                      "bitOffset": 0,
+                      "bitLength": 8
+                    }
+                  ]
+                },
+                "kind": "recoveryPoint",
+                "syntaxSupported": true,
+                "recoveryPoint": {
+                  "recoveryFrameCnt": {
+                    "value": 0,
+                    "span": {
+                      "rbspBitOffset": 16,
+                      "bitLength": 1,
+                      "sourceSpans": [
+                        {
+                          "byteOffset": 36,
+                          "bitOffset": 0,
+                          "bitLength": 1
+                        }
+                      ]
+                    }
+                  },
+                  "exactMatchFlag": {
+                    "value": true,
+                    "span": {
+                      "rbspBitOffset": 17,
+                      "bitLength": 1,
+                      "sourceSpans": [
+                        {
+                          "byteOffset": 36,
+                          "bitOffset": 1,
+                          "bitLength": 1
+                        }
+                      ]
+                    }
+                  },
+                  "brokenLinkFlag": {
+                    "value": false,
+                    "span": {
+                      "rbspBitOffset": 18,
+                      "bitLength": 1,
+                      "sourceSpans": [
+                        {
+                          "byteOffset": 36,
+                          "bitOffset": 2,
+                          "bitLength": 1
+                        }
+                      ]
+                    }
+                  },
+                  "changingSliceGroupIdc": {
+                    "value": 2,
+                    "span": {
+                      "rbspBitOffset": 19,
+                      "bitLength": 2,
+                      "sourceSpans": [
+                        {
+                          "byteOffset": 36,
+                          "bitOffset": 3,
+                          "bitLength": 2
+                        }
+                      ]
+                    }
+                  },
+                  "payloadAlignmentBits": {
+                    "rbspBitOffset": 21,
+                    "bitLength": 3,
+                    "sourceSpans": [
+                      {
+                        "byteOffset": 36,
+                        "bitOffset": 5,
+                        "bitLength": 3
+                      }
+                    ]
+                  }
+                },
+                "payloadComplete": true,
+                "complete": true
+              },
+              {
+                "index": 1,
+                "payloadType": {
+                  "value": 5,
+                  "span": {
+                    "rbspBitOffset": 24,
+                    "bitLength": 8,
+                    "sourceSpans": [
+                      {
+                        "byteOffset": 37,
+                        "bitOffset": 0,
+                        "bitLength": 8
+                      }
+                    ]
+                  }
+                },
+                "payloadSize": {
+                  "value": 18,
+                  "span": {
+                    "rbspBitOffset": 32,
+                    "bitLength": 8,
+                    "sourceSpans": [
+                      {
+                        "byteOffset": 38,
+                        "bitOffset": 0,
+                        "bitLength": 8
+                      }
+                    ]
+                  }
+                },
+                "payloadSpan": {
+                  "rbspBitOffset": 40,
+                  "bitLength": 144,
+                  "sourceSpans": [
+                    {
+                      "byteOffset": 39,
+                      "bitOffset": 0,
+                      "bitLength": 144
+                    }
+                  ]
+                },
+                "kind": "userDataUnregistered",
+                "syntaxSupported": true,
+                "userDataUnregistered": {
+                  "uuid": {
+                    "hex": "0102030405060708090a0b0c0d0e0f10",
+                    "span": {
+                      "rbspBitOffset": 40,
+                      "bitLength": 128,
+                      "sourceSpans": [
+                        {
+                          "byteOffset": 39,
+                          "bitOffset": 0,
+                          "bitLength": 128
+                        }
+                      ]
+                    }
+                  },
+                  "dataPreview": {
+                    "hex": "ff00",
+                    "span": {
+                      "rbspBitOffset": 168,
+                      "bitLength": 16,
+                      "sourceSpans": [
+                        {
+                          "byteOffset": 55,
+                          "bitOffset": 0,
+                          "bitLength": 16
+                        }
+                      ]
+                    }
+                  },
+                  "dataBytes": 2,
+                  "previewTruncated": false
+                },
+                "payloadComplete": true,
+                "complete": true
+              },
+              {
+                "index": 2,
+                "payloadType": {
+                  "value": 1,
+                  "span": {
+                    "rbspBitOffset": 184,
+                    "bitLength": 8,
+                    "sourceSpans": [
+                      {
+                        "byteOffset": 57,
+                        "bitOffset": 0,
+                        "bitLength": 8
+                      }
+                    ]
+                  }
+                },
+                "payloadSize": {
+                  "value": 1,
+                  "span": {
+                    "rbspBitOffset": 192,
+                    "bitLength": 8,
+                    "sourceSpans": [
+                      {
+                        "byteOffset": 58,
+                        "bitOffset": 0,
+                        "bitLength": 8
+                      }
+                    ]
+                  }
+                },
+                "payloadSpan": {
+                  "rbspBitOffset": 200,
+                  "bitLength": 8,
+                  "sourceSpans": [
+                    {
+                      "byteOffset": 59,
+                      "bitOffset": 0,
+                      "bitLength": 8
+                    }
+                  ]
+                },
+                "kind": "unknown",
+                "syntaxSupported": false,
+                "payloadComplete": true,
+                "complete": true
+              }
+            ],
+            "rbspTrailingBits": {
+              "rbspBitOffset": 208,
+              "bitLength": 8,
+              "sourceSpans": [
+                {
+                  "byteOffset": 60,
+                  "bitOffset": 0,
+                  "bitLength": 8
+                }
+              ]
+            },
+            "bytesRead": 27,
+            "syntaxBits": 216,
+            "framingComplete": true,
+            "complete": true
+          },
+          "index": 0,
+          "length": 28,
+          "lengthSpan": {
+            "byteOffset": 29,
+            "bitOffset": 0,
+            "bitLength": 32
+          },
+          "span": {
+            "byteOffset": 33,
+            "bitOffset": 0,
+            "bitLength": 224
+          },
+          "header": {
+            "raw": 6,
+            "span": {
+              "byteOffset": 33,
+              "bitOffset": 0,
+              "bitLength": 8
+            },
+            "forbiddenZeroBit": {
+              "value": false,
+              "span": {
+                "byteOffset": 33,
+                "bitOffset": 0,
+                "bitLength": 1
+              }
+            },
+            "nalRefIdc": {
+              "value": 0,
+              "span": {
+                "byteOffset": 33,
+                "bitOffset": 1,
+                "bitLength": 2
+              }
+            },
+            "nalUnitType": {
+              "value": 6,
+              "name": "sei",
+              "span": {
+                "byteOffset": 33,
+                "bitOffset": 3,
+                "bitLength": 5
+              }
+            },
+            "complete": true
+          },
+          "summaryComplete": true
+        }
+      ],
+      "framingComplete": true,
+      "complete": true
+    }
+  },
+  "diagnostics": []
+}

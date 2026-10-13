@@ -46,7 +46,7 @@ class LinuxSmokeTest(unittest.TestCase):
             ['--continue-context', '2', '--revisit-tag', '4'],
             ['--avc-search-pages', '0'], ['--avc-search-pages', '97'], ['--avc-search-pages', '2'],
             ['--avc-search-long'], ['--avc-search-action', 'cancel'], ['--avc-search-gate', '/tmp/unused'],
-            ['--mp3-frame', '0'], ['--mp3-history', '--mp3-frame', '64'],
+            ['--mp3-frame', '0'], ['--mp3-history', '--mp3-frame', '4294967296'],
             ['--mp3-history', '--mp3-frame', '-1'], ['--avc-search', 'all', '--mp3-history'],
             ['--field-name', ''], ['--field-name', '\n'], ['--field-name', 'a' * 257],
         ]
@@ -69,6 +69,11 @@ class LinuxSmokeTest(unittest.TestCase):
         args = smoke.arguments(self.argv + ['--mp3-history', '--mp3-frame', '26'])
         self.assertTrue(args.mp3_history)
         self.assertEqual(args.mp3_frame, 26)
+        pages = smoke.arguments(self.argv + ['--mp3-summary', '--mp3-summary-link', '--mp3-page-steps', '37', '--mp3-frame', '2600'])
+        self.assertEqual((pages.mp3_summary_link, pages.mp3_page_steps, pages.mp3_frame), (True, 37, 2600))
+        for extra in (['--mp3-summary-link'], ['--mp3-page-steps', '65'], ['--mp3-page-steps', '-1']):
+            with self.subTest(extra=extra), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                smoke.arguments(self.argv + extra)
 
     def test_codec_browsing_and_curve_metric_are_explicit(self):
         defaults = smoke.arguments(self.argv)

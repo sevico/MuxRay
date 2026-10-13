@@ -1,7 +1,7 @@
 import type { Detail } from './protocol';
 import type { HexSelection } from './hex';
 import { selectionFromSpan } from './hex';
-import { keyframeEvidence, keyframeRelations, mp3FrameSelection, mp3Dependency } from './codec-details';
+import { keyframeEvidence, keyframeRelations, mp3FramePage, mp3FrameSelection, mp3Dependency } from './codec-details';
 import type { MP3DependencySource } from './codec-details';
 
 const dependencyReasons: Record<string, string> = {
@@ -13,32 +13,42 @@ const dependencyReasons: Record<string, string> = {
   frame_budget: '帧检查数量达到上限', coverage_budget: '源范围检查预算耗尽', read_budget: '读取字节预算耗尽', source_limit: '来源条目数达到上限',
 };
 
-export function MP3FramePanel({ detail, disabled, onSelect }: { detail: Detail; disabled: boolean; onSelect: (index: number | null) => void }) {
-  const frames = mp3FrameSelection(detail);
-  if (!frames) return null;
-  const position = frames.selected === null ? -1 : frames.selectable.indexOf(frames.selected);
+export function MP3FramePanel({ detail, disabled, onSelect, onPage }: { detail: Detail; disabled: boolean; onSelect: (index: number | null) => void; onPage: (direction: -1 | 1 | 'continue') => void }) {
+  const frames = mp3FrameSelection(detail), page = mp3FramePage(detail);
+  if (!frames && !page) return null;
+  const position = !frames || frames.selected === null ? -1 : frames.selectable.indexOf(frames.selected);
   return <section className="codec-evidence" aria-label="MP3 逐帧详情">
     <h3>MP3 逐帧详情</h3>
+    {page && <>
+      <div className="codec-frame-controls">
+        <button disabled={disabled || page.state === 'preparing' || page.start === 0} onClick={() => onPage(-1)}>上一 MP3 帧页</button>
+        <button disabled={disabled || page.state !== 'ready' || page.next === null} onClick={() => onPage(1)}>下一 MP3 帧页</button>
+        {page.canContinue && <button disabled={disabled} onClick={() => onPage('continue')}>继续定位 MP3 帧页</button>}
+      </div>
+      <p className="detail-note" role="status">{page.state === 'preparing' ? `正在定位 MP3 帧页 ${page.requested}，已检查到帧 ${page.progress} 之前。请继续定位。` : page.state === 'stopped' ? `MP3 帧页 ${page.requested} 定位停止，已检查到帧 ${page.progress} 之前。请查看详情诊断。` : `MP3 帧页 ${page.start} · 本页 ${page.frames} 个帧头 · 覆盖 ${page.bytesCovered} byte。`}</p>
+    </>}
+    {frames && <>
     <div className="codec-frame-controls">
       <label>选择帧 <select aria-label="MP3 帧选择" disabled={disabled} value={frames.selected ?? ''} onChange={event => onSelect(event.target.value === '' ? null : Number(event.target.value))}>
-        <option value="">前两帧预览</option>
+        <option value="">{page && page.start > 0 ? '本页前两帧预览' : '前两帧预览'}</option>
         {frames.selectable.map(index => <option key={index} value={index}>帧 {index}</option>)}
       </select></label>
       <button disabled={disabled || position <= 0} onClick={() => onSelect(frames.selectable[position - 1])}>上一 MP3 帧</button>
       <button disabled={disabled || position + 1 >= frames.selectable.length} onClick={() => onSelect(frames.selectable[position + 1])}>下一 MP3 帧</button>
       <button disabled={disabled || !frames.selectable.length || frames.selected === frames.selectable.at(-1)} onClick={() => onSelect(frames.selectable.at(-1)!)}>末个可选 MP3 帧</button>
     </div>
-    <p className="detail-note" role="status">{frames.selected === null ? '当前显示前两帧预览' : `当前展开 MP3 帧 ${frames.selected}`} · 已检查 {frames.checked} 个帧头，{frames.selectable.length} 帧可选（索引从 0 开始）。</p>
-    <p className="detail-note">仅选择当前预算内已确认边界的帧；依赖分析保留本 Tag 的前序历史。截断、未知帧长和预算外范围仍保留在详情中。</p>
+    <p className="detail-note" role="status">{frames.selected === null ? (page && page.start > 0 ? '当前显示本页前两帧预览' : '当前显示前两帧预览') : `当前展开 MP3 帧 ${frames.selected}`} · 已检查 {frames.checked} 个帧头，{frames.selectable.length} 帧可选（索引从 0 开始）。</p>
+    </>}
+    <p className="detail-note">帧号保持 Tag 内原始序号；每页检查最多 64 帧，预览只展开前两帧。依赖分析保留跨页历史。截断、未知帧长和预算停止处不会猜测后续边界。</p>
   </section>;
 }
 
 export function MP3DependencyPanel({ detail, disabled, onInspect, onLocate }: { detail: Detail; disabled: boolean; onInspect: () => void; onLocate: (source: MP3DependencySource, destination: 'tag' | 'hex') => void }) {
-  const frames = mp3FrameSelection(detail), dependency = mp3Dependency(detail);
+  const frames = mp3FrameSelection(detail), dependency = mp3Dependency(detail), page = mp3FramePage(detail);
   if (!frames && !dependency) return null;
   return <section className="codec-evidence" aria-label="MP3 跨 Tag 依赖来源">
-    <div className="detail-heading"><h3>MP3 跨 Tag 依赖来源</h3><button disabled={disabled || !frames?.selectable.includes(frames.selected ?? 0)} onClick={onInspect}>定位 MP3 依赖来源</button></div>
-    <p className="detail-note">按当前帧的 main_data_begin 查找前序 MP3 主数据槽；预览状态使用帧 0。只说明物理范围覆盖，不判断剩余 reservoir 容量或音频能否解码。</p>
+    <div className="detail-heading"><h3>MP3 跨 Tag 依赖来源</h3><button disabled={disabled || !frames?.selectable.includes(frames.selected ?? page?.start ?? 0)} onClick={onInspect}>定位 MP3 依赖来源</button></div>
+    <p className="detail-note">按当前帧的 main_data_begin 查找前序 MP3 主数据槽；预览状态使用本页首帧。只说明物理范围覆盖，不判断剩余 reservoir 容量或音频能否解码。</p>
     {dependency && <>
       <p role="status">MP3 依赖定位完成：{dependency.state} · Tag {dependency.tagId} 帧 {dependency.frameIndex} · 回指 {dependency.requested} byte，已定位 {dependency.resolved} byte，未知 {dependency.missing} byte。</p>
       <p className="detail-note">{dependencyReasons[dependency.reason] ?? dependency.reason} · 检查前序 Tag {dependency.scannedTags} 条，读取 {dependency.bytesRead} byte。视频交错不视为音频中断；损坏、配置切换和预算限制保留未知。</p>
