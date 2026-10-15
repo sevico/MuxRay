@@ -163,6 +163,209 @@ export namespace desktop {
 		}
 	}
 	
+	export class CodecSearchValue {
+	    name: string;
+	    value: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CodecSearchValue(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.value = source["value"];
+	    }
+	}
+	export class CodecSearchRow {
+	    tagId: string;
+	    dts: string;
+	    offset: string;
+	    frameIndex?: number;
+	    nalIndex?: number;
+	    messageIndex?: number;
+	    kind: string;
+	    status: string;
+	    contextState: string;
+	    complete: boolean;
+	    span?: detailview.Span;
+	    spsSpan?: detailview.Span;
+	    evidenceSpan?: detailview.Span;
+	    values: CodecSearchValue[];
+	
+	    static createFrom(source: any = {}) {
+	        return new CodecSearchRow(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.tagId = source["tagId"];
+	        this.dts = source["dts"];
+	        this.offset = source["offset"];
+	        this.frameIndex = source["frameIndex"];
+	        this.nalIndex = source["nalIndex"];
+	        this.messageIndex = source["messageIndex"];
+	        this.kind = source["kind"];
+	        this.status = source["status"];
+	        this.contextState = source["contextState"];
+	        this.complete = source["complete"];
+	        this.span = this.convertValues(source["span"], detailview.Span);
+	        this.spsSpan = this.convertValues(source["spsSpan"], detailview.Span);
+	        this.evidenceSpan = this.convertValues(source["evidenceSpan"], detailview.Span);
+	        this.values = this.convertValues(source["values"], CodecSearchValue);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class CodecSearchPosition {
+	    tagId: string;
+	    frameIndex: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CodecSearchPosition(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.tagId = source["tagId"];
+	        this.frameIndex = source["frameIndex"];
+	    }
+	}
+	export class CodecSearchPage {
+	    kind: string;
+	    filter: string;
+	    cursor: string;
+	    nextCursor: string;
+	    start: CodecSearchPosition;
+	    next: CodecSearchPosition;
+	    total: string;
+	    scannedTags: number;
+	    scannedFrames: number;
+	    pending: number;
+	    bytesRead: string;
+	    exhausted: boolean;
+	    scanComplete: boolean;
+	    rows: CodecSearchRow[];
+	
+	    static createFrom(source: any = {}) {
+	        return new CodecSearchPage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.filter = source["filter"];
+	        this.cursor = source["cursor"];
+	        this.nextCursor = source["nextCursor"];
+	        this.start = this.convertValues(source["start"], CodecSearchPosition);
+	        this.next = this.convertValues(source["next"], CodecSearchPosition);
+	        this.total = source["total"];
+	        this.scannedTags = source["scannedTags"];
+	        this.scannedFrames = source["scannedFrames"];
+	        this.pending = source["pending"];
+	        this.bytesRead = source["bytesRead"];
+	        this.exhausted = source["exhausted"];
+	        this.scanComplete = source["scanComplete"];
+	        this.rows = this.convertValues(source["rows"], CodecSearchRow);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class CodecSearchRequest {
+	    sessionId: string;
+	    requestId: string;
+	    cursor: string;
+	    kind: string;
+	    filter: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CodecSearchRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.requestId = source["requestId"];
+	        this.cursor = source["cursor"];
+	        this.kind = source["kind"];
+	        this.filter = source["filter"];
+	    }
+	}
+	export class CodecSearchResponse {
+	    apiVersion: number;
+	    sessionId: string;
+	    requestId: string;
+	    state: string;
+	    page?: CodecSearchPage;
+	    error?: Fault;
+	
+	    static createFrom(source: any = {}) {
+	        return new CodecSearchResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.apiVersion = source["apiVersion"];
+	        this.sessionId = source["sessionId"];
+	        this.requestId = source["requestId"];
+	        this.state = source["state"];
+	        this.page = this.convertValues(source["page"], CodecSearchPage);
+	        this.error = this.convertValues(source["error"], Fault);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
 	export class DetailQuery {
 	    sessionId: string;
 	    requestId: string;
@@ -1038,6 +1241,24 @@ export namespace desktop {
 	        this.filter = source["filter"];
 	    }
 	}
+	export class SnapshotCodecSearchRequest {
+	    requestId: string;
+	    cursor: string;
+	    kind: string;
+	    filter: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SnapshotCodecSearchRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.requestId = source["requestId"];
+	        this.cursor = source["cursor"];
+	        this.kind = source["kind"];
+	        this.filter = source["filter"];
+	    }
+	}
 	export class SnapshotMediaCurveRequest {
 	    start: string;
 	    count: number;
@@ -1101,6 +1322,7 @@ export namespace desktop {
 	    trend?: SnapshotTrendRequest;
 	    mediaCurve?: SnapshotMediaCurveRequest;
 	    avcSearch?: SnapshotAVCSearchRequest;
+	    codecSearch?: SnapshotCodecSearchRequest;
 	
 	    static createFrom(source: any = {}) {
 	        return new SnapshotRequest(source);
@@ -1118,6 +1340,7 @@ export namespace desktop {
 	        this.trend = this.convertValues(source["trend"], SnapshotTrendRequest);
 	        this.mediaCurve = this.convertValues(source["mediaCurve"], SnapshotMediaCurveRequest);
 	        this.avcSearch = this.convertValues(source["avcSearch"], SnapshotAVCSearchRequest);
+	        this.codecSearch = this.convertValues(source["codecSearch"], SnapshotCodecSearchRequest);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

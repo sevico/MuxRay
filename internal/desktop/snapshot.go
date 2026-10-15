@@ -33,6 +33,7 @@ type SnapshotRequest struct {
 	Trend            *SnapshotTrendRequest       `json:"trend"`
 	MediaCurve       *SnapshotMediaCurveRequest  `json:"mediaCurve,omitempty"`
 	AVCSearch        *SnapshotAVCSearchRequest   `json:"avcSearch,omitempty"`
+	CodecSearch      *SnapshotCodecSearchRequest `json:"codecSearch,omitempty"`
 }
 
 type SnapshotSummaryPageRequest struct {
@@ -94,6 +95,7 @@ type DiagnosticSnapshot struct {
 	Omitted         []SnapshotOmission   `json:"omitted"`
 	MediaCurvePage  *MediaCurveResponse  `json:"mediaCurvePage,omitempty"`
 	AVCSearchPage   *AVCSearchResponse   `json:"avcSearchPage,omitempty"`
+	CodecSearchPage *CodecSearchResponse `json:"codecSearchPage,omitempty"`
 }
 
 type SnapshotProducer struct {
@@ -108,16 +110,18 @@ type SnapshotTrendIssue struct {
 }
 
 type SnapshotScope struct {
-	Kind                     string `json:"kind"`
-	SourceValidation         string `json:"sourceValidation"`
-	ScanDiagnostics          string `json:"scanDiagnostics"`
-	Summary                  string `json:"summary"`
-	Trend                    string `json:"trend"`
-	TrendInterpretation      string `json:"trendInterpretation"`
-	MediaCurve               string `json:"mediaCurve,omitempty"`
-	MediaCurveInterpretation string `json:"mediaCurveInterpretation,omitempty"`
-	AVCSearch                string `json:"avcSearch,omitempty"`
-	AVCSearchInterpretation  string `json:"avcSearchInterpretation,omitempty"`
+	Kind                      string `json:"kind"`
+	SourceValidation          string `json:"sourceValidation"`
+	ScanDiagnostics           string `json:"scanDiagnostics"`
+	Summary                   string `json:"summary"`
+	Trend                     string `json:"trend"`
+	TrendInterpretation       string `json:"trendInterpretation"`
+	MediaCurve                string `json:"mediaCurve,omitempty"`
+	MediaCurveInterpretation  string `json:"mediaCurveInterpretation,omitempty"`
+	AVCSearch                 string `json:"avcSearch,omitempty"`
+	AVCSearchInterpretation   string `json:"avcSearchInterpretation,omitempty"`
+	CodecSearch               string `json:"codecSearch,omitempty"`
+	CodecSearchInterpretation string `json:"codecSearchInterpretation,omitempty"`
 }
 
 // CaptureSnapshot runs only bounded in-memory queries. Holding the slot lock
@@ -206,10 +210,15 @@ func (a *App) CaptureSnapshot(request SnapshotRequest) (SnapshotCapture, *Fault)
 		report.Scope.MediaCurveInterpretation = "codec_payload_rate_and_declared_gop_not_transport_rate_or_decodability"
 		a.captureMediaCurve(e, &report, omit)
 	}
-	if version == 3 {
+	if version >= 3 {
 		report.Scope.AVCSearch = "requested_retained_current_page_only"
 		report.Scope.AVCSearchInterpretation = "bounded_nal_header_observation_not_corruption_or_decodability_proof"
 		a.captureAVCSearch(e, &report, omit)
+	}
+	if version >= 4 {
+		report.Scope.CodecSearch = "requested_retained_current_page_only"
+		report.Scope.CodecSearchInterpretation = "bounded_syntax_evidence_not_corruption_or_decodability_proof"
+		a.captureCodecSearch(e, &report, omit)
 	}
 	if request.Trend == nil {
 		omit("trend", "not_requested")
@@ -247,13 +256,16 @@ func (a *App) CaptureSnapshot(request SnapshotRequest) (SnapshotCapture, *Fault)
 }
 
 func validSnapshotRequest(q SnapshotRequest) bool {
-	if q.SessionID == "" || len(q.SessionID) > 64 || q.SchemaVersion > 3 {
+	if q.SessionID == "" || len(q.SessionID) > 64 || q.SchemaVersion > 4 {
 		return false
 	}
 	if q.MediaCurve != nil && (q.SchemaVersion < 2 || !validSnapshotMediaCurve(*q.MediaCurve)) {
 		return false
 	}
-	if q.AVCSearch != nil && (q.SchemaVersion != 3 || !validSnapshotAVCSearch(*q.AVCSearch)) {
+	if q.AVCSearch != nil && (q.SchemaVersion < 3 || !validSnapshotAVCSearch(*q.AVCSearch)) {
+		return false
+	}
+	if q.CodecSearch != nil && (q.SchemaVersion != 4 || !validSnapshotCodecSearch(*q.CodecSearch)) {
 		return false
 	}
 	for _, id := range []*string{q.SelectedTagID, q.DetailRequestID, q.HexRequestID, q.SummaryRequestID} {

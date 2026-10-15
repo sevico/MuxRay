@@ -6,6 +6,7 @@ import type { API, MediaCurvePage, MediaCurveRequest, MediaCurveResponse, SaveRe
 import { CURVE_PAGE_SIZE, curveDomain, curveTag, curveValue, curveY, validateMediaCurvePage } from '../src/media-curves.ts';
 import { mediaCurveResponse } from '../src/normalize.ts';
 import { overview } from './summary-fixture.ts';
+import { ready as codecReady } from './codec-search-fixture.ts';
 
 const unknownRate = () => ({ coveredBytes: '0', coveredIntervalMs: '0', bitsPerSecond: null, tagId: null });
 function curves(request: MediaCurveRequest, indexed = '33000'): MediaCurveResponse {
@@ -33,6 +34,7 @@ function setup(overrides: Partial<API> = {}, indexed = '33000') {
     progress: { sourceSize: '9007199254742000', bytesScanned: '20000', tagCount: indexed, diagnosticCount: 0 } };
   let session = base;
   const api: API = {
+    startCodecSearch: async () => { throw Error('unexpected codec search'); }, codecSearchResult: async () => { throw Error('unexpected codec search result'); }, cancelCodecSearch: async () => { throw Error('unexpected codec search cancel'); },
     startAVCSearch: async () => { throw Error('unexpected AVC search'); }, avcSearchResult: async () => { throw Error('unexpected AVC search result'); }, cancelAVCSearch: async () => { throw Error('unexpected AVC search cancel'); },
     open: async requestId => { session = { ...base, sessionId: `s${++opens}` }; return { apiVersion: 1, requestId, pending: false, canceled: false, fileName: 'curves.flv', session, error: null }; },
     openResult: async () => { throw Error('unexpected open'); }, status: async () => ({ apiVersion: 1, session, error: null }), cancel: async () => ({ apiVersion: 1, session, error: null }),
@@ -202,4 +204,15 @@ test('snapshot v3 omits curve selection while a replacement page is pending or s
   await controller.saveSnapshot(); assert.equal(saves[0].snapshot.mediaCurve, undefined);
   controller.startSummary(); await settle(); await controller.saveSnapshot();
   assert.equal(saves[1].snapshot.mediaCurve, undefined); controller.dispose();
+});
+test('ready codec evidence upgrades to snapshot v4 while preserving existing curve and summary selections', async () => {
+  const saves: SaveRequest[] = [];
+  const { controller, requests } = setup({ startCodecSearch: async request => { const result = codecReady(request); result.page!.total = '33000'; return result; },
+    saveSnapshot: async request => { saves.push(request); return { apiVersion: 1, requestId: request.requestId, pending: false, canceled: false, fileName: 'page.json', bytesWritten: '1000', error: null }; } });
+  await ready(controller); controller.loadMediaCurves('64'); await settle(); controller.setCurveMetric('gopMax');
+  controller.startCodecSearch('sei'); await settle(); await controller.saveSnapshot();
+  assert.equal(saves[0].snapshot.schemaVersion, 4); assert.equal(saves[0].snapshot.summaryRequestId, '1');
+  assert.deepEqual(saves[0].snapshot.mediaCurve, { start: '64', count: 64, metric: 'gopMax' });
+  assert.deepEqual(saves[0].snapshot.codecSearch, { requestId: '2', cursor: '0', kind: 'sei', filter: 'all' });
+  assert.equal(requests.length, 1); controller.dispose();
 });

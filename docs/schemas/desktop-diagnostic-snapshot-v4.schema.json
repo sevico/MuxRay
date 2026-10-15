@@ -1,0 +1,3380 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "desktop-diagnostic-snapshot-v4.schema.json",
+  "title": "MuxRay bounded desktop diagnostic snapshot v4",
+  "description": "Independent of CLI reports. At most 2 MiB UTF-8 including a trailing newline. Coordinates and request identities use canonical decimal strings. May contain AMF text and at most 4 KiB retained source bytes. Trend issues are local display observations. The capture checks an existing source-change latch without restatting or reading the source. Version 2 adds the selected completed-summary media curve page (at most 64 points), while freezing the retained codec detail field tree, including any selected MP3 frame and H.264 comparisons. No source reread or reanalysis is performed. Version 3 additionally freezes only the selected retained H.264 search page, at most 64 rows and 256 scanned Tags. NAL-header observations are not corruption findings or decodability proof. It preserves the page cursor, indexed coverage, unknown reasons and original source coordinates without launching or resuming a search. Version 4 freezes a retained MP3-change or SEI-message search page. Cursor strings are opaque server identities, never source positions. A SEI page can drain buffered rows with no new reads or scanned Tags. All observations remain bounded syntax evidence, not corruption or decodability proof.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "documentType",
+    "fileName",
+    "createdAt",
+    "producer",
+    "scope",
+    "session",
+    "selection",
+    "scanDiagnostics",
+    "selectedTag",
+    "detail",
+    "hex",
+    "summary",
+    "summaryPage",
+    "trend",
+    "trendIssues",
+    "omitted",
+    "mediaCurvePage",
+    "avcSearchPage",
+    "codecSearchPage"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 4
+    },
+    "documentType": {
+      "const": "desktopDiagnosticSnapshot"
+    },
+    "fileName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32768,
+      "pattern": "^[^/\\\\]+$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d(?:\\.\\d{1,9})?Z$",
+      "maxLength": 30
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "const": "MuxRay"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "sourceValidation",
+        "scanDiagnostics",
+        "summary",
+        "trend",
+        "trendInterpretation",
+        "mediaCurve",
+        "mediaCurveInterpretation",
+        "avcSearch",
+        "avcSearchInterpretation",
+        "codecSearch",
+        "codecSearchInterpretation"
+      ],
+      "properties": {
+        "kind": {
+          "const": "bounded_desktop_snapshot"
+        },
+        "sourceValidation": {
+          "const": "existing_change_latch_only"
+        },
+        "scanDiagnostics": {
+          "const": "first_100_retained"
+        },
+        "summary": {
+          "const": "ready_overview_and_requested_event_page"
+        },
+        "trend": {
+          "const": "requested_source_order_window"
+        },
+        "trendInterpretation": {
+          "const": "local_display_rule_not_parser_diagnostic"
+        },
+        "mediaCurve": {
+          "const": "requested_retained_summary_curve_page"
+        },
+        "mediaCurveInterpretation": {
+          "const": "codec_payload_rate_and_declared_gop_not_transport_rate_or_decodability"
+        },
+        "avcSearch": {
+          "const": "requested_retained_current_page_only"
+        },
+        "avcSearchInterpretation": {
+          "const": "bounded_nal_header_observation_not_corruption_or_decodability_proof"
+        },
+        "codecSearch": {
+          "const": "requested_retained_current_page_only"
+        },
+        "codecSearchInterpretation": {
+          "const": "bounded_syntax_evidence_not_corruption_or_decodability_proof"
+        }
+      }
+    },
+    "session": {
+      "$ref": "#/$defs/session"
+    },
+    "selection": {
+      "$ref": "#/$defs/selection"
+    },
+    "scanDiagnostics": {
+      "$ref": "#/$defs/diagnosticPage"
+    },
+    "selectedTag": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/tag"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "detail": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/detailResponse"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "hex": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/hexResponse"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "summary": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/summaryResponse"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "summaryPage": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/summaryPageResponse"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "trend": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/trendPage"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "trendIssues": {
+      "type": "array",
+      "maxItems": 512,
+      "items": {
+        "$ref": "#/$defs/trendIssue"
+      }
+    },
+    "omitted": {
+      "type": "array",
+      "maxItems": 9,
+      "items": {
+        "$ref": "#/$defs/omission"
+      }
+    },
+    "mediaCurvePage": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/mediaCurveResponse"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "avcSearchPage": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/avcSearchResponse"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "codecSearchPage": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/codecSearchResponse"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "u64": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|18446744073709550[0-9]{3}|18446744073709551[0-5][0-9]{2}|1844674407370955160[0-9]{1}|1844674407370955161[0-4]|18446744073709551615)$",
+      "maxLength": 20
+    },
+    "requestId": {
+      "type": "string",
+      "pattern": "^([1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|18446744073709550[0-9]{3}|18446744073709551[0-5][0-9]{2}|1844674407370955160[0-9]{1}|1844674407370955161[0-4]|18446744073709551615)$",
+      "maxLength": 20
+    },
+    "dts": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]{0,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]{1}|429496729[0-4]|4294967295)$",
+      "maxLength": 10
+    },
+    "delta": {
+      "type": "string",
+      "pattern": "^(0|-?([1-9][0-9]{0,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]{1}|429496729[0-4]|4294967295))$",
+      "maxLength": 11
+    },
+    "sessionId": {
+      "type": "string",
+      "pattern": "^scan-[1-9][0-9]*$",
+      "maxLength": 25
+    },
+    "fault": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 512
+        }
+      }
+    },
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "byteOffset",
+        "bitOffset",
+        "bitLength"
+      ],
+      "properties": {
+        "byteOffset": {
+          "$ref": "#/$defs/u64"
+        },
+        "bitOffset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7
+        },
+        "bitLength": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "severity",
+        "offset",
+        "bitOffset",
+        "message",
+        "expected",
+        "actual"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "warning",
+            "error"
+          ]
+        },
+        "offset": {
+          "$ref": "#/$defs/u64"
+        },
+        "bitOffset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "expected": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/u64"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "actual": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/u64"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "summaryKind": {
+      "enum": [
+        "keyframes",
+        "aac",
+        "avc",
+        "mp3",
+        "diagnostics"
+      ]
+    },
+    "trendType": {
+      "enum": [
+        "all",
+        "audio",
+        "video",
+        "script",
+        "other"
+      ]
+    },
+    "trendMetric": {
+      "enum": [
+        "dts",
+        "delta",
+        "size"
+      ]
+    },
+    "omission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "section",
+        "reason"
+      ],
+      "properties": {
+        "section": {
+          "enum": [
+            "selectedTag",
+            "detail",
+            "hex",
+            "summary",
+            "summaryPage",
+            "trend",
+            "mediaCurvePage",
+            "avcSearchPage",
+            "codecSearchPage"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "pattern": "^[a-z][a-z_]*$",
+          "maxLength": 64
+        }
+      }
+    },
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "section",
+        "name",
+        "value",
+        "unit"
+      ],
+      "properties": {
+        "section": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unit": {
+          "type": "string",
+          "maxLength": 256
+        }
+      }
+    },
+    "progress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceSize",
+        "bytesScanned",
+        "tagCount",
+        "diagnosticCount"
+      ],
+      "properties": {
+        "sourceSize": {
+          "$ref": "#/$defs/u64"
+        },
+        "bytesScanned": {
+          "$ref": "#/$defs/u64"
+        },
+        "tagCount": {
+          "$ref": "#/$defs/u64"
+        },
+        "diagnosticCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
+      }
+    },
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sessionId",
+        "state",
+        "terminal",
+        "closed",
+        "progress",
+        "scan",
+        "failure"
+      ],
+      "properties": {
+        "sessionId": {
+          "$ref": "#/$defs/sessionId"
+        },
+        "state": {
+          "enum": [
+            "finished",
+            "canceled",
+            "failed"
+          ]
+        },
+        "terminal": {
+          "const": true
+        },
+        "closed": {
+          "const": false
+        },
+        "progress": {
+          "$ref": "#/$defs/progress"
+        },
+        "scan": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "complete",
+            "hasErrors"
+          ],
+          "properties": {
+            "complete": {
+              "type": "boolean"
+            },
+            "hasErrors": {
+              "type": "boolean"
+            }
+          }
+        },
+        "failure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/fault"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "summaryPageRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "start",
+        "count"
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/summaryKind"
+        },
+        "start": {
+          "$ref": "#/$defs/u64"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      }
+    },
+    "trendRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "count",
+        "type",
+        "metric",
+        "gapThreshold"
+      ],
+      "properties": {
+        "start": {
+          "$ref": "#/$defs/u64"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 512
+        },
+        "type": {
+          "$ref": "#/$defs/trendType"
+        },
+        "metric": {
+          "$ref": "#/$defs/trendMetric"
+        },
+        "gapThreshold": {
+          "type": "string",
+          "pattern": "^([1-9][0-9]{0,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]{1}|429496729[0-4]|4294967295)$",
+          "maxLength": 10
+        }
+      }
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sessionId",
+        "selectedTagId",
+        "detailRequestId",
+        "hexRequestId",
+        "summaryRequestId",
+        "summaryPage",
+        "trend",
+        "schemaVersion"
+      ],
+      "properties": {
+        "sessionId": {
+          "$ref": "#/$defs/sessionId"
+        },
+        "selectedTagId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/u64"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "detailRequestId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/requestId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hexRequestId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/requestId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "summaryRequestId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/requestId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "summaryPage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/summaryPageRequest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "trend": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/trendRequest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schemaVersion": {
+          "const": 4
+        },
+        "mediaCurve": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/mediaCurveRequest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "avcSearch": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/avcSearchRequest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "codecSearch": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/codecSearchRequest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "tag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "typeCode",
+        "typeName",
+        "offset",
+        "span",
+        "headerSpan",
+        "payloadSpan",
+        "rawTypeFlags",
+        "filter",
+        "dataSize",
+        "availableDataSize",
+        "dts",
+        "streamId",
+        "payloadComplete",
+        "previousTagSize"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/u64"
+        },
+        "typeCode": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "typeName": {
+          "enum": [
+            "audio",
+            "video",
+            "script",
+            "unknown"
+          ]
+        },
+        "offset": {
+          "$ref": "#/$defs/u64"
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        },
+        "headerSpan": {
+          "$ref": "#/$defs/span"
+        },
+        "payloadSpan": {
+          "$ref": "#/$defs/span"
+        },
+        "rawTypeFlags": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "filter": {
+          "type": "boolean"
+        },
+        "dataSize": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "availableDataSize": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "dts": {
+          "$ref": "#/$defs/dts"
+        },
+        "streamId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "payloadComplete": {
+          "type": "boolean"
+        },
+        "previousTagSize": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "present",
+            "span",
+            "value",
+            "expected",
+            "valid"
+          ],
+          "properties": {
+            "present": {
+              "type": "boolean"
+            },
+            "span": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/span"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "value": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            "expected": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            "valid": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "diagnosticPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sessionId",
+        "bounds",
+        "diagnostics"
+      ],
+      "properties": {
+        "sessionId": {
+          "$ref": "#/$defs/sessionId"
+        },
+        "bounds": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "start",
+            "next",
+            "total",
+            "limit"
+          ],
+          "properties": {
+            "start": {
+              "$ref": "#/$defs/u64"
+            },
+            "next": {
+              "$ref": "#/$defs/u64"
+            },
+            "total": {
+              "$ref": "#/$defs/u64"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        },
+        "diagnostics": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/diagnostic"
+          }
+        }
+      }
+    },
+    "detailField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "parentId",
+        "name",
+        "type",
+        "value",
+        "span"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "parentId": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "type": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "value": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "span": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/span"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "detail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "complete",
+        "truncated",
+        "fields",
+        "diagnostics"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "amf0ScriptData",
+            "aacAudio",
+            "avcVideo",
+            "mp3Audio"
+          ]
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "fields": {
+          "type": "array",
+          "maxItems": 512,
+          "items": {
+            "$ref": "#/$defs/detailField"
+          }
+        },
+        "diagnostics": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/diagnostic"
+          }
+        }
+      }
+    },
+    "detailResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "apiVersion",
+        "sessionId",
+        "requestId",
+        "tagId",
+        "state",
+        "detail",
+        "error"
+      ],
+      "properties": {
+        "apiVersion": {
+          "const": 1
+        },
+        "sessionId": {
+          "$ref": "#/$defs/sessionId"
+        },
+        "requestId": {
+          "$ref": "#/$defs/requestId"
+        },
+        "tagId": {
+          "$ref": "#/$defs/u64"
+        },
+        "state": {
+          "const": "ready"
+        },
+        "detail": {
+          "$ref": "#/$defs/detail"
+        },
+        "error": {
+          "type": "null"
+        }
+      }
+    },
+    "hexWindow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "offset",
+        "sourceSize",
+        "hex",
+        "eof"
+      ],
+      "properties": {
+        "offset": {
+          "$ref": "#/$defs/u64"
+        },
+        "sourceSize": {
+          "$ref": "#/$defs/u64"
+        },
+        "hex": {
+          "type": "string",
+          "pattern": "^([0-9a-f]{2})*$",
+          "maxLength": 8192
+        },
+        "eof": {
+          "type": "boolean"
+        }
+      }
+    },
+    "hexResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "apiVersion",
+        "sessionId",
+        "requestId",
+        "offset",
+        "count",
+        "state",
+        "window",
+        "error"
+      ],
+      "properties": {
+        "apiVersion": {
+          "const": 1
+        },
+        "sessionId": {
+          "$ref": "#/$defs/sessionId"
+        },
+        "requestId": {
+          "$ref": "#/$defs/requestId"
+        },
+        "offset": {
+          "$ref": "#/$defs/u64"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "state": {
+          "const": "ready"
+        },
+        "window": {
+          "$ref": "#/$defs/hexWindow"
+        },
+        "error": {
+          "type": "null"
+        }
+      }
+    },
+    "listInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "observed",
+        "retained",
+        "truncated"
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/summaryKind"
+        },
+        "observed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/u64"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "retained": {
+          "$ref": "#/$defs/u64"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      }
+    },
+    "overview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceSize",
+        "indexedTags",
+        "scanComplete",
+        "scanHasErrors",
+        "complete",
+        "hasErrors",
+        "metrics",
+        "lists"
+      ],
+      "properties": {
+        "sourceSize": {
+          "$ref": "#/$defs/u64"
+        },
+        "indexedTags": {
+          "$ref": "#/$defs/u64"
+        },
+        "scanComplete": {
+          "type": "boolean"
+        },
+        "scanHasErrors": {
+          "type": "boolean"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "hasErrors": {
+          "type": "boolean"
+        },
+        "metrics": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "$ref": "#/$defs/metric"
+          }
+        },
+        "lists": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "$ref": "#/$defs/listInfo"
+          }
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "tagId",
+        "offset",
+        "bitOffset",
+        "dts",
+        "title",
+        "severity",
+        "message",
+        "values"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "tagId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/u64"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "offset": {
+          "$ref": "#/$defs/u64"
+        },
+        "bitOffset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7
+        },
+        "dts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/dts"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "severity": {
+          "enum": [
+            "",
+            "info",
+            "warning",
+            "error"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "values": {
+          "type": "array",
+          "maxItems": 24,
+          "items": {
+            "$ref": "#/$defs/metric"
+          }
+        }
+      }
+    },
+    "summaryResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "apiVersion",
+        "sessionId",
+        "requestId",
+        "state",
+        "processed",
+        "total",
+        "overview",
+        "error"
+      ],
+      "properties": {
+        "apiVersion": {
+          "const": 1
+        },
+        "sessionId": {
+          "$ref": "#/$defs/sessionId"
+        },
+        "requestId": {
+          "$ref": "#/$defs/requestId"
+        },
+        "state": {
+          "const": "ready"
+        },
+        "processed": {
+          "$ref": "#/$defs/u64"
+        },
+        "total": {
+          "$ref": "#/$defs/u64"
+        },
+        "overview": {
+          "$ref": "#/$defs/overview"
+        },
+        "error": {
+          "type": "null"
+        }
+      }
+    },
+    "summaryPageResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "apiVersion",
+        "sessionId",
+        "requestId",
+        "kind",
+        "page",
+        "error"
+      ],
+      "properties": {
+        "apiVersion": {
+          "const": 1
+        },
+        "sessionId": {
+          "$ref": "#/$defs/sessionId"
+        },
+        "requestId": {
+          "$ref": "#/$defs/requestId"
+        },
+        "kind": {
+          "$ref": "#/$defs/summaryKind"
+        },
+        "page": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "bounds",
+            "events"
+          ],
+          "properties": {
+            "bounds": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "start",
+                "next",
+                "total",
+                "limit"
+              ],
+              "properties": {
+                "start": {
+                  "$ref": "#/$defs/u64"
+                },
+                "next": {
+                  "$ref": "#/$defs/u64"
+                },
+                "total": {
+                  "$ref": "#/$defs/u64"
+                },
+                "limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100
+                }
+              }
+            },
+            "events": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "$ref": "#/$defs/event"
+              }
+            }
+          }
+        },
+        "error": {
+          "type": "null"
+        }
+      }
+    },
+    "trendPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tagId",
+        "offset",
+        "dts",
+        "typeCode",
+        "streamId",
+        "dataSize",
+        "availableDataSize",
+        "payloadComplete",
+        "previousTagSizeState",
+        "filtered",
+        "previousTagId",
+        "previousDts",
+        "deltaMs",
+        "context"
+      ],
+      "properties": {
+        "tagId": {
+          "$ref": "#/$defs/u64"
+        },
+        "offset": {
+          "$ref": "#/$defs/u64"
+        },
+        "dts": {
+          "$ref": "#/$defs/dts"
+        },
+        "typeCode": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "streamId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "dataSize": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "availableDataSize": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "payloadComplete": {
+          "type": "boolean"
+        },
+        "previousTagSizeState": {
+          "enum": [
+            "valid",
+            "missing",
+            "invalid"
+          ]
+        },
+        "filtered": {
+          "type": "boolean"
+        },
+        "previousTagId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/u64"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "previousDts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/dts"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "deltaMs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/delta"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "context": {
+          "enum": [
+            "found",
+            "start",
+            "budget_exhausted"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "context": {
+                "const": "found"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "previousTagId": {
+                "$ref": "#/$defs/u64"
+              },
+              "previousDts": {
+                "$ref": "#/$defs/dts"
+              },
+              "deltaMs": {
+                "$ref": "#/$defs/delta"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "previousTagId": {
+                "type": "null"
+              },
+              "previousDts": {
+                "type": "null"
+              },
+              "deltaMs": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "trendPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sessionId",
+        "bounds",
+        "contextStart",
+        "contextScanned",
+        "points"
+      ],
+      "properties": {
+        "sessionId": {
+          "$ref": "#/$defs/sessionId"
+        },
+        "bounds": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "start",
+            "next",
+            "total",
+            "limit"
+          ],
+          "properties": {
+            "start": {
+              "$ref": "#/$defs/u64"
+            },
+            "next": {
+              "$ref": "#/$defs/u64"
+            },
+            "total": {
+              "$ref": "#/$defs/u64"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 512
+            }
+          }
+        },
+        "contextStart": {
+          "$ref": "#/$defs/u64"
+        },
+        "contextScanned": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "points": {
+          "type": "array",
+          "maxItems": 512,
+          "items": {
+            "$ref": "#/$defs/trendPoint"
+          }
+        }
+      }
+    },
+    "trendIssue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "sourceTagId",
+        "codes"
+      ],
+      "properties": {
+        "kind": {
+          "const": "local_observation"
+        },
+        "sourceTagId": {
+          "$ref": "#/$defs/u64"
+        },
+        "codes": {
+          "type": "array",
+          "maxItems": 6,
+          "items": {
+            "enum": [
+              "regression",
+              "duplicate",
+              "gap",
+              "payload",
+              "previous_missing",
+              "previous_invalid"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "mediaCurveRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "count",
+        "metric"
+      ],
+      "properties": {
+        "start": {
+          "$ref": "#/$defs/u64"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "metric": {
+          "enum": [
+            "audio",
+            "video",
+            "mp3",
+            "gopAverage",
+            "gopMax"
+          ]
+        }
+      }
+    },
+    "mediaCurveRate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "coveredBytes",
+        "coveredIntervalMs",
+        "bitsPerSecond",
+        "tagId"
+      ],
+      "properties": {
+        "coveredBytes": {
+          "$ref": "#/$defs/u64"
+        },
+        "coveredIntervalMs": {
+          "$ref": "#/$defs/u64"
+        },
+        "bitsPerSecond": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/u64"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tagId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/u64"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "bitsPerSecond": {
+              "type": "null"
+            },
+            "tagId": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "bitsPerSecond": {
+              "$ref": "#/$defs/u64"
+            },
+            "tagId": {
+              "$ref": "#/$defs/u64"
+            },
+            "coveredIntervalMs": {
+              "$ref": "#/$defs/requestId"
+            }
+          }
+        }
+      ]
+    },
+    "mediaCurveGOP": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "declaredCount",
+        "closedCount",
+        "totalDurationMs",
+        "minDurationMs",
+        "maxDurationMs",
+        "averageDurationMs",
+        "tagId"
+      ],
+      "properties": {
+        "declaredCount": {
+          "$ref": "#/$defs/u64"
+        },
+        "closedCount": {
+          "$ref": "#/$defs/u64"
+        },
+        "totalDurationMs": {
+          "$ref": "#/$defs/u64"
+        },
+        "minDurationMs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/u64"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "maxDurationMs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/u64"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "averageDurationMs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/u64"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tagId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/u64"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "closedCount": {
+              "const": "0"
+            },
+            "totalDurationMs": {
+              "const": "0"
+            },
+            "minDurationMs": {
+              "type": "null"
+            },
+            "maxDurationMs": {
+              "type": "null"
+            },
+            "averageDurationMs": {
+              "type": "null"
+            },
+            "tagId": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "closedCount": {
+              "$ref": "#/$defs/requestId"
+            },
+            "minDurationMs": {
+              "$ref": "#/$defs/u64"
+            },
+            "maxDurationMs": {
+              "$ref": "#/$defs/u64"
+            },
+            "averageDurationMs": {
+              "$ref": "#/$defs/u64"
+            },
+            "tagId": {
+              "$ref": "#/$defs/u64"
+            }
+          }
+        }
+      ]
+    },
+    "mediaCurvePoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "index",
+        "startTag",
+        "nextTag",
+        "audio",
+        "video",
+        "mp3",
+        "gop",
+        "unclassifiedTags"
+      ],
+      "properties": {
+        "index": {
+          "$ref": "#/$defs/u64"
+        },
+        "startTag": {
+          "$ref": "#/$defs/u64"
+        },
+        "nextTag": {
+          "$ref": "#/$defs/u64"
+        },
+        "audio": {
+          "$ref": "#/$defs/mediaCurveRate"
+        },
+        "video": {
+          "$ref": "#/$defs/mediaCurveRate"
+        },
+        "mp3": {
+          "$ref": "#/$defs/mediaCurveRate"
+        },
+        "gop": {
+          "$ref": "#/$defs/mediaCurveGOP"
+        },
+        "unclassifiedTags": {
+          "$ref": "#/$defs/u64"
+        }
+      }
+    },
+    "mediaCurveBounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "limit",
+        "total",
+        "next"
+      ],
+      "properties": {
+        "start": {
+          "$ref": "#/$defs/u64"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "total": {
+          "$ref": "#/$defs/u64"
+        },
+        "next": {
+          "$ref": "#/$defs/u64"
+        }
+      }
+    },
+    "mediaCurvePage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bounds",
+        "windowTags",
+        "indexedTags",
+        "scanComplete",
+        "complete",
+        "points"
+      ],
+      "properties": {
+        "bounds": {
+          "$ref": "#/$defs/mediaCurveBounds"
+        },
+        "windowTags": {
+          "const": 256
+        },
+        "indexedTags": {
+          "$ref": "#/$defs/u64"
+        },
+        "scanComplete": {
+          "type": "boolean"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "points": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/mediaCurvePoint"
+          }
+        }
+      }
+    },
+    "mediaCurveResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "apiVersion",
+        "sessionId",
+        "requestId",
+        "page",
+        "error"
+      ],
+      "properties": {
+        "apiVersion": {
+          "const": 1
+        },
+        "sessionId": {
+          "$ref": "#/$defs/sessionId"
+        },
+        "requestId": {
+          "$ref": "#/$defs/requestId"
+        },
+        "page": {
+          "$ref": "#/$defs/mediaCurvePage"
+        },
+        "error": {
+          "type": "null"
+        }
+      }
+    },
+    "avcSearchFilter": {
+      "enum": [
+        "mismatches",
+        "unknown",
+        "all"
+      ]
+    },
+    "avcSearchRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestId",
+        "start",
+        "filter"
+      ],
+      "properties": {
+        "requestId": {
+          "$ref": "#/$defs/requestId"
+        },
+        "start": {
+          "$ref": "#/$defs/u64"
+        },
+        "filter": {
+          "$ref": "#/$defs/avcSearchFilter"
+        }
+      }
+    },
+    "avcSearchResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "apiVersion",
+        "sessionId",
+        "requestId",
+        "state",
+        "page",
+        "error"
+      ],
+      "properties": {
+        "apiVersion": {
+          "const": 1
+        },
+        "sessionId": {
+          "$ref": "#/$defs/sessionId"
+        },
+        "requestId": {
+          "$ref": "#/$defs/requestId"
+        },
+        "state": {
+          "const": "ready"
+        },
+        "page": {
+          "$ref": "#/$defs/avcSearchPage"
+        },
+        "error": {
+          "type": "null"
+        }
+      }
+    },
+    "avcSearchPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "next",
+        "total",
+        "scanned",
+        "bytesRead",
+        "exhausted",
+        "scanComplete",
+        "filter",
+        "rows"
+      ],
+      "properties": {
+        "start": {
+          "$ref": "#/$defs/u64"
+        },
+        "next": {
+          "$ref": "#/$defs/u64"
+        },
+        "total": {
+          "$ref": "#/$defs/u64"
+        },
+        "scanned": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 256
+        },
+        "bytesRead": {
+          "type": "string",
+          "maxLength": 7,
+          "pattern": "^(0|[1-9][0-9]{0,5}|10[0-3][0-9]{4}|104[0-7][0-9]{3}|1048[0-4][0-9]{2}|10485[0-6][0-9]|104857[0-6])$"
+        },
+        "exhausted": {
+          "type": "boolean"
+        },
+        "scanComplete": {
+          "type": "boolean"
+        },
+        "filter": {
+          "$ref": "#/$defs/avcSearchFilter"
+        },
+        "rows": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/avcSearchRow"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "filter": {
+                "const": "unknown"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "rows": {
+                "items": {
+                  "properties": {
+                    "observedIDR": {
+                      "const": "unknown"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "filter": {
+                "const": "mismatches"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "rows": {
+                "items": {
+                  "properties": {
+                    "declarationRelation": {
+                      "enum": [
+                        "keyframe_without_idr",
+                        "inter_with_idr"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "avcSearchRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tagId",
+        "dts",
+        "offset",
+        "declaredFrameType",
+        "observedIDR",
+        "declarationRelation",
+        "reason",
+        "span"
+      ],
+      "properties": {
+        "tagId": {
+          "$ref": "#/$defs/u64"
+        },
+        "dts": {
+          "$ref": "#/$defs/dts"
+        },
+        "offset": {
+          "$ref": "#/$defs/u64"
+        },
+        "declaredFrameType": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 15
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observedIDR": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "declarationRelation": {
+          "enum": [
+            "undetermined",
+            "other_declaration",
+            "keyframe_with_idr",
+            "keyframe_without_idr",
+            "inter_with_idr",
+            "inter_without_idr"
+          ]
+        },
+        "reason": {
+          "enum": [
+            "filtered",
+            "truncated_payload",
+            "byte_limit",
+            "unsupported_packet",
+            "missing_configuration",
+            "complete",
+            "nal_limit",
+            "invalid_framing",
+            "unclassified_header"
+          ]
+        },
+        "span": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/avcSearchSpan"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "observedIDR": {
+                "const": "yes"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "declarationRelation": {
+                "enum": [
+                  "keyframe_with_idr",
+                  "inter_with_idr",
+                  "other_declaration"
+                ]
+              },
+              "span": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "observedIDR": {
+                "const": "no"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "declarationRelation": {
+                "enum": [
+                  "keyframe_without_idr",
+                  "inter_without_idr",
+                  "other_declaration"
+                ]
+              },
+              "span": {
+                "type": "object"
+              },
+              "reason": {
+                "const": "complete"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "observedIDR": {
+                "const": "unknown"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "declarationRelation": {
+                "enum": [
+                  "undetermined",
+                  "other_declaration"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "declaredFrameType": {
+                "const": 1
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "declarationRelation": {
+                "enum": [
+                  "undetermined",
+                  "keyframe_with_idr",
+                  "keyframe_without_idr"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "declaredFrameType": {
+                "const": 2
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "declarationRelation": {
+                "enum": [
+                  "undetermined",
+                  "inter_with_idr",
+                  "inter_without_idr"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "declaredFrameType": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "observedIDR": {
+                "const": "unknown"
+              },
+              "declarationRelation": {
+                "const": "undetermined"
+              },
+              "span": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "avcSearchSpan": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/span"
+        },
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "bitOffset": {
+                  "const": 0
+                },
+                "bitLength": {
+                  "const": 4
+                }
+              }
+            },
+            {
+              "properties": {
+                "bitOffset": {
+                  "const": 3
+                },
+                "bitLength": {
+                  "const": 5
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "codecSearchRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestId",
+        "cursor",
+        "kind",
+        "filter"
+      ],
+      "properties": {
+        "requestId": {
+          "$ref": "#/$defs/requestId"
+        },
+        "cursor": {
+          "$ref": "#/$defs/u64"
+        },
+        "kind": {
+          "enum": [
+            "mp3",
+            "sei"
+          ]
+        },
+        "filter": {
+          "enum": [
+            "all",
+            "parameters",
+            "bitrate",
+            "stops",
+            "bufferingPeriod",
+            "pictureTiming",
+            "unknown"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "mp3"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "filter": {
+                "enum": [
+                  "all",
+                  "parameters",
+                  "bitrate",
+                  "stops"
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "filter": {
+                "enum": [
+                  "all",
+                  "bufferingPeriod",
+                  "pictureTiming",
+                  "unknown"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "codecSearchPosition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tagId",
+        "frameIndex"
+      ],
+      "properties": {
+        "tagId": {
+          "$ref": "#/$defs/u64"
+        },
+        "frameIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
+      }
+    },
+    "codecSearchSpan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "byteOffset",
+        "bitOffset",
+        "bitLength"
+      ],
+      "properties": {
+        "byteOffset": {
+          "$ref": "#/$defs/u64"
+        },
+        "bitOffset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7
+        },
+        "bitLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
+        }
+      }
+    },
+    "codecSearchValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "value"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "value": {
+          "type": "string",
+          "maxLength": 256
+        }
+      }
+    },
+    "codecSearchRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tagId",
+        "dts",
+        "offset",
+        "frameIndex",
+        "nalIndex",
+        "messageIndex",
+        "kind",
+        "status",
+        "contextState",
+        "complete",
+        "span",
+        "spsSpan",
+        "evidenceSpan",
+        "values"
+      ],
+      "properties": {
+        "tagId": {
+          "$ref": "#/$defs/u64"
+        },
+        "dts": {
+          "$ref": "#/$defs/dts"
+        },
+        "offset": {
+          "$ref": "#/$defs/u64"
+        },
+        "frameIndex": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nalIndex": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "messageIndex": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 63
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "enum": [
+            "stop",
+            "parameters",
+            "bitrate",
+            "parametersAndBitrate",
+            "coverage",
+            "bufferingPeriod",
+            "pictureTiming",
+            "recoveryPoint",
+            "userDataUnregistered",
+            "unknown"
+          ]
+        },
+        "status": {
+          "enum": [
+            "complete",
+            "truncatedHeader",
+            "malformedHeader",
+            "unsupportedLayer",
+            "freeFormat",
+            "truncatedFrame",
+            "filteredAudio",
+            "truncatedAudio",
+            "missingAudioHeader",
+            "unsupportedAudio",
+            "unknown",
+            "incomplete",
+            "opaque"
+          ]
+        },
+        "contextState": {
+          "enum": [
+            "",
+            "resolved",
+            "missing",
+            "ambiguous",
+            "not_applicable"
+          ]
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "span": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/codecSearchSpan"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "spsSpan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/codecSearchSpan"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidenceSpan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/codecSearchSpan"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "values": {
+          "type": "array",
+          "maxItems": 12,
+          "items": {
+            "$ref": "#/$defs/codecSearchValue"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "complete": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "complete",
+                  "opaque"
+                ]
+              },
+              "span": {
+                "type": "object"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "status": {
+                "not": {
+                  "enum": [
+                    "complete",
+                    "opaque"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "contextState": {
+                "enum": [
+                  "missing",
+                  "ambiguous"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "complete": {
+                "const": false
+              },
+              "status": {
+                "const": "unknown"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "contextState": {
+                "const": "resolved"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "spsSpan": {
+                "type": "object"
+              },
+              "evidenceSpan": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "codecSearchPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "filter",
+        "cursor",
+        "nextCursor",
+        "start",
+        "next",
+        "total",
+        "scannedTags",
+        "scannedFrames",
+        "pending",
+        "bytesRead",
+        "exhausted",
+        "scanComplete",
+        "rows"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "mp3",
+            "sei"
+          ]
+        },
+        "filter": {
+          "enum": [
+            "all",
+            "parameters",
+            "bitrate",
+            "stops",
+            "bufferingPeriod",
+            "pictureTiming",
+            "unknown"
+          ]
+        },
+        "cursor": {
+          "$ref": "#/$defs/u64"
+        },
+        "nextCursor": {
+          "$ref": "#/$defs/u64"
+        },
+        "start": {
+          "$ref": "#/$defs/codecSearchPosition"
+        },
+        "next": {
+          "$ref": "#/$defs/codecSearchPosition"
+        },
+        "total": {
+          "$ref": "#/$defs/u64"
+        },
+        "scannedTags": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 256
+        },
+        "scannedFrames": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1024
+        },
+        "pending": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 257
+        },
+        "bytesRead": {
+          "type": "string",
+          "maxLength": 7,
+          "pattern": "^(0|[1-9][0-9]{0,5}|10[0-3][0-9]{4}|104[0-7][0-9]{3}|1048[0-4][0-9]{2}|10485[0-6][0-9]|104857[0-6])$"
+        },
+        "exhausted": {
+          "type": "boolean"
+        },
+        "scanComplete": {
+          "type": "boolean"
+        },
+        "rows": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/codecSearchRow"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "mp3"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "filter": {
+                "enum": [
+                  "all",
+                  "parameters",
+                  "bitrate",
+                  "stops"
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "filter": {
+                "enum": [
+                  "all",
+                  "bufferingPeriod",
+                  "pictureTiming",
+                  "unknown"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "mp3"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "pending": {
+                "const": 0
+              },
+              "rows": {
+                "items": {
+                  "properties": {
+                    "frameIndex": {
+                      "type": "integer"
+                    },
+                    "nalIndex": {
+                      "type": "null"
+                    },
+                    "messageIndex": {
+                      "type": "null"
+                    },
+                    "spsSpan": {
+                      "type": "null"
+                    },
+                    "evidenceSpan": {
+                      "type": "null"
+                    },
+                    "contextState": {
+                      "const": ""
+                    },
+                    "kind": {
+                      "enum": [
+                        "parameters",
+                        "bitrate",
+                        "parametersAndBitrate",
+                        "stop"
+                      ]
+                    },
+                    "status": {
+                      "enum": [
+                        "complete",
+                        "truncatedHeader",
+                        "malformedHeader",
+                        "unsupportedLayer",
+                        "freeFormat",
+                        "truncatedFrame",
+                        "filteredAudio",
+                        "truncatedAudio",
+                        "missingAudioHeader",
+                        "unsupportedAudio"
+                      ]
+                    }
+                  }
+                }
+              },
+              "bytesRead": {
+                "type": "string",
+                "maxLength": 5,
+                "pattern": "^(0|[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-6])$"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "scannedFrames": {
+                "const": 0
+              },
+              "start": {
+                "properties": {
+                  "frameIndex": {
+                    "const": 0
+                  }
+                }
+              },
+              "next": {
+                "properties": {
+                  "frameIndex": {
+                    "const": 0
+                  }
+                }
+              },
+              "rows": {
+                "items": {
+                  "properties": {
+                    "frameIndex": {
+                      "type": "null"
+                    },
+                    "contextState": {
+                      "enum": [
+                        "resolved",
+                        "missing",
+                        "ambiguous",
+                        "not_applicable"
+                      ]
+                    },
+                    "kind": {
+                      "enum": [
+                        "coverage",
+                        "bufferingPeriod",
+                        "pictureTiming",
+                        "recoveryPoint",
+                        "userDataUnregistered",
+                        "unknown"
+                      ]
+                    },
+                    "status": {
+                      "enum": [
+                        "complete",
+                        "incomplete",
+                        "unknown",
+                        "opaque"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "exhausted": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "pending": {
+                "const": 0
+              },
+              "nextCursor": {
+                "const": "0"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "nextCursor": {
+                "$ref": "#/$defs/requestId"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "codecSearchResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "apiVersion",
+        "sessionId",
+        "requestId",
+        "state",
+        "page",
+        "error"
+      ],
+      "properties": {
+        "apiVersion": {
+          "const": 1
+        },
+        "sessionId": {
+          "$ref": "#/$defs/sessionId"
+        },
+        "requestId": {
+          "$ref": "#/$defs/requestId"
+        },
+        "state": {
+          "const": "ready"
+        },
+        "page": {
+          "$ref": "#/$defs/codecSearchPage"
+        },
+        "error": {
+          "type": "null"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "selectedTag": {
+            "type": "null"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "omitted": {
+            "contains": {
+              "properties": {
+                "section": {
+                  "const": "selectedTag"
+                }
+              }
+            },
+            "minContains": 1,
+            "maxContains": 1
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "omitted": {
+            "not": {
+              "contains": {
+                "properties": {
+                  "section": {
+                    "const": "selectedTag"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "detail": {
+            "type": "null"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "omitted": {
+            "contains": {
+              "properties": {
+                "section": {
+                  "const": "detail"
+                }
+              }
+            },
+            "minContains": 1,
+            "maxContains": 1
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "omitted": {
+            "not": {
+              "contains": {
+                "properties": {
+                  "section": {
+                    "const": "detail"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "hex": {
+            "type": "null"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "omitted": {
+            "contains": {
+              "properties": {
+                "section": {
+                  "const": "hex"
+                }
+              }
+            },
+            "minContains": 1,
+            "maxContains": 1
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "omitted": {
+            "not": {
+              "contains": {
+                "properties": {
+                  "section": {
+                    "const": "hex"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "summary": {
+            "type": "null"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "omitted": {
+            "contains": {
+              "properties": {
+                "section": {
+                  "const": "summary"
+                }
+              }
+            },
+            "minContains": 1,
+            "maxContains": 1
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "omitted": {
+            "not": {
+              "contains": {
+                "properties": {
+                  "section": {
+                    "const": "summary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "summaryPage": {
+            "type": "null"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "omitted": {
+            "contains": {
+              "properties": {
+                "section": {
+                  "const": "summaryPage"
+                }
+              }
+            },
+            "minContains": 1,
+            "maxContains": 1
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "omitted": {
+            "not": {
+              "contains": {
+                "properties": {
+                  "section": {
+                    "const": "summaryPage"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "trend": {
+            "type": "null"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "omitted": {
+            "contains": {
+              "properties": {
+                "section": {
+                  "const": "trend"
+                }
+              }
+            },
+            "minContains": 1,
+            "maxContains": 1
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "omitted": {
+            "not": {
+              "contains": {
+                "properties": {
+                  "section": {
+                    "const": "trend"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "trend": {
+            "type": "null"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "trendIssues": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mediaCurvePage": {
+            "type": "null"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "omitted": {
+            "contains": {
+              "properties": {
+                "section": {
+                  "const": "mediaCurvePage"
+                }
+              }
+            },
+            "minContains": 1,
+            "maxContains": 1
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "omitted": {
+            "not": {
+              "contains": {
+                "properties": {
+                  "section": {
+                    "const": "mediaCurvePage"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mediaCurvePage": {
+            "type": "object"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "summary": {
+            "type": "object"
+          },
+          "selection": {
+            "required": [
+              "mediaCurve"
+            ],
+            "properties": {
+              "mediaCurve": {
+                "type": "object"
+              },
+              "summaryRequestId": {
+                "$ref": "#/$defs/requestId"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "avcSearchPage": {
+            "type": "null"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "omitted": {
+            "contains": {
+              "properties": {
+                "section": {
+                  "const": "avcSearchPage"
+                }
+              }
+            },
+            "minContains": 1,
+            "maxContains": 1
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "omitted": {
+            "not": {
+              "contains": {
+                "properties": {
+                  "section": {
+                    "const": "avcSearchPage"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "avcSearchPage": {
+            "type": "object"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "selection": {
+            "required": [
+              "avcSearch"
+            ],
+            "properties": {
+              "avcSearch": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "codecSearchPage": {
+            "type": "null"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "omitted": {
+            "contains": {
+              "properties": {
+                "section": {
+                  "const": "codecSearchPage"
+                }
+              }
+            },
+            "minContains": 1,
+            "maxContains": 1
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "omitted": {
+            "not": {
+              "contains": {
+                "properties": {
+                  "section": {
+                    "const": "codecSearchPage"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "codecSearchPage": {
+            "type": "object"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "selection": {
+            "required": [
+              "codecSearch"
+            ],
+            "properties": {
+              "codecSearch": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

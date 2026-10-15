@@ -29,6 +29,7 @@ function setup(overrides: Partial<API> = {}) {
   const tag = (id: string): Tag => ({ id, typeCode: 9, typeName: 'video', offset: '13', span, headerSpan: span, payloadSpan: span, rawTypeFlags: 9, filter: false,
     dataSize: 1, availableDataSize: 1, dts: '0', streamId: 0, payloadComplete: true, previousTagSize: { present: true, span, value: 12, expected: 12, valid: true } });
   const api: API = {
+    startCodecSearch: async () => { throw Error('unexpected codec search'); }, codecSearchResult: async () => { throw Error('unexpected codec search result'); }, cancelCodecSearch: async () => { throw Error('unexpected codec search cancel'); },
     open: async requestId => ({ apiVersion: 1, requestId, pending: false, canceled: false, fileName: 'fixture.flv', session, error: null }), openResult: unexpected,
     status: async () => ({ apiVersion: 1, session, error: null }), cancel: unexpected, close: async () => ({ apiVersion: 1, session: { ...session, closed: true }, error: null }),
     tags: async request => ({ apiVersion: 1, error: null, page: { sessionId: session.sessionId, bounds: { start: request.start, next: String(BigInt(request.start) + 100n), total: '600', limit: 100 }, tags: [tag(request.start)] } }),

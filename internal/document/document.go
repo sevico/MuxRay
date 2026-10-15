@@ -31,6 +31,7 @@ var (
 	ErrSourceChanged  = errors.New("document: source changed")
 	ErrStaleRequest   = errors.New("document: request superseded")
 	ErrUnknownRequest = errors.New("document: request not found")
+	ErrUnknownCursor  = errors.New("document: search cursor expired or unknown")
 	ErrInvalidRequest = errors.New("document: invalid request")
 	ErrTagNotFound    = errors.New("document: tag not indexed")
 )
@@ -50,6 +51,7 @@ const (
 	hexWork
 	summaryWork
 	avcSearchWork
+	codecSearchWork
 )
 
 type work struct {
@@ -62,6 +64,8 @@ type work struct {
 	mp3Page       *uint32
 	mp3Dependency bool
 	filter        string
+	codec         string
+	codecSeed     *codecSearchCursor
 }
 
 // DetailResult is the latest selected request. Its value is copied on return;
@@ -99,6 +103,8 @@ type Document struct {
 	snapshotDetail DetailResult
 	snapshotHex    HexResult
 	avcSearch      AVCSearchResult
+	codecSearch    CodecSearchResult
+	codecCursors   []codecSearchCursor
 	summary        SummaryResult
 	summaryReport  *summaryview.Report
 	pending        *work
@@ -160,6 +166,7 @@ func (d *Document) run() {
 			d.clearSnapshotReadsLocked()
 			d.summary.Overview, d.summaryReport = nil, nil
 			d.avcSearch.Page = nil
+			d.codecSearch.Page, d.codecCursors = nil, nil
 			d.avcParameters.Clear()
 			d.mp3Pages = nil
 			d.mu.Unlock()
@@ -196,6 +203,8 @@ func (d *Document) run() {
 		var window *HexWindow
 		var summary *summaryview.Report
 		var searchPage *avcsearch.Page
+		var codecPage *CodecSearchPage
+		var codecNext *codecSearchCursor
 		var checkpoint *avccontext.ParameterCheckpoint
 		var mp3Checkpoints []mp3PageCheckpoint
 		var err error
@@ -203,6 +212,8 @@ func (d *Document) run() {
 			window, err = d.readHex(ctx, selected.offset, selected.count)
 		} else if selected.kind == summaryWork {
 			summary, err = d.readSummary(ctx, selected.id)
+		} else if selected.kind == codecSearchWork {
+			codecPage, codecNext, err = d.readCodecSearch(ctx, *selected)
 		} else if selected.kind == avcSearchWork {
 			searchPage, err = d.readAVCSearch(ctx, selected.offset, selected.filter)
 		} else {
@@ -240,6 +251,18 @@ func (d *Document) run() {
 			d.avcSearch.State, d.avcSearch.Err, d.avcSearch.Page = "ready", err, searchPage
 			if err != nil {
 				d.avcSearch.State, d.avcSearch.Page = "failed", nil
+			}
+		} else if !d.closed && selected.kind == codecSearchWork && d.codecSearch.RequestID == selected.id {
+			if d.changed {
+				err = ErrSourceChanged
+			} else if d.codecSearch.State == "canceling" || d.request.id != selected.id {
+				err = context.Canceled
+			}
+			d.codecSearch.State, d.codecSearch.Err, d.codecSearch.Page = "ready", err, codecPage
+			if err != nil {
+				d.codecSearch.State, d.codecSearch.Page = "failed", nil
+			} else {
+				d.commitCodecCursorLocked(*selected, codecNext)
 			}
 		} else if !d.closed && d.request.id == selected.id {
 			if selected.kind == hexWork {
@@ -285,6 +308,7 @@ func (d *Document) sourceUnchanged() error {
 		d.clearSnapshotReadsLocked()
 		d.invalidateSummaryLocked(ErrSourceChanged)
 		d.invalidateAVCSearchLocked(ErrSourceChanged)
+		d.invalidateCodecSearchLocked(ErrSourceChanged)
 		d.mu.Unlock()
 		return ErrSourceChanged
 	}
@@ -428,6 +452,7 @@ func sameMP3Frame(a, b *uint32) bool {
 func (d *Document) admitLocked(task work) {
 	d.cancelSummaryLocked()
 	d.cancelAVCSearchLocked()
+	d.cancelCodecSearchLocked()
 	d.request = task
 	d.pending = &task
 	d.latest, d.hex = DetailResult{}, HexResult{}
@@ -441,6 +466,8 @@ func (d *Document) admitLocked(task work) {
 		d.clearSnapshotReadsLocked()
 		d.summary = SummaryResult{RequestID: task.id, State: "pending", Total: d.scan.Snapshot().Progress.TagCount}
 		d.summaryReport = nil
+	} else if task.kind == codecSearchWork {
+		d.codecSearch = CodecSearchResult{RequestID: task.id, State: "pending"}
 	} else if task.kind == avcSearchWork {
 		d.avcSearch = AVCSearchResult{RequestID: task.id, State: "pending"}
 	}
@@ -538,6 +565,7 @@ func (d *Document) Close(ctx context.Context) error {
 	d.clearSnapshotReadsLocked()
 	d.summary.Overview, d.summaryReport = nil, nil
 	d.avcSearch.Page = nil
+	d.codecSearch.Page, d.codecCursors = nil, nil
 	if d.activeCancel != nil {
 		d.activeCancel()
 	}

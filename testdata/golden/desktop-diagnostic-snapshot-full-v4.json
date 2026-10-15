@@ -1,0 +1,2006 @@
+{
+  "schemaVersion": 4,
+  "documentType": "desktopDiagnosticSnapshot",
+  "fileName": "sei-search.flv",
+  "createdAt": "2026-09-29T00:00:00Z",
+  "producer": {
+    "name": "MuxRay",
+    "version": "0.1.0-dev"
+  },
+  "scope": {
+    "kind": "bounded_desktop_snapshot",
+    "sourceValidation": "existing_change_latch_only",
+    "scanDiagnostics": "first_100_retained",
+    "summary": "ready_overview_and_requested_event_page",
+    "trend": "requested_source_order_window",
+    "trendInterpretation": "local_display_rule_not_parser_diagnostic",
+    "mediaCurve": "requested_retained_summary_curve_page",
+    "mediaCurveInterpretation": "codec_payload_rate_and_declared_gop_not_transport_rate_or_decodability",
+    "avcSearch": "requested_retained_current_page_only",
+    "avcSearchInterpretation": "bounded_nal_header_observation_not_corruption_or_decodability_proof",
+    "codecSearch": "requested_retained_current_page_only",
+    "codecSearchInterpretation": "bounded_syntax_evidence_not_corruption_or_decodability_proof"
+  },
+  "session": {
+    "sessionId": "scan-1",
+    "state": "finished",
+    "terminal": true,
+    "closed": false,
+    "progress": {
+      "sourceSize": "468",
+      "bytesScanned": "468",
+      "tagCount": "2",
+      "diagnosticCount": 0
+    },
+    "scan": {
+      "complete": true,
+      "hasErrors": false
+    },
+    "failure": null
+  },
+  "selection": {
+    "schemaVersion": 4,
+    "sessionId": "scan-1",
+    "selectedTagId": null,
+    "detailRequestId": null,
+    "hexRequestId": "9007199254740996",
+    "summaryRequestId": null,
+    "summaryPage": null,
+    "trend": null,
+    "codecSearch": {
+      "requestId": "9007199254740994",
+      "cursor": "9007199254740993",
+      "kind": "sei",
+      "filter": "all"
+    }
+  },
+  "scanDiagnostics": {
+    "sessionId": "scan-1",
+    "bounds": {
+      "start": "0",
+      "limit": 100,
+      "total": "0",
+      "next": "0"
+    },
+    "diagnostics": []
+  },
+  "selectedTag": null,
+  "detail": null,
+  "hex": {
+    "apiVersion": 1,
+    "sessionId": "scan-1",
+    "requestId": "9007199254740996",
+    "offset": "0",
+    "count": 4096,
+    "state": "ready",
+    "window": {
+      "offset": "0",
+      "sourceSize": "468",
+      "hex": "464c56010500000009000000000900000c0000000000000017000000000142001effe000000000170900019d000000000000002701000000000000c20603018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018080000000c20603018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018003018080000000080603018003018080000001a8",
+      "eof": true
+    },
+    "error": null
+  },
+  "summary": null,
+  "summaryPage": null,
+  "trend": null,
+  "trendIssues": [],
+  "omitted": [
+    {
+      "section": "selectedTag",
+      "reason": "not_requested"
+    },
+    {
+      "section": "detail",
+      "reason": "not_requested"
+    },
+    {
+      "section": "summary",
+      "reason": "not_requested"
+    },
+    {
+      "section": "summaryPage",
+      "reason": "summary_unavailable"
+    },
+    {
+      "section": "mediaCurvePage",
+      "reason": "not_requested"
+    },
+    {
+      "section": "avcSearchPage",
+      "reason": "not_requested"
+    },
+    {
+      "section": "trend",
+      "reason": "not_requested"
+    }
+  ],
+  "mediaCurvePage": null,
+  "avcSearchPage": null,
+  "codecSearchPage": {
+    "apiVersion": 1,
+    "sessionId": "scan-1",
+    "requestId": "9007199254740994",
+    "state": "ready",
+    "page": {
+      "kind": "sei",
+      "filter": "all",
+      "cursor": "9007199254740993",
+      "nextCursor": "9007199254740994",
+      "start": {
+        "tagId": "1",
+        "frameIndex": 0
+      },
+      "next": {
+        "tagId": "1",
+        "frameIndex": 0
+      },
+      "total": "2",
+      "scannedTags": 0,
+      "scannedFrames": 0,
+      "pending": 2,
+      "bytesRead": "0",
+      "exhausted": false,
+      "scanComplete": true,
+      "rows": [
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 0,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "259",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 1,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "262",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 2,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "265",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 3,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "268",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 4,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "271",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 5,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "274",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 6,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "277",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 7,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "280",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 8,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "283",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 9,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "286",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 10,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "289",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 11,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "292",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 12,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "295",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 13,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "298",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 14,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "301",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 15,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "304",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 16,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "307",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 17,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "310",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 18,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "313",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 19,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "316",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 20,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "319",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 21,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "322",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 22,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "325",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 23,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "328",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 24,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "331",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 25,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "334",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 26,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "337",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 27,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "340",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 28,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "343",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 29,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "346",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 30,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "349",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 31,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "352",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 32,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "355",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 33,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "358",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 34,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "361",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 35,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "364",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 36,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "367",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 37,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "370",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 38,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "373",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 39,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "376",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 40,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "379",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 41,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "382",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 42,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "385",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 43,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "388",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 44,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "391",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 45,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "394",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 46,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "397",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 47,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "400",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 48,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "403",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 49,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "406",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 50,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "409",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 51,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "412",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 52,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "415",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 53,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "418",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 54,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "421",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 55,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "424",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 56,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "427",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 57,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "430",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 58,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "433",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 59,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "436",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 60,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "439",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 61,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "442",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 62,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "445",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        },
+        {
+          "tagId": "1",
+          "dts": "0",
+          "offset": "40",
+          "frameIndex": null,
+          "nalIndex": 1,
+          "messageIndex": 63,
+          "kind": "unknown",
+          "status": "opaque",
+          "contextState": "not_applicable",
+          "complete": true,
+          "span": {
+            "byteOffset": "448",
+            "bitOffset": 0,
+            "bitLength": 24
+          },
+          "spsSpan": null,
+          "evidenceSpan": null,
+          "values": [
+            {
+              "name": "payloadType",
+              "value": "3"
+            },
+            {
+              "name": "reason",
+              "value": "unsupported_payload_type"
+            }
+          ]
+        }
+      ]
+    },
+    "error": null
+  }
+}

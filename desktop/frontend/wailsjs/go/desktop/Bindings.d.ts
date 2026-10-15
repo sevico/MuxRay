@@ -4,6 +4,8 @@ import {desktop} from '../models';
 
 export function CancelAVCSearch(arg1:desktop.DetailQuery):Promise<desktop.AVCSearchResponse>;
 
+export function CancelCodecSearch(arg1:desktop.DetailQuery):Promise<desktop.CodecSearchResponse>;
+
 export function CancelScan(arg1:string):Promise<desktop.SessionResponse>;
 
 export function CancelSummary(arg1:desktop.SummaryQuery):Promise<desktop.SummaryResponse>;
@@ -11,6 +13,8 @@ export function CancelSummary(arg1:desktop.SummaryQuery):Promise<desktop.Summary
 export function CloseFile(arg1:string):Promise<desktop.SessionResponse>;
 
 export function GetAVCSearch(arg1:desktop.DetailQuery):Promise<desktop.AVCSearchResponse>;
+
+export function GetCodecSearch(arg1:desktop.DetailQuery):Promise<desktop.CodecSearchResponse>;
 
 export function GetDetail(arg1:desktop.DetailQuery):Promise<desktop.DetailResponse>;
 
@@ -35,6 +39,8 @@ export function GetTags(arg1:desktop.PageRequest):Promise<desktop.TagPageRespons
 export function OpenFile(arg1:desktop.OpenRequest):Promise<desktop.SessionResponse>;
 
 export function StartAVCSearch(arg1:desktop.AVCSearchRequest):Promise<desktop.AVCSearchResponse>;
+
+export function StartCodecSearch(arg1:desktop.CodecSearchRequest):Promise<desktop.CodecSearchResponse>;
 
 export function StartDetail(arg1:desktop.DetailRequest):Promise<desktop.DetailResponse>;
 

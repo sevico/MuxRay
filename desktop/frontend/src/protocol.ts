@@ -65,6 +65,23 @@ export interface AVCSearchPage {
 export interface AVCSearchResponse extends DetailQuery {
   apiVersion: number; state: 'pending' | 'canceling' | 'ready' | 'failed'; page: AVCSearchPage | null; error: Fault | null;
 }
+export type CodecSearchKind = 'mp3' | 'sei';
+export type CodecSearchFilter = 'all' | 'parameters' | 'bitrate' | 'stops' | 'bufferingPeriod' | 'pictureTiming' | 'unknown';
+export interface CodecSearchRequest extends DetailQuery { cursor: string; kind: CodecSearchKind; filter: CodecSearchFilter }
+export interface CodecSearchPosition { tagId: string; frameIndex: number }
+export interface CodecSearchRow {
+  tagId: string; dts: string; offset: string; frameIndex: number | null; nalIndex: number | null; messageIndex: number | null;
+  kind: string; status: string; contextState: string; complete: boolean;
+  span: Span | null; spsSpan: Span | null; evidenceSpan: Span | null; values: { name: string; value: string }[];
+}
+export interface CodecSearchPage {
+  kind: CodecSearchKind; filter: CodecSearchFilter; cursor: string; nextCursor: string; total: string;
+  start: CodecSearchPosition; next: CodecSearchPosition; scannedTags: number; scannedFrames: number; pending: number;
+  bytesRead: string; exhausted: boolean; scanComplete: boolean; rows: CodecSearchRow[];
+}
+export interface CodecSearchResponse extends DetailQuery {
+  apiVersion: number; state: 'pending' | 'canceling' | 'ready' | 'failed'; page: CodecSearchPage | null; error: Fault | null;
+}
 export interface DetailField { id: string; parentId: string; name: string; type: string; value: string; span: Span | null }
 export type DetailKind = 'amf0ScriptData' | 'aacAudio' | 'avcVideo' | 'mp3Audio';
 export interface Detail { kind: DetailKind; complete: boolean; truncated: boolean; fields: DetailField[]; diagnostics: Diagnostic[] }
@@ -120,7 +137,8 @@ export interface SnapshotTrend {
   metric: 'dts' | 'delta' | 'size'; gapThreshold: string;
 }
 export interface SnapshotRequest {
-  schemaVersion?: 1 | 2 | 3;
+  schemaVersion?: 1 | 2 | 3 | 4;
+  codecSearch?: { requestId: string; cursor: string; kind: CodecSearchKind; filter: CodecSearchFilter };
   mediaCurve?: { start: string; count: number; metric: 'audio' | 'video' | 'mp3' | 'gopAverage' | 'gopMax' };
   avcSearch?: { requestId: string; start: string; filter: AVCSearchFilter };
   sessionId: string; selectedTagId: string | null; detailRequestId: string | null;
@@ -155,6 +173,9 @@ export interface API {
   startAVCSearch(request: AVCSearchRequest): Promise<AVCSearchResponse>;
   avcSearchResult(request: DetailQuery): Promise<AVCSearchResponse>;
   cancelAVCSearch(request: DetailQuery): Promise<AVCSearchResponse>;
+  startCodecSearch(request: CodecSearchRequest): Promise<CodecSearchResponse>;
+  codecSearchResult(request: DetailQuery): Promise<CodecSearchResponse>;
+  cancelCodecSearch(request: DetailQuery): Promise<CodecSearchResponse>;
   saveSnapshot(request: SaveRequest): Promise<SaveResponse>;
   saveResult(requestId: string): Promise<SaveResponse>;
 }

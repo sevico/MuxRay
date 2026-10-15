@@ -6,9 +6,11 @@ import { unsigned } from './numbers.ts';
 import { avcReplayProgress } from './details.ts';
 import { adjacentMP3Frame, mp3FrameIndex, mp3FramePage, mp3FrameSelection, mp3Dependency } from './codec-details.ts';
 import type { MP3DependencySource } from './codec-details.ts';
+import { codecSearchFilter, codecSearchKind, codecRowID, validateCodecSearch } from './codec-search.ts';
+import type { CodecSearchKind, CodecSearchFilter, CodecSearchPosition, CodecSearchPage, CodecSearchRequest, CodecSearchRow } from './protocol.ts';
 import { avcSearchFilter, validateAVCSearch } from './avc-search.ts';
 import type { AVCSearchFilter, AVCSearchPage, AVCSearchRequest, AVCSearchRow } from './protocol.ts';
-import { HEX_WINDOW_BYTES, validateHexWindow, validateSelection } from './hex.ts';
+import { HEX_WINDOW_BYTES, selectionFromSpan, validateHexWindow, validateSelection } from './hex.ts';
 import type { HexSelection } from './hex.ts';
 import type { DetailQuery, SummaryKind, SummaryOverview, SummaryPage, SummaryPageRequest, SummaryResponse, SummaryEvent } from './protocol.ts';
 import { summaryKind, summaryMP3Frame, validateSummaryPage, validateSummaryResponse } from './summary.ts';
@@ -69,6 +71,15 @@ export interface ViewState {
   hexRetry: '' | 'confirm' | 'reload';
   tagJumpError: string | null;
   sourceChanged: boolean;
+  codecSearchPage: CodecSearchPage | null;
+  codecSearchState: '' | 'loading' | 'pending' | 'canceling' | 'recovering' | 'ready' | 'failed';
+  codecSearchRunning: boolean;
+  codecSearchCancelRequested: boolean;
+  codecSearchError: string | null;
+  codecSearchRetry: '' | 'confirm' | 'reload';
+  codecSearchKind: CodecSearchKind;
+  codecSearchFilter: CodecSearchFilter;
+  codecSearchCursor: string;
   avcSearchPage: AVCSearchPage | null;
   avcSearchState: '' | 'loading' | 'pending' | 'canceling' | 'recovering' | 'ready' | 'failed';
   avcSearchRunning: boolean;
@@ -106,7 +117,7 @@ const scheduler: Scheduler = {
 
 class RequestError extends Error {}
 class ReplyUnconfirmed extends Error {}
-type ReplySlot = 'open' | 'command' | 'status' | 'page' | 'detail' | 'hex' | 'summary' | 'summaryPage' | 'trend' | 'curve' | 'save' | 'avcSearch';
+type ReplySlot = 'open' | 'command' | 'status' | 'page' | 'detail' | 'hex' | 'summary' | 'summaryPage' | 'trend' | 'curve' | 'save' | 'avcSearch' | 'codecSearch';
 function check(response: { apiVersion: number; error: { code: string } | null }): void {
   if (response.apiVersion !== 1) throw new RequestError('incompatible_api');
   if (response.error) throw new RequestError(response.error.code);
@@ -185,7 +196,7 @@ export class Controller {
   private api: API;
   private clock: Scheduler;
   private listeners = new Set<() => void>();
-  private state: ViewState = { fileName: '', session: null, operation: '', error: null, tab: 'tags', start: '0', page: null, loading: false, tagFilter: null, filteredPage: null, filterError: null, filterPrevious: null, filterHistoryLimited: false, trendPage: null, trendLoading: false, trendError: null, trendStart: '0', trendSelectedId: null, trendMetric: 'dts', trendType: 'all', trendGapThreshold: '1000', saveState: '', savePending: false, saveError: null, saveRetry: false, saveSourceName: '', saveSessionId: null, saveFileName: '', saveBytesWritten: '0', selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '', mp3JumpError: null, hex: null, hexSelection: null, hexState: '', hexError: null, hexRetry: '', tagJumpError: null, sourceChanged: false, avcSearchPage: null, avcSearchState: '', avcSearchRunning: false, avcSearchCancelRequested: false, avcSearchError: null, avcSearchRetry: '', avcSearchFilter: 'mismatches', avcSearchStart: '0', avcSearchPrevious: null, summary: null, summaryState: '', summaryRunning: false, summaryCancelRequested: false, summaryProcessed: '0', summaryTotal: '0', summaryError: null, summaryRetry: '', summaryKind: 'keyframes', summaryStart: '0', summaryPage: null, summaryPageLoading: false, summaryPageError: null, summaryPrevious: null, curvePage: null, curveLoading: false, curveError: null, curveStart: '0', curveSelectedIndex: null, curveMetric: 'audio' };
+  private state: ViewState = { fileName: '', session: null, operation: '', error: null, tab: 'tags', start: '0', page: null, loading: false, tagFilter: null, filteredPage: null, filterError: null, filterPrevious: null, filterHistoryLimited: false, trendPage: null, trendLoading: false, trendError: null, trendStart: '0', trendSelectedId: null, trendMetric: 'dts', trendType: 'all', trendGapThreshold: '1000', saveState: '', savePending: false, saveError: null, saveRetry: false, saveSourceName: '', saveSessionId: null, saveFileName: '', saveBytesWritten: '0', selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '', mp3JumpError: null, hex: null, hexSelection: null, hexState: '', hexError: null, hexRetry: '', tagJumpError: null, sourceChanged: false, codecSearchPage: null, codecSearchState: '', codecSearchRunning: false, codecSearchCancelRequested: false, codecSearchError: null, codecSearchRetry: '', codecSearchKind: 'mp3', codecSearchFilter: 'all', codecSearchCursor: '0', avcSearchPage: null, avcSearchState: '', avcSearchRunning: false, avcSearchCancelRequested: false, avcSearchError: null, avcSearchRetry: '', avcSearchFilter: 'mismatches', avcSearchStart: '0', avcSearchPrevious: null, summary: null, summaryState: '', summaryRunning: false, summaryCancelRequested: false, summaryProcessed: '0', summaryTotal: '0', summaryError: null, summaryRetry: '', summaryKind: 'keyframes', summaryStart: '0', summaryPage: null, summaryPageLoading: false, summaryPageError: null, summaryPrevious: null, curvePage: null, curveLoading: false, curveError: null, curveStart: '0', curveSelectedIndex: null, curveMetric: 'audio' };
   private disposed = false;
   private statusVersion = 0;
   private pageVersion = 0;
@@ -200,6 +211,13 @@ export class Controller {
   private stopTimer: (() => void) | null = null;
   private replyStops = new Map<ReplySlot, () => void>();
   private nextReadID = 0n;
+  private codecSearchRequest: CodecSearchRequest | null = null;
+  private codecSearchExpectedStart: CodecSearchPosition | null = null;
+  private codecSearchPhase: 'start' | 'get' | 'cancel' = 'start';
+  private codecSearchBusy = false;
+  private codecSearchPaused = false;
+  private codecSearchPolls = 0;
+  private stopCodecSearchTimer: (() => void) | null = null;
   private avcSearchRequest: AVCSearchRequest | null = null;
   private avcSearchPhase: 'start' | 'get' | 'cancel' = 'start';
   private avcSearchBusy = false;
@@ -257,7 +275,7 @@ export class Controller {
     if (session.closed && session.terminal) {
       this.clearTrend();
       this.clearFilter();
-      this.clearAVCSearch();
+      this.clearAVCSearch(); this.clearCodecSearch();
       this.clearSummary();
       this.clearDetail();
       this.pageVersion++;
@@ -266,12 +284,13 @@ export class Controller {
       this.jumpTagId = null;
       this.update({ session: null, fileName: '', operation: '', page: null, loading: false, start: '0', sourceChanged: false, error: null });
     } else {
-      if (session.closed) { this.clearTrend(); this.clearFilter(); this.clearAVCSearch(); this.clearSummary(); this.clearDetail(); }
+      if (session.closed) { this.clearTrend(); this.clearFilter(); this.clearAVCSearch(); this.clearCodecSearch(); this.clearSummary(); this.clearDetail(); }
       this.update({ session, operation: session.closed ? 'closing' : '' });
       this.ensureDetail();
       this.ensureHex();
       this.ensureSummary();
       this.ensureAVCSearch();
+      this.ensureCodecSearch();
       this.ensureTrend();
     }
   }
@@ -333,7 +352,7 @@ export class Controller {
       this.update({ trendMetric: 'dts', trendType: 'all', trendGapThreshold: '1000' });
       this.clearTrend();
       this.clearFilter();
-      this.clearAVCSearch();
+      this.clearAVCSearch(); this.clearCodecSearch();
       this.clearSummary();
       this.clearDetail();
       this.nextReadID = 0n;
@@ -356,8 +375,10 @@ export class Controller {
     const trendPage = this.state.trendPage;
     const curvePage = !this.state.curveLoading && !this.state.curveError ? this.state.curvePage : null;
     const searchPage = this.state.avcSearchState === 'ready' && !this.state.avcSearchRunning ? this.state.avcSearchPage : null;
+    const codecPage = this.state.codecSearchState === 'ready' && !this.state.codecSearchRunning ? this.state.codecSearchPage : null;
     return Object.freeze({
-      schemaVersion: 3,
+      schemaVersion: codecPage ? 4 : 3,
+      ...(codecPage && this.codecSearchRequest ? { codecSearch: Object.freeze({ requestId: this.codecSearchRequest.requestId, cursor: codecPage.cursor, kind: codecPage.kind, filter: codecPage.filter }) } : {}),
       ...(curvePage ? { mediaCurve: Object.freeze({ start: curvePage.bounds.start, count: curvePage.bounds.limit, metric: this.state.curveMetric }) } : {}),
       ...(searchPage && this.avcSearchRequest ? { avcSearch: Object.freeze({ requestId: this.avcSearchRequest.requestId, start: searchPage.start, filter: searchPage.filter }) } : {}),
       sessionId: this.state.session!.sessionId, selectedTagId: this.state.selectedTag?.id ?? null,
@@ -432,7 +453,7 @@ export class Controller {
     if (operation === 'closing') {
       this.clearTrend();
       this.clearFilter();
-      this.clearAVCSearch();
+      this.clearAVCSearch(); this.clearCodecSearch();
       this.clearSummary();
       this.clearDetail();
       this.pageVersion++;
@@ -502,7 +523,7 @@ export class Controller {
     } finally { this.polling = false; this.schedule(); }
   }
   select(tab: Tab, start = '0'): void {
-    if (this.state.summaryRunning || this.state.avcSearchRunning) return;
+    if (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) return;
     try { unsigned(start); } catch { this.update({ error: 'invalid_argument' }); return; }
     this.clearFilter();
     this.pageVersion++;
@@ -516,7 +537,7 @@ export class Controller {
     this.update({ tagFilter: null, filteredPage: null, filterPrevious: null, filterHistoryLimited: false, filterError: null });
   }
   applyTagFilter(filter: TagFilter): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     try { validateTagFilter(filter); } catch { this.update({ filterError: 'invalid_filter' }); return; }
     this.filterHistory = [];
     this.pageVersion++; this.jumpTagId = null;
@@ -526,12 +547,12 @@ export class Controller {
     this.ensurePage();
   }
   resetTagFilter(): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     this.select('tags');
   }
   pageFilteredTags(direction: 'first' | 'previous' | 'next'): void {
     const page = this.state.filteredPage;
-    if (this.disposed || !page || !this.state.tagFilter || this.state.loading || (this.state.summaryRunning || this.state.avcSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || !page || !this.state.tagFilter || this.state.loading || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     let start: string;
     let limited = this.state.filterHistoryLimited;
     if (direction === 'first') { start = '0'; this.filterHistory = []; limited = false; }
@@ -625,12 +646,12 @@ export class Controller {
     }
   }
   selectTrendTag(id: string): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed || !this.state.trendPage?.points.some(point => point.tagId === id)) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed || !this.state.trendPage?.points.some(point => point.tagId === id)) return;
     this.update({ trendSelectedId: id });
     this.jumpTag(id);
   }
   showTrendHex(id: string, target: 'tag' | 'payload'): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     const point = this.state.trendPage?.points.find(item => item.tagId === id);
     if (!point || (target !== 'tag' && target !== 'payload')) return;
     if (this.state.selectedTag?.id !== id) this.clearDetail();
@@ -640,7 +661,7 @@ export class Controller {
       label: target === 'tag' ? `Tag ${id} 范围` : `Tag ${id} payload（实际 ${point.availableDataSize} / 声明 ${point.dataSize} byte）` });
   }
   private ensurePage(): void {
-    if (this.disposed || this.paging || this.refreshStatus || this.pollFailed || !this.ready() || this.state.page || this.state.filteredPage || this.state.summaryRunning || this.state.avcSearchRunning) return;
+    if (this.disposed || this.paging || this.refreshStatus || this.pollFailed || !this.ready() || this.state.page || this.state.filteredPage || this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) return;
     void this.loadPage();
   }
   private async loadPage(): Promise<void> {
@@ -694,7 +715,7 @@ export class Controller {
     this.ensurePage();
   }
   selectTag(tagId: string, mp3FrameIndex?: number): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (mp3FrameIndex !== undefined && (!Number.isInteger(mp3FrameIndex) || mp3FrameIndex < 0 || mp3FrameIndex > 4294967295)) return;
     const tags = this.state.filteredPage?.tags ?? (this.state.page?.tab === 'tags' ? this.state.page.data.tags : []);
     const tag = tags.find(item => item.id === tagId);
@@ -718,7 +739,7 @@ export class Controller {
     this.update({ selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '', mp3JumpError: null });
   }
   private ensureDetail(): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || this.detailBusy || this.detailPaused || this.stopDetailTimer || !this.detailRequest || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || this.detailBusy || this.detailPaused || this.stopDetailTimer || !this.detailRequest || !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (this.detailPhase === 'start') void this.loadDetail();
     else this.stopDetailTimer = this.clock.after(() => { this.stopDetailTimer = null; void this.loadDetail(); }, POLL_MS);
   }
@@ -767,7 +788,7 @@ export class Controller {
   }
   selectMP3Frame(index: number | null): void {
     const frames = mp3FrameSelection(this.state.detail);
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || this.detailBusy || !this.detailPaused || !this.detailRequest ||
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || this.detailBusy || !this.detailPaused || !this.detailRequest ||
         this.state.detailState !== 'ready' || !frames || frames.selected === index ||
         !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (index !== null && (!Number.isInteger(index) || !frames.selectable.includes(index))) return;
@@ -781,7 +802,7 @@ export class Controller {
   }
   jumpMP3Frame(text: string): void {
     const page = mp3FramePage(this.state.detail);
-    if (this.disposed || this.state.summaryRunning || this.state.avcSearchRunning || this.detailBusy || !this.detailPaused || !this.detailRequest ||
+    if (this.disposed || this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.detailBusy || !this.detailPaused || !this.detailRequest ||
         this.state.detailState !== 'ready' || !page || !this.ready() || this.refreshStatus || this.pollFailed) return;
     const index = mp3FrameIndex(text);
     if (index === null) { this.update({ mp3JumpError: '请输入 0–4294967295 之间的十进制整数帧号（索引从 0 开始）。' }); return; }
@@ -803,7 +824,7 @@ export class Controller {
   }
   pageMP3Frames(direction: -1 | 1 | 'continue'): void {
     const page = mp3FramePage(this.state.detail);
-    if (this.disposed || this.state.summaryRunning || this.state.avcSearchRunning || this.detailBusy || !this.detailPaused || !this.detailRequest ||
+    if (this.disposed || this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.detailBusy || !this.detailPaused || !this.detailRequest ||
         this.state.detailState !== 'ready' || !page || !this.ready() || this.refreshStatus || this.pollFailed) return;
     let request: DetailRequest;
     if (direction === 'continue') {
@@ -823,7 +844,7 @@ export class Controller {
   }
   inspectMP3Dependency(): void {
     const frames = mp3FrameSelection(this.state.detail);
-    if (this.disposed || this.state.summaryRunning || this.state.avcSearchRunning || this.detailBusy || !this.detailPaused ||
+    if (this.disposed || this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.detailBusy || !this.detailPaused ||
         !this.detailRequest || this.state.detailState !== 'ready' || !frames || !this.ready() || this.refreshStatus || this.pollFailed) return;
     const index = frames.selected ?? mp3FramePage(this.state.detail)?.start ?? 0;
     if (!frames.selectable.includes(index)) return;
@@ -838,13 +859,13 @@ export class Controller {
     const result = mp3Dependency(this.state.detail);
     if (this.state.detailState !== 'ready' || !result?.sources.some(item => item.tagId === source.tagId && item.frameIndex === source.frameIndex &&
         item.current === source.current && item.span.byteOffset === source.span.byteOffset && item.span.bitLength === source.span.bitLength) ||
-        this.state.summaryRunning || this.state.avcSearchRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+        this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (destination === 'tag') this.jumpTag(source.tagId, source.frameIndex);
     else this.showHex({ offset: source.span.byteOffset, bitOffset: 0, bitLength: source.span.bitLength, label: `MP3 来源 Tag ${source.tagId} 帧 ${source.frameIndex}` });
   }
   continueAVCContext(): void {
     const progress = avcReplayProgress(this.state.detail);
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || this.detailBusy || !this.detailPaused || !this.detailRequest ||
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || this.detailBusy || !this.detailPaused || !this.detailRequest ||
         this.state.detailState !== 'ready' || !progress?.canContinue || progress.target !== this.detailRequest.tagId ||
         !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (this.nextReadID === 18446744073709551615n) { this.update({ detailError: 'id_exhausted' }); return; }
@@ -855,7 +876,7 @@ export class Controller {
     this.ensureDetail();
   }
   retryDetail(): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || this.detailBusy || !this.detailPaused || !this.detailRequest || !this.state.detailRetry || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || this.detailBusy || !this.detailPaused || !this.detailRequest || !this.state.detailRetry || !this.ready() || this.refreshStatus || this.pollFailed) return;
     // Unconfirmed work keeps its identity. An explicitly failed read is cached
     // by the host, so only a deliberate new read advances the request number.
     if (this.state.detailRetry === 'reload') {
@@ -868,7 +889,7 @@ export class Controller {
     this.ensureDetail();
   }
   jumpTag(text: string, mp3FrameIndex?: number): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     try {
       const id = unsigned(text), total = unsigned(this.state.session!.progress!.tagCount);
       if (id >= total) throw new Error('Out of range.');
@@ -880,7 +901,7 @@ export class Controller {
     } catch { this.update({ tagJumpError: 'tag_not_found' }); }
   }
   showHex(selection: HexSelection): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     try {
       validateSelection(selection);
       if (unsigned(selection.offset) > unsigned(this.state.session!.progress!.sourceSize)) throw new Error('Out of range.');
@@ -905,7 +926,7 @@ export class Controller {
     if (this.state.detailState !== 'ready') this.update({ detailState: 'failed', detailError: 'detail_superseded', detailRetry: 'reload' });
   }
   private requestHex(offset: string, selection: HexSelection | null): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (this.nextReadID === 18446744073709551615n) { this.update({ hexError: 'id_exhausted' }); return; }
     // A direct byte selection supersedes a Tag jump whose index page is still
     // arriving. Keep that page usable, but do not open its obsolete detail and
@@ -927,7 +948,7 @@ export class Controller {
   private invalidateSource(): void {
     this.clearTrend();
     this.clearFilter();
-    this.clearAVCSearch();
+    this.clearAVCSearch(); this.clearCodecSearch();
     this.clearSummary();
     this.clearDetail();
     this.pageVersion++; this.jumpTagId = null;
@@ -935,7 +956,7 @@ export class Controller {
     this.update({ sourceChanged: true, error: 'source_changed', page: null, loading: false });
   }
   private ensureHex(): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || this.hexBusy || this.hexPaused || this.stopHexTimer || !this.hexRequest || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || this.hexBusy || this.hexPaused || this.stopHexTimer || !this.hexRequest || !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (this.hexPhase === 'start') void this.loadHex();
     else this.stopHexTimer = this.clock.after(() => { this.stopHexTimer = null; void this.loadHex(); }, POLL_MS);
   }
@@ -977,7 +998,7 @@ export class Controller {
     } finally { this.hexBusy = false; this.ensureHex(); }
   }
   retryHex(): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || this.hexBusy || !this.hexPaused || !this.hexRequest || !this.state.hexRetry || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || this.hexBusy || !this.hexPaused || !this.hexRequest || !this.state.hexRetry || !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (this.state.hexRetry === 'reload') {
       if (this.nextReadID === 18446744073709551615n) { this.update({ hexError: 'id_exhausted' }); return; }
       this.hexRequest = { ...this.hexRequest, requestId: (++this.nextReadID).toString() };
@@ -987,14 +1008,14 @@ export class Controller {
     this.ensureHex();
   }
   startAVCSearch(filter: AVCSearchFilter = this.state.avcSearchFilter): void {
-    if (this.disposed || this.state.summaryRunning || this.state.avcSearchRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
     try { avcSearchFilter(filter); } catch { return; }
     this.avcSearchHistory = [];
     this.requestAVCSearch('0', filter);
   }
   pageAVCSearch(direction: 'previous' | 'next'): void {
     const page = this.state.avcSearchPage;
-    if (!page || this.state.avcSearchRunning || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (!page || (this.state.avcSearchRunning || this.state.codecSearchRunning) || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
     let start: string;
     if (direction === 'previous') {
       const previous = this.avcSearchHistory.pop(); if (previous === undefined) return; start = previous;
@@ -1027,7 +1048,7 @@ export class Controller {
     this.ensureAVCSearch();
   }
   retryAVCSearch(): void {
-    if (this.disposed || this.avcSearchBusy || !this.avcSearchPaused || !this.avcSearchRequest || !this.state.avcSearchRetry || !this.ready() || this.state.summaryRunning || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || this.avcSearchBusy || !this.avcSearchPaused || !this.avcSearchRequest || !this.state.avcSearchRetry || !this.ready() || this.state.codecSearchRunning || this.state.summaryRunning || this.refreshStatus || this.pollFailed) return;
     if (this.state.avcSearchRetry === 'reload') { this.requestAVCSearch(this.avcSearchRequest.start, this.avcSearchRequest.filter); return; }
     this.avcSearchRequest = { ...this.avcSearchRequest };
     this.avcSearchPhase = this.state.avcSearchCancelRequested ? 'cancel' : this.state.avcSearchError === 'avc_search_not_found' ? 'start' : 'get';
@@ -1096,8 +1117,114 @@ export class Controller {
     if (destination === 'tag') this.jumpTag(row.tagId);
     else if (row.span) this.showHex({ offset: row.span.byteOffset, bitOffset: row.span.bitOffset, bitLength: row.span.bitLength, label: `H.264 Tag ${row.tagId} 证据` });
   }
+  startCodecSearch(kind: CodecSearchKind = this.state.codecSearchKind, filter: CodecSearchFilter = kind === this.state.codecSearchKind ? this.state.codecSearchFilter : 'all'): void {
+    if (this.disposed || this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    try { codecSearchKind(kind); codecSearchFilter(kind, filter); } catch { return; }
+    this.requestCodecSearch('0', kind, filter, { tagId: '0', frameIndex: 0 });
+  }
+  continueCodecSearch(): void {
+    const page = this.state.codecSearchPage;
+    if (this.disposed || !page || this.state.codecSearchState !== 'ready' || page.exhausted || this.state.codecSearchRunning || this.state.avcSearchRunning || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    this.requestCodecSearch(page.nextCursor, page.kind, page.filter, page.next);
+  }
+  private requestCodecSearch(cursor: string, kind: CodecSearchKind, filter: CodecSearchFilter, expectedStart: CodecSearchPosition | null): void {
+    if (this.nextReadID === 18446744073709551615n) { this.update({ codecSearchError: 'id_exhausted' }); return; }
+    this.clearDetail();
+    this.pageVersion++; this.jumpTagId = null;
+    this.replyStops.get('page')?.();
+    this.codecSearchRequest = { sessionId: this.state.session!.sessionId, requestId: (++this.nextReadID).toString(), cursor, kind, filter };
+    this.codecSearchExpectedStart = expectedStart;
+    this.codecSearchPhase = 'start'; this.codecSearchPaused = false; this.codecSearchPolls = 0;
+    this.update({ codecSearchPage: null, codecSearchState: 'loading', codecSearchRunning: true, codecSearchCancelRequested: false,
+      codecSearchError: null, codecSearchRetry: '', codecSearchCursor: cursor, codecSearchKind: kind, codecSearchFilter: filter, loading: false });
+    this.ensureCodecSearch();
+  }
+  cancelCodecSearch(): void {
+    if (this.disposed || !this.codecSearchRequest || !this.state.codecSearchRunning || this.state.codecSearchCancelRequested || !this.ready()) return;
+    this.codecSearchRequest = { ...this.codecSearchRequest };
+    this.stopCodecSearchTimer?.(); this.stopCodecSearchTimer = null;
+    this.replyStops.get('codecSearch')?.();
+    this.codecSearchPhase = 'cancel'; this.codecSearchPaused = false; this.codecSearchPolls = 0;
+    this.update({ codecSearchState: 'canceling', codecSearchCancelRequested: true, codecSearchError: null, codecSearchRetry: '' });
+    this.ensureCodecSearch();
+  }
+  retryCodecSearch(): void {
+    if (this.disposed || this.codecSearchBusy || !this.codecSearchPaused || !this.codecSearchRequest || !this.state.codecSearchRetry || !this.ready() || this.state.summaryRunning || this.state.avcSearchRunning || this.refreshStatus || this.pollFailed) return;
+    if (this.state.codecSearchRetry === 'reload') { this.requestCodecSearch(this.codecSearchRequest.cursor, this.codecSearchRequest.kind, this.codecSearchRequest.filter, this.codecSearchExpectedStart); return; }
+    this.codecSearchRequest = { ...this.codecSearchRequest };
+    this.codecSearchPhase = this.state.codecSearchCancelRequested ? 'cancel' : this.state.codecSearchError === 'codec_search_not_found' ? 'start' : 'get';
+    this.codecSearchPaused = false; this.codecSearchPolls = 0;
+    this.update({ codecSearchState: this.state.codecSearchCancelRequested ? 'canceling' : 'recovering', codecSearchError: null, codecSearchRetry: '' });
+    this.ensureCodecSearch();
+  }
+  private clearCodecSearch(): void {
+    this.codecSearchRequest = null; this.codecSearchPaused = false; this.codecSearchPolls = 0; this.codecSearchExpectedStart = null;
+    this.stopCodecSearchTimer?.(); this.stopCodecSearchTimer = null;
+    this.replyStops.get('codecSearch')?.();
+    this.update({ codecSearchPage: null, codecSearchState: '', codecSearchRunning: false, codecSearchCancelRequested: false,
+      codecSearchError: null, codecSearchRetry: '', codecSearchCursor: '0', codecSearchKind: 'mp3', codecSearchFilter: 'all' });
+  }
+  private ensureCodecSearch(): void {
+    if (this.disposed || this.codecSearchBusy || this.codecSearchPaused || this.stopCodecSearchTimer || !this.codecSearchRequest || !this.state.codecSearchRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.codecSearchPhase !== 'get') void this.loadCodecSearch();
+    else this.stopCodecSearchTimer = this.clock.after(() => { this.stopCodecSearchTimer = null; void this.loadCodecSearch(); }, POLL_MS);
+  }
+  private async loadCodecSearch(): Promise<void> {
+    const request = this.codecSearchRequest;
+    if (!request || this.codecSearchBusy || !this.ready() || this.disposed) return;
+    const current = () => !this.disposed && this.codecSearchRequest === request && this.state.session?.sessionId === request.sessionId && this.ready();
+    const phase = this.codecSearchPhase;
+    this.codecSearchBusy = true;
+    try {
+      const response = await this.awaitReply('codecSearch', () => phase === 'start' ? this.api.startCodecSearch(request) : phase === 'cancel' ? this.api.cancelCodecSearch(request) : this.api.codecSearchResult(request));
+      if (!current()) return;
+      try { validateCodecSearch(response, request, this.state.session!.progress!.tagCount, this.state.session!.progress!.sourceSize, this.codecSearchExpectedStart); } catch { throw new RequestError('invalid_response'); }
+      if (response.page && response.page.scanComplete !== this.state.session!.scan!.complete) throw new RequestError('invalid_response');
+      if (response.state === 'ready') {
+        this.codecSearchPaused = true;
+        this.update({ codecSearchPage: response.page, codecSearchState: 'ready', codecSearchRunning: false, codecSearchCancelRequested: false, codecSearchError: null, codecSearchRetry: '' });
+        this.ensurePage();
+      } else if (response.state === 'failed') {
+        const code = response.error!.code;
+        if (code === 'source_changed') { this.invalidateSource(); return; }
+        this.codecSearchPaused = true;
+        const uncertain = code === 'codec_search_not_found';
+        this.update({ codecSearchState: 'failed', codecSearchRunning: uncertain, codecSearchCancelRequested: uncertain && this.state.codecSearchCancelRequested,
+          codecSearchError: code, codecSearchRetry: uncertain ? 'confirm' : ['codec_search_failed', 'deadline_exceeded', 'canceled'].includes(code) ? 'reload' : '' });
+        if (!uncertain) this.ensurePage();
+      } else {
+        this.codecSearchPhase = 'get';
+        if (this.state.codecSearchCancelRequested && response.state === 'pending') {
+          this.codecSearchPaused = true;
+          this.update({ codecSearchState: 'canceling', codecSearchError: 'codec_search_cancel_unconfirmed', codecSearchRetry: 'confirm' });
+        } else if (phase === 'get' && ++this.codecSearchPolls >= DETAIL_POLL_LIMIT) {
+          this.codecSearchPaused = true;
+          this.update({ codecSearchState: response.state, codecSearchError: 'codec_search_wait_paused', codecSearchRetry: 'confirm' });
+        } else this.update({ codecSearchState: response.state, codecSearchCancelRequested: response.state === 'canceling' || this.state.codecSearchCancelRequested, codecSearchError: null, codecSearchRetry: '' });
+      }
+    } catch (error) {
+      if (!current()) return;
+      if ((phase === 'start' || phase === 'cancel') && !(error instanceof RequestError)) {
+        this.codecSearchPhase = 'get';
+        this.update({ codecSearchState: this.state.codecSearchCancelRequested ? 'canceling' : 'recovering', codecSearchError: null });
+      } else {
+        this.codecSearchPaused = true;
+        this.update({ codecSearchState: this.state.codecSearchCancelRequested ? 'canceling' : 'failed', codecSearchError: errorCode(error), codecSearchRetry: 'confirm' });
+      }
+    } finally { this.codecSearchBusy = false; this.ensureCodecSearch(); }
+  }
+  locateCodecSearchRow(row: CodecSearchRow, destination: 'tag' | 'frame' | 'hex' | 'sps' | 'evidence'): void {
+    if (this.state.codecSearchState !== 'ready' || !this.state.codecSearchPage?.rows.includes(row) || !this.ready()) return;
+    if (destination === 'tag') { this.jumpTag(row.tagId); return; }
+    if (destination === 'frame') {
+      if (this.state.codecSearchPage.kind === 'mp3' && row.complete && row.status === 'complete' && row.frameIndex !== null) this.jumpTag(row.tagId, row.frameIndex);
+      return;
+    }
+    const span = destination === 'sps' ? row.spsSpan : destination === 'evidence' ? row.evidenceSpan : row.span;
+    if (span) this.showHex(selectionFromSpan(span, `编解码器证据 ${codecRowID(row)} ${destination}`));
+  }
   startSummary(): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (this.nextReadID === 18446744073709551615n) { this.update({ summaryError: 'id_exhausted' }); return; }
     this.clearSummary();
     this.clearDetail();
@@ -1120,7 +1247,7 @@ export class Controller {
     this.ensureSummary();
   }
   retrySummary(): void {
-    if (this.disposed || this.summaryBusy || !this.summaryPaused || !this.summaryRequest || !this.state.summaryRetry || !this.ready()) return;
+    if (this.disposed || this.summaryBusy || !this.summaryPaused || !this.summaryRequest || !this.state.summaryRetry || !this.ready() || this.state.codecSearchRunning || this.state.avcSearchRunning || this.refreshStatus || this.pollFailed) return;
     if (this.state.summaryRetry === 'reload') { this.startSummary(); return; }
     this.summaryRequest = { ...this.summaryRequest };
     this.summaryPhase = this.state.summaryCancelRequested ? 'cancel' : this.state.summaryError === 'summary_not_found' ? 'start' : 'get';
@@ -1337,6 +1464,8 @@ export class Controller {
     this.stopDetailTimer?.(); this.stopDetailTimer = null;
     this.hexRequest = null;
     this.stopHexTimer?.(); this.stopHexTimer = null;
+    this.codecSearchRequest = null;
+    this.stopCodecSearchTimer?.(); this.stopCodecSearchTimer = null;
     this.avcSearchRequest = null;
     this.stopAVCSearchTimer?.(); this.stopAVCSearchTimer = null;
     this.summaryRequest = null;

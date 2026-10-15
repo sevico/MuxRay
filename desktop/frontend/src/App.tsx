@@ -1,3 +1,4 @@
+import { CodecSearchPanel } from './CodecSearchPanel';
 import { AVCSearchPanel } from './AVCSearchPanel';
 import { MP3FramePanel, MP3DependencyPanel, KeyframeEvidencePanel } from './CodecDetailPanel';
 import { useEffect, useState, useSyncExternalStore } from 'react';
@@ -26,6 +27,9 @@ const errors: Record<string, string> = {
   shutting_down: '应用正在退出。', dialog_failed: '文件选择窗口打开失败。',
   avc_search_failed: 'H.264 检索失败，可以重试当前批次。', avc_search_not_found: '尚未确认 H.264 检索是否已启动。', avc_search_unsupported: '当前宿主不支持 H.264 检索。',
   avc_search_cancel_unconfirmed: '尚未确认取消，请继续确认状态。', avc_search_wait_paused: '本批仍未完成，可继续确认状态或取消。',
+  codec_search_failed: '本批编解码器检索失败，可重试当前批次。', codec_search_not_found: '尚未确认编解码器检索是否已启动。',
+  codec_search_cursor_expired: '继续位置已失效，请从头重新检索。', codec_search_unsupported: '当前宿主不支持编解码器检索。',
+  codec_search_cancel_unconfirmed: '尚未确认编解码器检索取消，请继续确认状态。', codec_search_wait_paused: '本批仍未完成，可继续确认状态或取消。',
   canceled: '任务已取消。', deadline_exceeded: '等待已超时。',
   invalid_argument: '请求参数无效。', session_closed: '此文件已关闭。', session_not_found: '此会话已失效。',
   incompatible_api: '界面与宿主版本不匹配，请重新构建。', invalid_response: '宿主返回了不匹配的结果。',
@@ -68,7 +72,7 @@ export function App({ controller }: { controller: Controller }) {
   const { session, operation, page } = view;
   const progress = session?.progress;
   const scanReady = !!session?.terminal && !session.closed && session.scan !== null && !view.sourceChanged;
-  const canPage = scanReady && !view.summaryRunning && !view.avcSearchRunning;
+  const canPage = scanReady && !view.summaryRunning && !(view.avcSearchRunning || view.codecSearchRunning);
   const bounds = page?.data.bounds;
   const percent = progress ? progressPercent(progress.bytesScanned, progress.sourceSize) : 0;
   const isClosing = operation === 'closing' || session?.closed;
@@ -110,11 +114,12 @@ export function App({ controller }: { controller: Controller }) {
           <p className="snapshot-scope">导出诊断 JSON 保存当前已载入的概览、事件页、Tag 详情、Hex、趋势、媒体曲线页与 H.264 检索页，不代表全文件分析。报告可能包含有限媒体字节和 AMF 字段文本。</p>
         </section>
 
+        <CodecSearchPanel view={view} controller={controller} disabled={!scanReady || !!isClosing} message={fault} />
         <AVCSearchPanel view={view} controller={controller} disabled={!scanReady || !!isClosing} message={fault} />
 
-        <SummaryPanel view={view} controller={controller} disabled={!scanReady || !!isClosing || view.avcSearchRunning} message={fault} />
+        <SummaryPanel view={view} controller={controller} disabled={!scanReady || !!isClosing || (view.avcSearchRunning || view.codecSearchRunning)} message={fault} />
 
-        <MediaCurvePanel view={view} controller={controller} disabled={!scanReady || !!operation || view.avcSearchRunning} message={fault} />
+        <MediaCurvePanel view={view} controller={controller} disabled={!scanReady || !!operation || (view.avcSearchRunning || view.codecSearchRunning)} message={fault} />
 
         <TagTrendPanel key={session.sessionId} view={view} controller={controller} disabled={!scanReady || !!operation} readDisabled={!canPage || !!operation} message={fault} />
 
@@ -183,9 +188,9 @@ function DetailPanel({ view, onRetry, onContinue, onSelectMP3, onPageMP3, onJump
         <p className="detail-note">MP3 在当前 Tag 内检查帧边界、VBR 声明、side-info 和头部 CRC，并显示主数据回指范围。范围覆盖不代表 bit-reservoir 或音频解码有效；可按需回溯前序 Tag，定位主数据依赖来源。</p>
         <p className="detail-note">free-format 的码率和帧长未知；派生字段不标注单一原始位置，以“—”显示。</p>
       </>}
-      <MP3FramePanel key={`${view.session?.sessionId}-${view.selectedTag?.id}`} detail={detail} jumpError={view.mp3JumpError} disabled={busy || view.detailState !== 'ready' || view.summaryRunning || view.avcSearchRunning || view.sourceChanged} onSelect={onSelectMP3} onPage={onPageMP3} onJump={onJumpMP3} onStep={onStepMP3} />
-      <MP3DependencyPanel detail={detail} disabled={busy || view.detailState !== 'ready' || view.summaryRunning || view.avcSearchRunning || view.sourceChanged} onInspect={onInspectMP3} onLocate={onLocateMP3} />
-      <KeyframeEvidencePanel detail={detail} disabled={busy || view.detailState !== 'ready' || view.summaryRunning || view.avcSearchRunning || view.sourceChanged} onLocate={onLocate} />
+      <MP3FramePanel key={`${view.session?.sessionId}-${view.selectedTag?.id}`} detail={detail} jumpError={view.mp3JumpError} disabled={busy || view.detailState !== 'ready' || view.summaryRunning || (view.avcSearchRunning || view.codecSearchRunning) || view.sourceChanged} onSelect={onSelectMP3} onPage={onPageMP3} onJump={onJumpMP3} onStep={onStepMP3} />
+      <MP3DependencyPanel detail={detail} disabled={busy || view.detailState !== 'ready' || view.summaryRunning || (view.avcSearchRunning || view.codecSearchRunning) || view.sourceChanged} onInspect={onInspectMP3} onLocate={onLocateMP3} />
+      <KeyframeEvidencePanel detail={detail} disabled={busy || view.detailState !== 'ready' || view.summaryRunning || (view.avcSearchRunning || view.codecSearchRunning) || view.sourceChanged} onLocate={onLocate} />
       {!detail.complete && <p className="detail-note problem">保留可解析的字段；请结合下方详情诊断检查未完成部分。</p>}
       {detail.truncated && <p className="detail-note">部分内容因截断或展示上限而省略；显示的值是有限预览。</p>}
       <div className="detail-table-area"><table className="detail-fields"><thead><tr><th>字段</th><th>类型</th><th>值 / 预览</th><th>byte : bit</th><th>位长</th></tr></thead><tbody>{detailRows(detail.fields).map(({ field, depth }) => <tr key={field.id}>

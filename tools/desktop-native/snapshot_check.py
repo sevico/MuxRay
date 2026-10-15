@@ -93,14 +93,14 @@ def check_snapshot(report_path, source_path=None, max_source_bytes=MAX_FIXTURE):
     raw = report_path.read_bytes()
     report = json.loads(raw.decode("utf-8"))
     version = report.get("schemaVersion")
-    if type(version) is not int or version not in (1, 2, 3):
+    if type(version) is not int or version not in (1, 2, 3, 4):
         raise ValueError("Unsupported snapshot version")
     schema = json.loads((ROOT / f"docs/schemas/desktop-diagnostic-snapshot-v{version}.schema.json").read_text(encoding="utf-8"))
     Draft202012Validator(schema, format_checker=Draft202012Validator.FORMAT_CHECKER).validate(report)
     session_id = report["session"]["sessionId"]
     if report["selection"]["sessionId"] != session_id:
         raise ValueError("Selection belongs to a different session")
-    sections = (("mediaCurvePage",) if version >= 2 else ()) + (("avcSearchPage",) if version >= 3 else ())
+    sections = (("mediaCurvePage",) if version >= 2 else ()) + (("avcSearchPage",) if version >= 3 else ()) + (("codecSearchPage",) if version >= 4 else ())
     for name in ("scanDiagnostics", "detail", "hex", "summary", "summaryPage", "trend") + sections:
         section = report[name]
         if section is not None and section["sessionId"] != session_id:
@@ -128,12 +128,96 @@ def check_snapshot(report_path, source_path=None, max_source_bytes=MAX_FIXTURE):
         check_curve_page(report)
     if version >= 3 and report["avcSearchPage"] is not None:
         check_avc_search_page(report)
+    if version >= 4 and report["codecSearchPage"] is not None:
+        check_codec_search_page(report)
     result = {"report": report_path.name, "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(),
               "fileName": report["fileName"], "scanComplete": report["session"]["scan"]["complete"],
               "omitted": report["omitted"], "schemaValid": True}
     if source_path is not None:
         result.update(check_source(report, source_path, max_source_bytes))
     return result
+
+
+def check_codec_search_page(report):
+    response, query = report["codecSearchPage"], report["selection"].get("codecSearch")
+    if not query or response["requestId"] != query["requestId"] or response["state"] != "ready" or response["error"] is not None:
+        raise ValueError("Codec search request identity or ready state mismatch")
+    p = response["page"]
+    start, end = (tuple((int(p[key]["tagId"]), p[key]["frameIndex"])) for key in ("start", "next"))
+    total, size = int(p["total"]), int(report["session"]["progress"]["sourceSize"])
+    if (any(p[key] != query[key] for key in ("kind", "filter", "cursor")) or
+            total != int(report["session"]["progress"]["tagCount"]) or total > MAX_TAG_VISITS or
+            p["scanComplete"] != report["session"]["scan"]["complete"] or not start <= end or end[0] > total or
+            (start[0] == total and start[1]) or (end[0] == total and end[1]) or
+            p["exhausted"] != (end[0] == total and p["pending"] == 0) or
+            p["nextCursor"] != ("0" if p["exhausted"] else response["requestId"])):
+        raise ValueError("Codec search identity, position or completion mismatch")
+    # Cursor identities are opaque: there is deliberately no arithmetic between
+    # cursor/nextCursor and source positions, row counts or file offsets.
+    distance = end[0] - start[0]
+    if p["kind"] == "mp3":
+        if (p["pending"] or int(p["bytesRead"]) > 65536 or not distance <= p["scannedTags"] <= distance + 1 or
+                not p["exhausted"] and start == end or len(p["rows"]) > p["scannedFrames"] + p["scannedTags"]):
+            raise ValueError("MP3 search scan/read budget or continuation mismatch")
+    elif (abs(distance - p["scannedTags"]) > 1 or
+          not p["exhausted"] and start == end and not p["rows"] and not p["scannedTags"]):
+        raise ValueError("SEI pending-row/scan coverage mismatch")
+    previous = None
+    for row in p["rows"]:
+        tag = int(row["tagId"])
+        if not start[0] <= tag < total or tag > end[0] or int(row["offset"]) > size:
+            raise ValueError("Codec search row exceeds page/source coverage")
+        for key in ("span", "spsSpan", "evidenceSpan"):
+            span = row[key]
+            if span is not None and int(span["byteOffset"]) * 8 + span["bitOffset"] + span["bitLength"] > size * 8:
+                raise ValueError("Codec search source span exceeds file")
+        values = {item["name"]: item["value"] for item in row["values"]}
+        if len(values) != len(row["values"]):
+            raise ValueError("Codec search repeats a value name")
+        if p["kind"] == "mp3":
+            position = (tag, row["frameIndex"])
+            if not start <= position < end or previous is not None and position <= previous:
+                raise ValueError("MP3 search rows repeat, reorder or exceed cursor coverage")
+            previous = position
+            if row["complete"]:
+                names = ("version", "sampleRateHz", "channelMode", "channels", "samplesPerFrame", "bitrateKbps")
+                if row["span"] is None or set(values) != {prefix + "." + name for prefix in ("current", "previous") for name in names}:
+                    raise ValueError("MP3 change lacks exact before/after evidence")
+                parameters = any(values["current." + name] != values["previous." + name] for name in names[:-1])
+                bitrate = values["current.bitrateKbps"] != values["previous.bitrateKbps"]
+                kind = "parametersAndBitrate" if parameters and bitrate else "parameters" if parameters else "bitrate" if bitrate else None
+                if row["kind"] != kind or p["filter"] == "stops" or p["filter"] == "parameters" and not parameters or p["filter"] == "bitrate" and not bitrate:
+                    raise ValueError("MP3 change kind/filter contradicts its values")
+            elif row["kind"] != "stop" or p["filter"] not in ("all", "stops") or any(name.startswith("previous.") for name in values):
+                raise ValueError("MP3 stop row invents comparison or violates filter")
+            elif row["status"] not in ("truncatedHeader", "malformedHeader", "unsupportedLayer", "freeFormat", "truncatedFrame", "filteredAudio", "truncatedAudio", "missingAudioHeader", "unsupportedAudio"):
+                raise ValueError("Unknown MP3 stopping reason")
+        else:
+            if tag == end[0] and not p["pending"]:
+                raise ValueError("SEI row at next Tag has no pending coverage")
+            coverage = row["kind"] == "coverage"
+            position = (tag, (1 << 32) if coverage else row["nalIndex"], (1 << 32) if coverage else row["messageIndex"])
+            if (not coverage and (row["nalIndex"] is None or row["messageIndex"] is None) or
+                    coverage and (row["nalIndex"] is not None or row["messageIndex"] is not None or row["complete"] or row["status"] != "unknown")):
+                raise ValueError("SEI message/coverage identity mismatch")
+            if previous is not None and position <= previous:
+                raise ValueError("SEI rows repeat or reorder")
+            previous = position
+            if (not coverage and p["filter"] not in ("all", "unknown", row["kind"]) or
+                    not coverage and p["filter"] == "unknown" and row["complete"] and row["contextState"] not in ("missing", "ambiguous")):
+                raise ValueError("SEI row violates selected filter")
+            if coverage:
+                if not values.get("reason"):
+                    raise ValueError("SEI coverage gap has no reason")
+            elif "payloadType" in values:
+                payload = int(values["payloadType"])
+                kind = {0: "bufferingPeriod", 1: "pictureTiming", 5: "userDataUnregistered", 6: "recoveryPoint"}.get(payload, "unknown")
+                if row["kind"] != kind or not 0 <= payload <= 4294967295:
+                    raise ValueError("SEI message kind disagrees with payload type")
+            elif row["complete"]:
+                raise ValueError("Complete SEI message has no payload type evidence")
+            if row["contextState"] == "resolved" and (values.get("contextSource") not in ("bufferingPeriod", "slice") or "spsId" not in values or not 0 <= int(values["spsId"]) <= 31):
+                raise ValueError("SEI resolved context lacks its SPS/selection evidence")
 
 
 def check_avc_search_page(report):
@@ -221,7 +305,9 @@ def check_source(report, source_path, max_source_bytes):
             tagged.extend((int(point["tagId"]), point) for point in report["trend"]["points"])
         search_rows = ((report.get("avcSearchPage") or {}).get("page") or {}).get("rows", [])
         tagged.extend((int(row["tagId"]), row) for row in search_rows)
-        offsets = fixture_tag_offsets(source, {tag_id for tag_id, _ in tagged})
+        codec_page = (report.get("codecSearchPage") or {}).get("page")
+        codec_rows = (codec_page or {}).get("rows", [])
+        offsets = fixture_tag_offsets(source, {tag_id for tag_id, _ in tagged} | {int(row["tagId"]) for row in codec_rows})
         indexed = int(report["session"]["progress"]["tagCount"])
         for tag_id, tag in tagged:
             if tag_id >= indexed or offsets.get(tag_id) != int(tag["offset"]):
@@ -258,8 +344,70 @@ def check_source(report, source_path, max_source_bytes):
                 raise ValueError("AVC search declaration differs from source")
         if report.get("avcSearchPage") is not None:
             result["avcSearchRowsMatchingSource"] = len(search_rows)
+        frame_positions = {}
+        for row in codec_rows:
+            offset = offsets.get(int(row["tagId"]))
+            if offset is None:
+                raise ValueError("Codec search Tag does not exist in source")
+            header = source[offset:offset + 11]
+            dts = int.from_bytes(header[4:7], "big") | header[7] << 24
+            expected_type = 8 if codec_page["kind"] == "mp3" else 9
+            end = min(offset + 11 + int.from_bytes(header[1:4], "big"), len(source))
+            if header[0] & 31 != expected_type or int(row["dts"]) != dts:
+                raise ValueError("Codec search source Tag type/DTS mismatch")
+            if codec_page["kind"] == "sei" and int(row["offset"]) != offset:
+                raise ValueError("SEI row does not identify its source Tag")
+            if codec_page["kind"] == "mp3" and not offset + 11 <= int(row["offset"]) <= end:
+                raise ValueError("MP3 row is outside its source Tag")
+            span = row["span"]
+            if span is not None:
+                begin = int(span["byteOffset"]) * 8 + span["bitOffset"]
+                if not (offset + 11) * 8 <= begin < begin + span["bitLength"] <= end * 8:
+                    raise ValueError("Codec search source span exceeds its Tag payload")
+                if codec_page["kind"] == "mp3" and int(span["byteOffset"]) != int(row["offset"]):
+                    raise ValueError("MP3 source offset and span disagree")
+            if codec_page["kind"] == "mp3" and row["status"] not in ("filteredAudio", "truncatedAudio", "missingAudioHeader", "unsupportedAudio"):
+                if source[offset + 11:offset + 12][0] >> 4 != 2:
+                    raise ValueError("MP3 frame row does not belong to MP3 SoundData")
+                index, position = frame_positions.get(offset, (0, offset + 12))
+                target = row["frameIndex"]
+                if target < index or target >= MAX_TAG_VISITS:
+                    raise ValueError("MP3 frame index exceeds independent boundary budget")
+                while index < target:
+                    length, _ = source_mp3_header(source, position, end)
+                    position, index = position + length, index + 1
+                if position != int(row["offset"]):
+                    raise ValueError("MP3 frame index does not match validated source boundaries")
+                frame_positions[offset] = (index, position)
+                if row["complete"]:
+                    length, fields = source_mp3_header(source, position, end)
+                    values = {item["name"]: item["value"] for item in row["values"]}
+                    if span is None or span["bitOffset"] != 0 or span["bitLength"] != length * 8 or any(values.get("current." + key) != str(value) for key, value in fields.items()):
+                        raise ValueError("MP3 current parameters or frame span differ from source")
+        if codec_page is not None:
+            result["codecSearchRowsMatchingSource"] = len(codec_rows)
         result["sourceSHA256"] = source.digest()
     return result
+
+
+def source_mp3_header(source, position, end):
+    """Independent fixed-header arithmetic; never resynchronize or read bodies."""
+    if position + 4 > end:
+        raise ValueError("MP3 indexed target crosses a truncated header")
+    word = int.from_bytes(source[position:position + 4], "big")
+    version, layer, bitrate_index, rate_index = (word >> 19) & 3, (word >> 17) & 3, (word >> 12) & 15, (word >> 10) & 3
+    if word >> 21 != 2047 or version == 1 or layer != 1 or bitrate_index in (0, 15) or rate_index == 3 or word & 3 == 2:
+        raise ValueError("MP3 indexed target crosses an unresolved frame boundary")
+    rate = (44100, 48000, 32000)[rate_index] // ({3: 1, 2: 2, 0: 4}[version])
+    table = (0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320) if version == 3 else (0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160)
+    bitrate = table[bitrate_index]
+    length = (144000 if version == 3 else 72000) * bitrate // rate + ((word >> 9) & 1)
+    if position + length > end:
+        raise ValueError("MP3 indexed target crosses a truncated frame")
+    mode = (word >> 6) & 3
+    return length, {"version": {3: "mpeg1", 2: "mpeg2", 0: "mpeg2.5"}[version], "sampleRateHz": rate,
+                    "channelMode": ("stereo", "jointStereo", "dualChannel", "singleChannel")[mode],
+                    "channels": 1 if mode == 3 else 2, "samplesPerFrame": 1152 if version == 3 else 576, "bitrateKbps": bitrate}
 
 
 def fixture_tag_offsets(source, wanted):

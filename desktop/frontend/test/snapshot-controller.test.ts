@@ -27,6 +27,7 @@ function setup(overrides: Partial<API> = {}) {
   let opens = 0;
   const session = (id = `scan-${opens}`): Session => ({ sessionId: id, state: 'canceled', terminal: true, closed: false, scan: { complete: false, hasErrors: false }, failure: null, progress: { sourceSize: '10000', bytesScanned: '10000', tagCount: '2', diagnosticCount: 0 } });
   const api: API = {
+    startCodecSearch: async () => { throw Error('unexpected codec search'); }, codecSearchResult: async () => { throw Error('unexpected codec search result'); }, cancelCodecSearch: async () => { throw Error('unexpected codec search cancel'); },
     startAVCSearch: async () => { throw Error('unexpected AVC search'); }, avcSearchResult: async () => { throw Error('unexpected AVC search result'); }, cancelAVCSearch: async () => { throw Error('unexpected AVC search cancel'); },
     mediaCurves: async () => { throw Error('unexpected media curves'); },
     open: async requestId => { opens++; return { apiVersion: 1, requestId, pending: false, canceled: false, fileName: `sample-${opens}.flv`, session: session(), error: null }; },

@@ -12,6 +12,9 @@ from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parent.parent
 CONTRACTS = (
+    ("docs/schemas/desktop-diagnostic-snapshot-v4.schema.json", "testdata/golden/desktop-diagnostic-snapshot-minimal-v4.json"),
+    ("docs/schemas/desktop-diagnostic-snapshot-v4.schema.json", "testdata/golden/desktop-diagnostic-snapshot-full-v4.json"),
+    ("docs/schemas/desktop-diagnostic-snapshot-v4.schema.json", "testdata/golden/desktop-diagnostic-snapshot-mp3-v4.json"),
     ("docs/schemas/flv-avc-tag-detail-v5.schema.json", "testdata/golden/flv-avc-detail-sei-v5.json"),
     ("docs/schemas/flv-avc-tag-detail-v5.schema.json", "testdata/golden/flv-avc-detail-sei-config-v5.json"),
     ("docs/schemas/flv-avc-tag-detail-v5.schema.json", "testdata/golden/flv-avc-detail-sei-truncated-v5.json"),
@@ -325,6 +328,42 @@ def validate_desktop_snapshot_v3_edge_cases(validator: Draft202012Validator) -> 
         path = ROOT / f"testdata/golden/desktop-diagnostic-snapshot-{name}-v3.json"
         if path.stat().st_size > 2 << 20:
             raise SystemExit(f"{path}: snapshot exceeds 2 MiB")
+
+def validate_desktop_snapshot_v4_edge_cases(validator: Draft202012Validator) -> None:
+    for name in ("minimal", "full", "mp3"):
+        path = ROOT / f"testdata/golden/desktop-diagnostic-snapshot-{name}-v4.json"
+        if path.stat().st_size > 2 << 20:
+            raise SystemExit(f"{path}: snapshot exceeds 2 MiB")
+    full = load_json("testdata/golden/desktop-diagnostic-snapshot-full-v4.json")
+    for path, value in (
+            (["schemaVersion"], 3), (["selection", "schemaVersion"], 3),
+            (["selection", "codecSearch", "requestId"], "0"), (["selection", "codecSearch", "cursor"], "01"),
+            (["selection", "codecSearch", "filter"], "parameters"),
+            (["codecSearchPage", "page", "rows"], full["codecSearchPage"]["page"]["rows"] * 2),
+            (["codecSearchPage", "page", "scannedTags"], 257),
+            (["codecSearchPage", "page", "scannedFrames"], 1),
+            (["codecSearchPage", "page", "pending"], 258),
+            (["codecSearchPage", "page", "bytesRead"], "1048577"),
+            (["codecSearchPage", "page", "rows", 0, "messageIndex"], 64),
+            (["codecSearchPage", "page", "rows", 0, "span", "bitLength"], 0),
+            (["codecSearchPage", "page", "rows", 0, "contextState"], "resolved"),
+    ):
+        changed = deepcopy(full)
+        target = changed
+        for key in path[:-1]:
+            target = target[key]
+        target[path[-1]] = value
+        require_invalid(validator, changed, "snapshot v4 bounded search: " + str(path))
+    for version in (1, 2, 3):
+        old = Draft202012Validator(load_json(f"docs/schemas/desktop-diagnostic-snapshot-v{version}.schema.json"))
+        require_invalid(old, full, "older snapshot excludes v4 fields")
+    mp3 = load_json("testdata/golden/desktop-diagnostic-snapshot-mp3-v4.json")
+    for amount in (0, 65535, 65536):
+        mp3["codecSearchPage"]["page"]["bytesRead"] = str(amount)
+        require_valid(validator, mp3, "MP3 exact read budget")
+    mp3["codecSearchPage"]["page"]["bytesRead"] = "65537"
+    require_invalid(validator, mp3, "MP3 independent read ceiling")
+
 
 def validate_media_summary_edge_cases(validator: Draft202012Validator) -> None:
     summary = load_json("testdata/golden/flv-media-summary-v1.json")
@@ -1974,6 +2013,7 @@ def main() -> None:
     desktop_snapshot_validator = None
     desktop_snapshot_v2_validator = None
     desktop_snapshot_v3_validator = None
+    desktop_snapshot_v4_validator = None
     for schema_path, instance_path in CONTRACTS:
         schema = load_json(schema_path)
         Draft202012Validator.check_schema(schema)
@@ -2000,6 +2040,8 @@ def main() -> None:
             desktop_snapshot_v2_validator = validator
         if schema_path == "docs/schemas/desktop-diagnostic-snapshot-v3.schema.json":
             desktop_snapshot_v3_validator = validator
+        if schema_path == "docs/schemas/desktop-diagnostic-snapshot-v4.schema.json":
+            desktop_snapshot_v4_validator = validator
 
     if tag_page_validator is None:
         raise SystemExit("tag page schema was not validated")
@@ -2041,6 +2083,10 @@ def main() -> None:
         raise SystemExit("desktop snapshot v3 schema was not validated")
     validate_desktop_snapshot_v3_edge_cases(desktop_snapshot_v3_validator)
     print("validated desktop snapshot v3 retained search identity, bounded evidence, unknown reasons, omissions and version isolation")
+    if desktop_snapshot_v4_validator is None:
+        raise SystemExit("desktop snapshot v4 schema was not validated")
+    validate_desktop_snapshot_v4_edge_cases(desktop_snapshot_v4_validator)
+    print("validated desktop snapshot v4 bounded codec pages, opaque cursors, pending rows, source spans and version isolation")
 
 
 if __name__ == "__main__":

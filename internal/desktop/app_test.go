@@ -621,7 +621,7 @@ func TestBindingSurface(t *testing.T) {
 	for i := range typeOf.NumMethod() {
 		methods = append(methods, typeOf.Method(i).Name)
 	}
-	want := []string{"CancelAVCSearch", "CancelScan", "CancelSummary", "CloseFile", "GetAVCSearch", "GetDetail", "GetDiagnostics", "GetFilteredTags", "GetHex", "GetMediaCurves", "GetSession", "GetSummary", "GetSummaryEvents", "GetTagTrends", "GetTags", "OpenFile", "StartAVCSearch", "StartDetail", "StartHex", "StartSummary"}
+	want := []string{"CancelAVCSearch", "CancelCodecSearch", "CancelScan", "CancelSummary", "CloseFile", "GetAVCSearch", "GetCodecSearch", "GetDetail", "GetDiagnostics", "GetFilteredTags", "GetHex", "GetMediaCurves", "GetSession", "GetSummary", "GetSummaryEvents", "GetTagTrends", "GetTags", "OpenFile", "StartAVCSearch", "StartCodecSearch", "StartDetail", "StartHex", "StartSummary"}
 	if !reflect.DeepEqual(methods, want) {
 		t.Fatalf("unexpected binding exposure: %v", methods)
 	}

@@ -6,6 +6,10 @@ export function CancelAVCSearch(arg1) {
   return window['go']['desktop']['Bindings']['CancelAVCSearch'](arg1);
 }
 
+export function CancelCodecSearch(arg1) {
+  return window['go']['desktop']['Bindings']['CancelCodecSearch'](arg1);
+}
+
 export function CancelScan(arg1) {
   return window['go']['desktop']['Bindings']['CancelScan'](arg1);
 }
@@ -20,6 +24,10 @@ export function CloseFile(arg1) {
 
 export function GetAVCSearch(arg1) {
   return window['go']['desktop']['Bindings']['GetAVCSearch'](arg1);
+}
+
+export function GetCodecSearch(arg1) {
+  return window['go']['desktop']['Bindings']['GetCodecSearch'](arg1);
 }
 
 export function GetDetail(arg1) {
@@ -68,6 +76,10 @@ export function OpenFile(arg1) {
 
 export function StartAVCSearch(arg1) {
   return window['go']['desktop']['Bindings']['StartAVCSearch'](arg1);
+}
+
+export function StartCodecSearch(arg1) {
+  return window['go']['desktop']['Bindings']['StartCodecSearch'](arg1);
 }
 
 export function StartDetail(arg1) {

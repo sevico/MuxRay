@@ -106,10 +106,10 @@ class SnapshotCheckTests(unittest.TestCase):
                     checker.check_snapshot(self.report_path)
 
     def test_snapshot_versions_and_omissions_remain_distinct(self):
-        for name in ("minimal-v1", "minimal-v2", "full-v1", "full-v2", "minimal-v3", "full-v3"):
+        for name in ("minimal-v1", "minimal-v2", "full-v1", "full-v2", "minimal-v3", "full-v3", "minimal-v4", "full-v4", "mp3-v4"):
             path = checker.ROOT / f"testdata/golden/desktop-diagnostic-snapshot-{name}.json"
             self.assertTrue(checker.check_snapshot(path)["schemaValid"])
-        for version in (0, 4, True, "2"):
+        for version in (0, 5, True, "2"):
             report = self.v2_report()
             report["schemaVersion"] = version
             self.report_path.write_text(json.dumps(report), encoding="utf-8")
@@ -123,6 +123,107 @@ class SnapshotCheckTests(unittest.TestCase):
 
     def v3_report(self):
         return json.loads((checker.ROOT / "testdata/golden/desktop-diagnostic-snapshot-full-v3.json").read_text())
+
+    def v4_report(self, kind="sei"):
+        name = "full" if kind == "sei" else "mp3"
+        return json.loads((checker.ROOT / f"testdata/golden/desktop-diagnostic-snapshot-{name}-v4.json").read_text())
+
+    def test_v4_sei_pending_page_has_zero_reads_and_precise_source(self):
+        report = self.v4_report()
+        page = report["codecSearchPage"]["page"]
+        self.assertEqual((page["start"], page["next"], page["scannedTags"], page["bytesRead"], page["pending"]),
+                         ({"tagId": "1", "frameIndex": 0}, {"tagId": "1", "frameIndex": 0}, 0, "0", 2))
+        self.assertFalse(page["exhausted"])
+        source = self.directory / report["fileName"]
+        source.write_bytes(bytes.fromhex(report["hex"]["window"]["hex"]))
+        result = self.check(report, source)
+        self.assertEqual(result["codecSearchRowsMatchingSource"], 64)
+        # Tokens deliberately exceed both source size and Tag coordinates.
+        self.assertGreater(int(page["cursor"]), source.stat().st_size)
+
+    def test_v4_mp3_late_frame_indices_and_values_match_source(self):
+        report = self.v4_report("mp3")
+        data = bytearray(b"FLV\x01\x05\x00\x00\x00\x09\x00\x00\x00\x00")
+        payload = bytearray(1 + 417 * 3000)
+        payload[0] = 0x2f
+        for i in range(3000):
+            payload[1+i*417:5+i*417] = bytes.fromhex("fffb9064")
+        payload[1+2600*417+3] = 0xe4
+        for p in (payload, bytes.fromhex("2f00000000")):
+            header = bytearray(11)
+            header[0], header[1:4] = 8, len(p).to_bytes(3, "big")
+            data.extend(header + p + (11+len(p)).to_bytes(4, "big"))
+        source = self.directory / report["fileName"]
+        source.write_bytes(data)
+        result = self.check(report, source)
+        self.assertEqual(result["codecSearchRowsMatchingSource"], 3)
+        for name, mutate in {
+                "index": lambda r: r["codecSearchPage"]["page"]["rows"][0].update(frameIndex=2599),
+                "source_value": lambda r: r["codecSearchPage"]["page"]["rows"][0]["values"][0].update(value="mpeg2"),
+                "frame_span": lambda r: r["codecSearchPage"]["page"]["rows"][0]["span"].update(bitLength=32),
+        }.items():
+            changed = copy.deepcopy(report)
+            mutate(changed)
+            with self.subTest(name=name), self.assertRaises((ValueError, ValidationError)):
+                self.check(changed, source)
+
+    def test_v4_codec_negative_identity_coverage_filters_and_source_spans(self):
+        for kind, mutations in {
+                "sei": {
+                    "request": lambda r: r["codecSearchPage"].update(requestId="1"),
+                    "cursor": lambda r: r["codecSearchPage"]["page"].update(cursor="1"),
+                    "next_cursor": lambda r: r["codecSearchPage"]["page"].update(nextCursor="2"),
+                    "no_pending": lambda r: r["codecSearchPage"]["page"].update(pending=0),
+                    "invented_complete": lambda r: r["codecSearchPage"]["page"].update(exhausted=True),
+                    "scan_count": lambda r: r["codecSearchPage"]["page"].update(scannedTags=2),
+                    "filter": lambda r: r["codecSearchPage"]["page"].update(filter="pictureTiming"),
+                    "bad_type": lambda r: r["codecSearchPage"]["page"]["rows"][0]["values"][0].update(value="0"),
+                    "out_of_source": lambda r: r["codecSearchPage"]["page"]["rows"][0]["span"].update(byteOffset="9999999"),
+                    "duplicate": lambda r: r["codecSearchPage"]["page"]["rows"].__setitem__(1, copy.deepcopy(r["codecSearchPage"]["page"]["rows"][0])),
+                    "false_context": lambda r: r["codecSearchPage"]["page"]["rows"][0].update(contextState="resolved"),
+                    "missing_span": lambda r: r["codecSearchPage"]["page"]["rows"][0].update(span=None),
+                    "missing_type": lambda r: r["codecSearchPage"]["page"]["rows"][0].update(values=[]),
+                    "row_budget": lambda r: r["codecSearchPage"]["page"]["rows"].append(copy.deepcopy(r["codecSearchPage"]["page"]["rows"][0])),
+                },
+                "mp3": {
+                    "frame_budget": lambda r: r["codecSearchPage"]["page"].update(scannedFrames=1025),
+                    "read_budget": lambda r: r["codecSearchPage"]["page"].update(bytesRead="65537"),
+                    "pending": lambda r: r["codecSearchPage"]["page"].update(pending=1),
+                    "no_change": lambda r: r["codecSearchPage"]["page"]["rows"][0].update(kind="bitrate"),
+                    "missing_previous": lambda r: r["codecSearchPage"]["page"]["rows"][0]["values"].pop(),
+                    "forged_status": lambda r: r["codecSearchPage"]["page"]["rows"][2].update(status="unknown"),
+                    "duplicate_value": lambda r: r["codecSearchPage"]["page"]["rows"][0]["values"].__setitem__(1, copy.deepcopy(r["codecSearchPage"]["page"]["rows"][0]["values"][0])),
+                },
+        }.items():
+            for name, mutate in mutations.items():
+                report = self.v4_report(kind)
+                mutate(report)
+                self.report_path.write_text(json.dumps(report))
+                with self.subTest(kind=kind, name=name), self.assertRaises((ValueError, ValidationError)):
+                    checker.check_snapshot(self.report_path)
+
+    def test_v4_search_source_tag_and_sps_spans_cannot_be_reassigned(self):
+        report = self.v4_report()
+        source = self.directory / report["fileName"]
+        source.write_bytes(bytes.fromhex(report["hex"]["window"]["hex"]))
+        for key, value in (("offset", "14"), ("dts", "1")):
+            changed = copy.deepcopy(report)
+            changed["codecSearchPage"]["page"]["rows"][0][key] = value
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                self.check(changed, source)
+        changed = copy.deepcopy(report)
+        changed["codecSearchPage"]["page"]["rows"][0]["span"]["byteOffset"] = "24"
+        with self.assertRaises(ValueError):
+            self.check(changed, source)
+
+    def test_v4_legacy_schemas_reject_new_selection_and_scope(self):
+        for version in (1, 2, 3):
+            report = self.v4_report()
+            report["schemaVersion"] = version
+            report["selection"]["schemaVersion"] = version
+            self.report_path.write_text(json.dumps(report))
+            with self.subTest(version=version), self.assertRaises(ValidationError):
+                checker.check_snapshot(self.report_path)
 
     def test_v3_unknown_null_declaration_is_a_valid_bounded_observation(self):
         report = self.v3_report()

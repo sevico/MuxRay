@@ -80,6 +80,11 @@ go run ./cmd/muxray detail --tag 0 --pretty sample.flv
 
 桌面新增 **H.264 批量证据检索**：按 NAL 头筛选声明差异、未知证据或全部候选，支持继续、取消、回看和 Tag/Hex 定位。每批最多 256 Tag、64 条结果、1 MiB 读取；每 Tag 最多 256 个 NAL 头，不批量解析 slice。**MP3 跨 Tag 依赖来源**可按所选帧显式回溯，列出主数据物理槽位的来源 Tag、帧和范围，支持精确跳转。历史不足、损坏、配置切换和预算耗尽保留未知，不重建 reservoir 或解码音频。范围与合同见 [ADR-027](docs/decisions/027-bounded-codec-search-and-mp3-sources.md)。
 
+桌面另增 **MP3 变化与停止原因检索** 和 **H.264 SEI 消息检索**：按批显式继续，
+支持大 Tag 内帧位置、跨批参数比较、时序上下文与来源跳转。SEI 同 Tag 的剩余消息
+可分多页返回；预算耗尽与真实停止原因分别呈现。当前已完成页可导出快照 v4，
+既有 v1–v3 合同保持兼容。资源与证据边界见 [ADR-032](docs/decisions/032-codec-change-and-sei-search.md)。
+
 干净构建产物、独立字节对照与九轮 Linux 原生结果见 [批量检索与跨 Tag 来源验收](docs/desktop-codec-search-history-20261012.md)。
 后续的独立 CI、检索页快照 v3、长文件及受控取消/关闭结果见
 [快照 v3 与生命周期验收](docs/desktop-snapshot-v3-regression-20261012.md)。
@@ -126,8 +131,8 @@ Go 应用层新增 `internal/session.Open`：一个会话拥有一个后台扫�
 [`ADR-018`](docs/decisions/018-bounded-tag-trends.md)，验证见
 [`趋势验证记录`](docs/desktop-trends-20260927.md)。
 
-桌面导出采用独立的 `desktopDiagnosticSnapshot` v3 格式，只保存当前已载入的有界
-证据，包括选中编解码器详情、最多 64 点的当前媒体曲线页及最多 64 行的当前 H.264
+桌面导出默认采用独立的 `desktopDiagnosticSnapshot` v3；当前编解码器检索页使用 v4，
+只保存当前已载入的有界证据，包括选中编解码器详情、最多 64 点的当前媒体曲线页及最多 64 行的当前 H.264
 检索页，总量仍不超过 2 MiB；v1/v2 合同保持兼容。
 快照明确标记部分覆盖、曲线选择和省略原因，不重读源文件或补跑分析；显式 v1 与
 未指定版本的请求保持原 v1 形状。原生保存支持结果恢复及源文件保护。设计见
