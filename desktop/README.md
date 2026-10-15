@@ -73,6 +73,7 @@ MP3 每批最多 256 Tag / 1,024 帧头；在大 Tag 内保留准确帧边界和
 不透明续查游标；过期后从头检索。当前 ready 检索页使导出选择快照 v4，其他导出
 仍使用 v3。v4 仅冻结当前页，不遍历历史或补做分析；v1–v3 输出保持兼容。
 完整规则见 [ADR-032](../docs/decisions/032-codec-change-and-sei-search.md)。
+固定构建、Linux 原生结果和工具性能计量见 [检索与回归工具验收](../docs/desktop-codec-change-sei-search-20261015.md)。
 
 ## 媒体码率与 GOP 曲线
 
