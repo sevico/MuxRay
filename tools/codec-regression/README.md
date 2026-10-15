@@ -434,3 +434,42 @@ reuse existing context, or clone compact context, using an in-memory ReaderAt.
 Read counts/bytes and request/page counts establish the workload; `B/op` and
 `allocs/op` are Go allocations, not RSS or peak live memory. No cross-machine
 speed threshold is imposed. Whole native-run duration is not parser latency.
+
+## MP3 changes and SEI message searches
+
+The independent authored samples cover a parameter change at MP3 frame 2600,
+bitrate changes and five distinct stopping reasons, 130 SEI messages in one Tag,
+timing activation across a 256-Tag batch boundary, missing timing context and
+message-budget coverage. These are structural fixtures with opaque media bodies;
+they are not decoder-success samples.
+
+```sh
+/usr/bin/python3 -B tools/codec-regression/codec_search_oracle.py --output-dir "$PWD/.cache/cs-samples"
+/usr/bin/python3 -B tools/codec-regression/native_codec_search.py \
+  --input-dir "$PWD/.cache/cs-samples" --binary "$PWD/desktop/build/bin/MuxRay" \
+  --output-dir "$PWD/.cache/cs-native" --timeout-seconds 900
+```
+
+Use a fresh output directory. `--case` selects a named round; the default runs
+all six. Each filter visits every expected bounded page and exports its current
+snapshot v4. Independent expectations check row identity, before/after values,
+stopping reason, source envelope, context provenance and no missing/duplicate
+messages. Same-Tag pending SEI pages must have zero source reads. Source/Tag,
+exact MP3 frame, SPS and activation-evidence navigation preserve that page.
+The ordinary source immutability, file-descriptor release and normal-exit gates
+remain mandatory. The `linux-codec-search` CI job preserves failed runs too.
+
+### Independent bit-field oracle cost
+
+`source_field` extracts only each field's covering bytes instead of expanding
+the whole media file into a binary string for every field. It still checks
+source offsets, bounds, exact encoded bits and integer value.
+
+```sh
+/usr/bin/python3 -B tools/codec-regression/source_field_benchmark.py --repetitions 3
+```
+
+The benchmark compares both algorithms on the same late side-info fields and
+records visited bytes, elapsed samples and one-call Python allocation peak.
+It has no wall-clock pass threshold. This measures the regression helper, not
+media parsing, UI latency, native-process RSS or general system performance.

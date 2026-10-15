@@ -879,3 +879,18 @@ gate 仍阻塞时没有 orderly source Close；进程退出后由 OS 回收句�
 `build-record.json` 保存 run ID、源文件/前端输入和产物 SHA-256、工具模板身份、版本与 overlay 参数。控制及检查入口重新核对产物；收据绑定 run ID、PID 与每次进程生成的 token。JSON 先在同目录写完再原子发布，拒绝覆盖已有文件，读者不会看到半条收据。
 
 保留整个 run 和截图，尤其是 `entered.json`、操作意图、`released.json`/`closed.json` 或 `exit-observed.json`，以及最终 `acceptance.json`。`verification.json` 只表示非 GUI 测试通过。构建或校验失败会保留已有产物；没有成功记录的 run 不算通过，请修复原因后使用新目录。工具不会加入交互 CI，也不修改私有样本、正常生产 exe 或既有 ADR。
+
+### 关闭失败后的隔离取证
+
+`linux_smoke.py` 保留一次原始关闭动作的开始、返回、接受状态和异常。失败后先保存
+`native-result.json`，再用独立只读进程写 `failure-probe-request.json`、
+`failure-probe.json`、`failure-ui.json` 与 `failure-observation.json`。
+
+取证先保留两份进程身份与源文件 FD 样本，再遍历最多 2,048 个可访问节点。
+缺失节点、读取异常、截断文本、节点预算和遍历未完成都有独立标记；缺失树不能解释为
+空窗口或关闭成功。增量结果原子落盘。取证子进程最多等待八秒，超时只终止并回收
+该观察进程，记录信号和原因；应用后续清理仍在原有独立记录中。
+
+取证不会重复点击关闭，不会把原始失败改成通过，也不据不完整的 AT-SPI 树推断
+产品根因。测试继续使用独立 Xvfb/D-Bus 和 `GSETTINGS_BACKEND=memory`，不写系统
+辅助功能配置。原生窗口偶发关闭超时仍需凭实际动作、资源与进程证据判断。

@@ -43,6 +43,13 @@ def arguments(argv=None):
     parser.add_argument('--avc-search-long', action='store_true', help='export only last page and check the complete 64-entry back-history boundary')
     parser.add_argument('--avc-search-gate', type=Path, help='explicit controlled overlay build directory; requires --avc-search-action')
     parser.add_argument('--avc-search-action', choices=['cancel', 'close'], help='native action while the controlled first source read is blocked')
+    parser.add_argument('--codec-search', choices=['mp3', 'sei'], help='inspect ready codec evidence pages through native actions')
+    parser.add_argument('--codec-search-filter', action='append', default=[], help='ordered codec filters; at most four distinct filters')
+    parser.add_argument('--codec-search-pages', type=int, default=4, help='maximum pages per codec filter, 1 through 16')
+    parser.add_argument('--codec-search-target', help='exact row identity tag:frame:nal:message, absent indices use -')
+    parser.add_argument('--codec-search-frame', action='store_true', help='open the target complete MP3 frame and explicitly continue locating')
+    parser.add_argument('--codec-search-source', action='append', choices=['hex', 'sps', 'evidence'], default=[])
+    parser.add_argument('--codec-search-restart', action='store_true', help='retain first page, restart once and verify a new first request')
     parser.add_argument('--mp3-history', action='store_true', help='inspect and export bounded MP3 dependency sources and click their source ranges')
     parser.add_argument('--mp3-frame', type=int, help='select a global MP3 frame index on the inspected page')
     parser.add_argument('--media-curves', choices=['audio', 'video', 'mp3', 'gopAverage', 'gopMax'], help='analyze media and load the current curve page before details')
@@ -89,6 +96,26 @@ def arguments(argv=None):
         parser.error('--mp3-frame requires history, pages or summary link and must fit uint32')
     if args.avc_search and args.mp3_history:
         parser.error('AVC search and MP3 history are separate native rounds')
+    filters = ('all', 'parameters', 'bitrate', 'stops') if args.codec_search == 'mp3' else ('all', 'bufferingPeriod', 'pictureTiming', 'unknown')
+    if args.codec_search:
+        if args.avc_search or args.mp3_browse or args.mp3_summary or args.mp3_history or args.mp3_jump_frame is not None or args.mp3_page_steps:
+            parser.error('codec search requires a separate native flow')
+        if not args.codec_search_filter:
+            args.codec_search_filter = ['all']
+        if len(args.codec_search_filter) > 4 or len(set(args.codec_search_filter)) != len(args.codec_search_filter) or any(f not in filters for f in args.codec_search_filter):
+            parser.error('codec filters must be distinct and valid for the selected kind')
+    elif args.codec_search_filter or args.codec_search_target or args.codec_search_frame or args.codec_search_source or args.codec_search_restart or args.codec_search_pages != 4:
+        parser.error('codec search options require --codec-search')
+    if not 1 <= args.codec_search_pages <= 16:
+        parser.error('codec search pages must be 1 through 16')
+    if args.codec_search_target and not re.fullmatch(r'(0|[1-9][0-9]{0,5}):(-|0|[1-9][0-9]{0,9}):(-|0|[1-9][0-9]{0,9}):(-|0|[1-9][0-9]{0,9})', args.codec_search_target):
+        parser.error('invalid codec search row identity')
+    if args.codec_search_target and any(part != '-' and int(part) > 4294967295 for part in args.codec_search_target.split(':')[1:]):
+        parser.error('codec search row indices must fit uint32')
+    if (args.codec_search_source or args.codec_search_frame) and not args.codec_search_target or args.codec_search_frame and args.codec_search != 'mp3':
+        parser.error('codec source/frame actions require an exact compatible target')
+    if len(set(args.codec_search_source)) != len(args.codec_search_source):
+        parser.error('codec source actions must be distinct')
     args.binary = args.binary.resolve()
     if not args.binary.is_file() or not os.access(args.binary, os.X_OK):
         parser.error('--binary must be an executable file; build with desktop/build-production.sh first')
@@ -192,6 +219,179 @@ def source_fds(rows, source):
 def require(condition, message):
     if not condition:
         raise RuntimeError(message)
+
+
+def failure_ui_tree(desktop, pid, publish, node_budget=2048):
+    """Read-only forensic tree; missing nodes/errors never imply an empty UI."""
+    report = {'complete': False, 'traversalFinished': False, 'nodes': [], 'errors': [], 'errorCount': 0,
+              'nodeBudget': node_budget, 'budgetLimited': False, 'textTruncated': False}
+    references = 0
+
+    def read(path, operation, call, default=None):
+        try:
+            return call()
+        except Exception as error:
+            report['errorCount'] += 1
+            if len(report['errors']) < 32:
+                report['errors'].append({'path': path, 'operation': operation, 'error': repr(error)[:512]})
+            return default
+
+    def children(node, path):
+        nonlocal references
+        count = read(path, 'childCount', lambda: node.childCount, 0)
+        if not isinstance(count, int) or count < 0:
+            read(path, 'validChildCount', lambda: require(False, 'invalid accessible child count'))
+            return []
+        available = node_budget - references
+        if count > available:
+            report['budgetLimited'] = True
+        result = []
+        for index in range(min(count, available)):
+            references += 1
+            child_path = path + [index]
+            child = read(child_path, 'getChildAtIndex', lambda: node.getChildAtIndex(index))
+            if child is None:
+                read(child_path, 'childPresent', lambda: require(False, 'missing accessible child'))
+            else:
+                result.append((child, child_path))
+        after = read(path, 'childCountAfter', lambda: node.childCount)
+        read(path, 'stableChildCount', lambda: require(count == after, 'children changed while reading'))
+        return result
+
+    stack = [(node, path) for node, path in children(desktop, [])
+             if read(path, 'processId', node.get_process_id) == pid]
+    report['ownedRoots'] = len(stack)
+    publish(report)
+    while stack and len(report['nodes']) < node_budget:
+        node, path = stack.pop()
+        row = {'path': path, 'depth': len(path) - 1,
+               'role': read(path, 'role', node.getRoleName),
+               'name': read(path, 'name', lambda: node.name),
+               'description': read(path, 'description', lambda: node.description), 'text': ''}
+
+        def text():
+            try:
+                interface = node.queryText()
+            except NotImplementedError:
+                return ''  # The node has no Text interface, not a failed read.
+            count = interface.characterCount
+            report['textTruncated'] |= count > 1200
+            return interface.getText(0, min(count, 1200))
+
+        row['text'] = read(path, 'text', text)
+        report['nodes'].append(row)
+        stack.extend(reversed(children(node, path)))
+        if len(report['nodes']) % 32 == 0:
+            publish(report)
+    report['budgetLimited'] |= bool(stack)
+    report['traversalFinished'] = True
+    report['complete'] = bool(report['ownedRoots']) and not (report['errorCount'] or report['budgetLimited'] or report['textTruncated'])
+    publish(report)
+    return report
+
+
+def failure_probe(request_path):
+    # This interpreter inherits only the private test bus/display. It never
+    # invokes an action, changes settings, or sends a signal to the application.
+    request = json.loads(Path(request_path).read_text())
+    out, pid = Path(request_path).parent, request['pid']
+    report = {'processSamples': [], 'ui': {'complete': False, 'nodes': [], 'errors': [], 'state': 'notStarted'}}
+
+    def persist():
+        save(out, 'failure-probe.tmp', report)
+        (out / 'failure-probe.tmp').replace(out / 'failure-probe.json')
+
+    known = {row['pid']: row for row in request['knownProcesses']}
+    for index in range(2):
+        sample = {'unixSeconds': time.time(), 'monotonicSeconds': time.monotonic()}
+        try:
+            sample['observedProcesses'] = observe(pid, known)
+            sample['sourceFDs'] = source_fds(sample['observedProcesses'], Path(request['source']))
+            sample['complete'] = True
+        except Exception as error:
+            sample.update(complete=False, error=repr(error)[:512])
+        report['processSamples'].append(sample)
+        persist()
+        if index == 0:
+            time.sleep(.2)
+    try:
+        require(alive(request['appIdentity']), 'original app identity no longer exists')
+        import pyatspi
+
+        def publish(ui):
+            report['ui'] = {**ui, 'state': 'finished' if ui['complete'] else 'partial'}
+            persist()
+
+        failure_ui_tree(pyatspi.Registry.getDesktop(0), pid, publish)
+    except Exception as error:
+        report['ui'].update(complete=False, error=repr(error)[:512])
+        persist()
+
+
+def run_failure_probe(command, timeout=8):
+    # A Python alarm cannot bound an AT-SPI C call. Isolate it and reap only
+    # this child; its termination is separate from application cleanup records.
+    child = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    result = {'pid': child.pid, 'identity': process(child.pid), 'budgetSeconds': timeout,
+              'timedOut': False, 'terminationSignal': None, 'reaped': False}
+    try:
+        result['exitCode'] = child.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        result.update(timedOut=True, terminationSignal='SIGKILL', terminationReason='failure observation deadline')
+        child.kill()
+        result['exitCode'] = child.wait(timeout=1)
+    finally:
+        if child.poll() is None:
+            child.kill()
+            child.wait(timeout=1)
+        result['reaped'] = child.poll() is not None
+    return result
+
+
+def capture_failure_observation(out, app, source, known, close_stages):
+    observation = {'startedUnixSeconds': time.time(), 'startedMonotonicSeconds': time.monotonic(),
+                   'appPollBefore': app.poll(), 'closeStages': close_stages,
+                   'actionReplayed': False, 'ui': {'complete': False}}
+    try:
+        save(out, 'failure-probe-request.json', {'pid': app.pid, 'source': str(source),
+             'appIdentity': known[app.pid], 'knownProcesses': list(known.values())})
+        command = [sys.executable, '-B', '-c',
+                   'import runpy,sys; runpy.run_path(sys.argv[1])["failure_probe"](sys.argv[2])',
+                   str(Path(__file__).resolve()), str(out / 'failure-probe-request.json')]
+        observation['probe'] = run_failure_probe(command)
+        if (out / 'failure-probe.json').exists():
+            report = json.loads((out / 'failure-probe.json').read_text())
+            ui = report['ui']
+            save(out, 'failure-ui.json', ui.pop('nodes'))
+            ui.update(file='failure-ui.json', sha256=digest(out / 'failure-ui.json'))
+            if observation['probe']['timedOut']:
+                ui.update(complete=False, interrupted=True)
+            observation.update(report)
+    except Exception as error:
+        observation['observationError'] = repr(error)[:512]
+    observation.update(appPollAfter=app.poll(), finishedUnixSeconds=time.time(),
+                       elapsedSeconds=time.monotonic() - observation['startedMonotonicSeconds'])
+    save(out, 'failure-observation.json', observation)
+    return observation
+
+
+def record_failure_observation(result, out, app, source, known):
+    try:
+        save(out, 'native-result.json', result)  # Preserve the primary exception first.
+        result['failureObservation'] = capture_failure_observation(out, app, source, known, result.get('closeStages', []))
+    except BaseException as error:
+        result['failureObservationError'] = repr(error)[:512]
+
+
+def accessible_action_once(action, name, stage=None):
+    require(action.nActions == 1, 'action missing: ' + name)
+    if stage is not None:
+        stage.update(state='actionPending', actionAttempted=True, actionStartedUnixSeconds=time.time())
+    accepted = action.doAction(0)
+    if stage is not None:
+        stage.update(state='actionReturned', actionReturned=True, actionAccepted=bool(accepted),
+                     actionFinishedUnixSeconds=time.time())
+    require(accepted, 'action failed: ' + name)
 
 
 def choose_accessible_option(get_combo, index, label, expected_name=None):
@@ -343,10 +543,14 @@ def run_worker(args):
         return matches[0]
 
     def click(name, role='push button'):
+        stage = None
+        if name == '关闭文件':
+            stage = {'state': 'locating', 'startedUnixSeconds': time.time(),
+                     'actionAttempted': False, 'actionReturned': False}
+            result.setdefault('closeStages', []).append(stage)
         node = find(role, name)
         require(node.getState().contains(pyatspi.STATE_ENABLED), 'disabled target: ' + name)
-        action = node.queryAction()
-        require(action.nActions == 1 and action.doAction(0), 'action failed: ' + name)
+        accessible_action_once(node.queryAction(), name, stage)
 
     def wait_text(fragment, seconds=35):
         return wait(lambda: any(fragment in name or fragment in node_text(node)
@@ -502,6 +706,97 @@ def run_worker(args):
             click('检索 H.264 证据')
         else:
             choose('H.264 证据筛选', labels[args.avc_search])
+
+    def codec_search():
+        filters = ('all', 'parameters', 'bitrate', 'stops') if args.codec_search == 'mp3' else ('all', 'bufferingPeriod', 'pictureTiming', 'unknown')
+        filter_labels = ('全部变化与停止', '参数变化', '码率变化', '无法继续检查') if args.codec_search == 'mp3' else ('全部 SEI 消息', '缓冲周期', '图像时序', '未知或不完整证据')
+        previous, request = None, None
+        result['codecSearchPages'] = []
+
+        def page(filename, filter_name, index, cursor):
+            status = wait(lambda: next((node_text(node) for node, _, _, _ in rows()
+                          if node_text(node).startswith('编解码器检索完成：' + args.codec_search + ' · ') and
+                          (previous is None or node_text(node) != previous)), None), 'codec search ready page')
+            wait(lambda: find('push button', '从头检索编解码器').getState().contains(pyatspi.STATE_ENABLED), 'codec page no longer running')
+            ui_name = filename.removesuffix('.json') + '-ui.json'
+            dump(ui_name)
+            snapshot, checked = export_snapshot(filename)
+            response = snapshot.get('codecSearchPage')
+            require(snapshot['schemaVersion'] == 4 and response is not None and response['state'] == 'ready' and response['error'] is None, 'codec ready page missing from v4 export')
+            current = response['page']
+            require(current['kind'] == args.codec_search and current['filter'] == filter_name and current['cursor'] == cursor, 'codec request kind/filter/cursor differs')
+            require(request is None or int(response['requestId']) > int(request), 'codec search reused an old request')
+            stage = {'file': filename, 'snapshotCheck': checked, 'uiFile': ui_name, 'uiSHA256': digest(out / ui_name),
+                     'filter': filter_name, 'pageIndex': index, 'status': status, 'requestId': response['requestId']}
+            return stage, current
+
+        if args.codec_search == 'sei':
+            choose('编解码器检索类型', 1, 'H.264 SEI 消息')
+            wait_text('编解码器检索完成：sei · ')
+        for filter_index, filter_name in enumerate(args.codec_search_filter):
+            previous = None
+            if filter_index == 0 and filter_name == 'all':
+                if args.codec_search == 'mp3':
+                    click('检索编解码器证据')
+            else:
+                choose('编解码器检索筛选', filters.index(filter_name), filter_labels[filters.index(filter_name)])
+            cursor = '0'
+            if args.codec_search_restart and filter_index == 0:
+                stage, _ = page('codec-restart-initial.json', filter_name, 0, cursor)
+                result['codecSearchRestart'] = stage
+                request = stage['requestId']
+                click('从头检索编解码器')
+            for index in range(args.codec_search_pages):
+                stage, current = page(f'codec-{filter_name}-{index}.json', filter_name, index, cursor)
+                result['codecSearchPages'].append(stage)
+                request, previous = stage['requestId'], stage['status']
+                if current['exhausted']:
+                    break
+                require(index + 1 < args.codec_search_pages, 'codec fixture did not exhaust within explicit page budget')
+                cursor = current['nextCursor']
+                require(cursor != '0', 'nonexhausted codec page lost continuation token')
+                click('继续检索编解码器')
+        if not args.codec_search_target:
+            return
+        identity = lambda row: ':'.join(str(row[key]) if row[key] is not None else '-' for key in ('tagId', 'frameIndex', 'nalIndex', 'messageIndex'))
+        targets = [row for row in current['rows'] if identity(row) == args.codec_search_target]
+        require(len(targets) == 1, 'exact codec target missing from final retained page')
+        target = targets[0]
+        if args.codec_search_frame:
+            require(target['complete'] and target['status'] == 'complete' and target['frameIndex'] is not None, 'codec row cannot open frame details')
+            click(f'从编解码器检索跳转 {args.codec_search_target} 帧')
+            result['codecSearchFrameStages'], prior = [], None
+            for step in range(4):
+                frame = target['frameIndex']
+                wait(lambda: any((f'当前展开 MP3 帧 {frame} ·' in node_text(node) or
+                                  f'正在定位 MP3 帧 {frame}，已检查到帧 ' in node_text(node)) for node, _, _, _ in rows()), 'codec row frame target')
+                filename = f'codec-frame-{step}.json'
+                snapshot, checked = export_snapshot(filename, int(target['tagId']))
+                navigation = check_mp3_navigation_stage(snapshot, frame, prior)
+                stage = {**navigation, 'file': filename, 'snapshotCheck': checked}
+                result['codecSearchFrameStages'].append(stage)
+                if navigation['state'] == 'ready':
+                    break
+                require(navigation['state'] == 'preparing' and step < 3, 'codec frame target stopped or exceeded continuation budget')
+                prior = navigation
+                click('继续定位 MP3 帧页')
+                wait_text(f'正在定位 MP3 帧 {frame}，已检查到帧 {prior["nextFrameIndex"] + 1024} 之前。' if
+                          prior['nextFrameIndex'] + 1024 <= frame // 64 * 64 else f'当前展开 MP3 帧 {frame} ·')
+        result['codecSearchSources'] = []
+        for destination in args.codec_search_source:
+            label, key_name = {'hex': ('证据', 'span'), 'sps': ('SPS', 'spsSpan'), 'evidence': ('选择依据', 'evidenceSpan')}[destination]
+            source_span = target[key_name]
+            require(source_span is not None, 'codec target source is unavailable')
+            click(f'定位编解码器 {args.codec_search_target} {label}')
+            source_label = f'编解码器证据 {args.codec_search_target} {destination}'
+            wait_text(f'{source_label} · {source_span["byteOffset"]} : {source_span["bitOffset"]} · {source_span["bitLength"]} bit')
+            wait(lambda: any(n == f'查看 byte {source_span["byteOffset"]} 的位' for _, _, _, n in rows()), 'codec source Hex bytes')
+            filename, ui = f'codec-source-{destination}.json', f'codec-source-{destination}-ui.json'
+            dump(ui)
+            _, checked = export_snapshot(filename)
+            result['codecSearchSources'].append({'destination': destination, 'target': args.codec_search_target,
+                   'span': source_span, 'label': source_label, 'file': filename, 'snapshotCheck': checked,
+                   'uiFile': ui, 'uiSHA256': digest(out / ui)})
 
     result = {'passed': False, 'pid': app.pid}
     try:
@@ -663,6 +958,10 @@ def run_worker(args):
                 result['avcSearchSelected'] = {'tagId': target, 'file': 'avc-search-selected.json', 'snapshotCheck': checked}
         if not args.mp3_summary_link:
             select_tag(args.tag)
+        if args.codec_search:
+            codec_search()
+            if not args.codec_search_frame:
+                select_tag(args.tag)
         if args.mp3_jump_frame is not None:
             jump_mp3_frame(args.mp3_jump_frame)
         selected_target = args.mp3_jump_frame
@@ -802,9 +1101,12 @@ def run_worker(args):
         result['sourceFDsBeforeClose'] = source_fds(observe(app.pid, known), source)
         require(result['sourceFDsBeforeClose'], 'no owned process holds the open source')
         click('关闭文件')
+        result['closeStages'][-1]['state'] = 'waitingForEmptyUI'
         wait_text('从一个文件开始')
+        result['closeStages'][-1]['state'] = 'waitingForSourceFDRelease'
         wait(lambda: not source_fds(observe(app.pid, known), source), 'source FD release')
         result['sourceFDsAfterClose'] = source_fds(observe(app.pid, known), source)
+        result['closeStages'][-1].update(state='sourceReleased', sourceReleasedUnixSeconds=time.time())
         with BoundedSource(source, args.max_source_bytes) as stream:
             require(stream.digest() == before_hash, 'source changed before close completed')
         result['sourceUnchanged'] = True
@@ -826,14 +1128,15 @@ def run_worker(args):
         result['passed'] = True
     except BaseException as exc:
         result.update(error=repr(exc), traceback=traceback.format_exc())
-        save(out, 'native-result.json', result)
-        # The outer deadline still applies if an accessibility query itself is stuck.
-        if app.poll() is None:
-            dump('failure-ui.json')
+        record_failure_observation(result, out, app, source, known)
         raise
     finally:
-        save(out, 'native-result.json', result)
-        screen.close()
+        try:
+            save(out, 'native-result.json', result)
+            screen.close()
+        except Exception:
+            if result['passed']:
+                raise
     return 0
 
 
@@ -877,6 +1180,18 @@ def launch(args):
         command.extend(['--mp3-page-steps', str(args.mp3_page_steps)])
     if args.mp3_jump_frame is not None:
         command.extend(['--mp3-jump-frame', str(args.mp3_jump_frame)])
+    if args.codec_search:
+        command.extend(['--codec-search', args.codec_search, '--codec-search-pages', str(args.codec_search_pages)])
+        for item in args.codec_search_filter:
+            command.extend(['--codec-search-filter', item])
+        if args.codec_search_target:
+            command.extend(['--codec-search-target', args.codec_search_target])
+        if args.codec_search_frame:
+            command.append('--codec-search-frame')
+        if args.codec_search_restart:
+            command.append('--codec-search-restart')
+        for item in args.codec_search_source:
+            command.extend(['--codec-search-source', item])
     for direction in args.mp3_frame_walk:
         command.extend(['--mp3-frame-walk', direction])
     if args.field_name:

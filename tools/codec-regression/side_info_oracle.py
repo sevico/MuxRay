@@ -153,10 +153,17 @@ def stream_oracle(data, source_offset=25):
 
 def source_field(data, field, source_offset=0):
     span = field['span']
-    start = (span['byteOffset'] - source_offset) * 8 + span['bitOffset']
-    bits = ''.join(f'{value:08b}' for value in data)
-    actual = bits[start:start + span['bitLength']]
-    require(len(actual) == span['bitLength'] and actual == field['encodedBits'] and int(actual, 2) == field['value'],
+    offset, bit, width = span['byteOffset'], span['bitOffset'], span['bitLength']
+    require(all(type(value) is int for value in (source_offset, offset, bit, width)) and
+            source_offset >= 0 and offset >= source_offset and 0 <= bit < 8 and width > 0,
+            'invalid oracle field source span: ' + field['path'])
+    start = offset - source_offset
+    end = start + (bit + width + 7) // 8
+    require(end <= len(data), 'oracle field exceeds its source: ' + field['path'])
+    bits = ''.join(f'{value:08b}' for value in data[start:end])
+    actual = bits[bit:bit + width]
+    require(type(field['value']) is int and len(actual) == width and
+            actual == field['encodedBits'] and int(actual, 2) == field['value'],
             'oracle field does not map to its original source bits: ' + field['path'])
 
 

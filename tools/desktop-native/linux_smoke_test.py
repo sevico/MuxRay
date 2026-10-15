@@ -3,10 +3,12 @@
 import contextlib
 import copy
 import io
+import json
 import os
 from pathlib import Path
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
@@ -27,6 +29,16 @@ def accessible_combo(names, missing_index=None):
     root.getRoleName.return_value = 'combo box'
     root.getChildAtIndex.side_effect = lambda i: None if i == missing_index else items[i]
     return root, items
+
+
+def forensic_node(name, children=(), pid=42):
+    node = Mock()
+    node.name, node.description, node.childCount = name, '', len(children)
+    node.getRoleName.return_value = 'application' if name == 'app' else 'section'
+    node.get_process_id.return_value = pid
+    node.getChildAtIndex.side_effect = lambda i: children[i]
+    node.queryText.side_effect = NotImplementedError
+    return node
 
 
 class LinuxSmokeTest(unittest.TestCase):
@@ -96,6 +108,20 @@ class LinuxSmokeTest(unittest.TestCase):
         self.assertTrue(args.avc_evidence)
         self.assertEqual(args.media_curves, 'video')
         self.assertFalse(args.mp3_browse)
+
+    def test_codec_search_options_are_bounded_and_require_one_explicit_flow(self):
+        args = smoke.arguments(self.argv + ['--codec-search', 'mp3', '--codec-search-filter', 'parameters',
+                     '--codec-search-target', '0:2600:-:-', '--codec-search-frame', '--codec-search-source', 'hex'])
+        self.assertEqual((args.codec_search, args.codec_search_filter, args.codec_search_target), ('mp3', ['parameters'], '0:2600:-:-'))
+        self.assertEqual(smoke.arguments(self.argv + ['--codec-search', 'sei']).codec_search_filter, ['all'])
+        for options in (['--codec-search-filter', 'all'], ['--codec-search', 'sei', '--codec-search-filter', 'bitrate'],
+                        ['--codec-search', 'mp3', '--codec-search-filter', 'all', '--codec-search-filter', 'all'],
+                        ['--codec-search', 'mp3', '--codec-search-pages', '17'], ['--codec-search', 'mp3', '--codec-search-source', 'hex'],
+                        ['--codec-search', 'sei', '--codec-search-frame', '--codec-search-target', '1:-:0:0'],
+                        ['--codec-search', 'mp3', '--mp3-jump-frame', '3'],
+                        ['--codec-search', 'mp3', '--codec-search-target', '01:2:-:-']):
+            with self.subTest(options=options), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                smoke.arguments(self.argv + options)
 
     def test_rejects_invalid_inputs_before_launch(self):
         invalid = [
@@ -203,6 +229,126 @@ class LinuxSmokeTest(unittest.TestCase):
         with alias.open('rb') as stream:
             self.assertIn({'pid': os.getpid(), 'fd': str(stream.fileno())}, smoke.source_fds([row], source))
         self.assertEqual(smoke.source_fds([row], source), [])
+
+    def test_forensic_ui_marks_missing_and_failed_reads_without_losing_siblings(self):
+        readable, broken = forensic_node('readable'), forensic_node('broken')
+        broken.queryText.side_effect = RuntimeError('remote text read failed')
+        app = forensic_node('app', [readable, None, broken])
+        desktop = forensic_node('desktop', [app])
+        result = smoke.failure_ui_tree(desktop, 42, lambda report: None)
+        self.assertFalse(result['complete'])
+        self.assertEqual([row['name'] for row in result['nodes']], ['app', 'readable', 'broken'])
+        self.assertIn('childPresent', [row['operation'] for row in result['errors']])
+        self.assertIn('text', [row['operation'] for row in result['errors']])
+        self.assertFalse(app.queryAction.called)
+
+    def test_forensic_ui_complete_and_bounded_are_distinct(self):
+        child = forensic_node('readable')
+        app = forensic_node('app', [child])
+        desktop = forensic_node('desktop', [app])
+        good = smoke.failure_ui_tree(desktop, 42, lambda report: None)
+        self.assertTrue(good['complete'])
+        limited = smoke.failure_ui_tree(desktop, 42, lambda report: None, node_budget=1)
+        self.assertFalse(limited['complete'])
+        self.assertTrue(limited['budgetLimited'])
+        self.assertEqual(len(limited['nodes']), 1)
+        child.queryText.side_effect = None
+        child.queryText.return_value.characterCount = 1201
+        child.queryText.return_value.getText.return_value = 'x' * 1200
+        truncated = smoke.failure_ui_tree(desktop, 42, lambda report: None)
+        self.assertFalse(truncated['complete'])
+        self.assertTrue(truncated['textTruncated'])
+        absent = smoke.failure_ui_tree(desktop, 999, lambda report: None)
+        self.assertFalse(absent['complete'])
+        self.assertTrue(absent['traversalFinished'])
+        self.assertEqual(absent['ownedRoots'], 0)
+
+    def test_close_action_exception_or_false_result_is_never_replayed(self):
+        for outcome in (RuntimeError('AT-SPI no reply'), False):
+            stage, action = {}, Mock()
+            action.nActions = 1
+            if isinstance(outcome, Exception):
+                action.doAction.side_effect = outcome
+            else:
+                action.doAction.return_value = outcome
+            with self.subTest(outcome=outcome), self.assertRaises(RuntimeError):
+                smoke.accessible_action_once(action, '关闭文件', stage)
+            action.doAction.assert_called_once_with(0)
+            self.assertTrue(stage['actionAttempted'])
+            self.assertEqual(stage['state'], 'actionPending' if isinstance(outcome, Exception) else 'actionReturned')
+
+    def test_failure_probe_timeout_kills_and_reaps_only_probe(self):
+        result = smoke.run_failure_probe([sys.executable, '-c', 'import time; time.sleep(60)'], timeout=.05)
+        self.assertTrue(result['timedOut'] and result['reaped'])
+        self.assertEqual((result['terminationSignal'], result['exitCode']), ('SIGKILL', -9))
+        self.assertIsNone(smoke.process(result['pid']))
+        self.assertIsNotNone(smoke.process(os.getpid()))
+        normal = smoke.run_failure_probe([sys.executable, '-c', 'pass'], timeout=5)
+        self.assertFalse(normal['timedOut'])
+        self.assertEqual(normal['exitCode'], 0)
+        self.assertTrue(normal['reaped'])
+
+    @patch.object(smoke.time, 'sleep')
+    def test_failure_probe_saves_resource_samples_before_ui_and_never_actions(self, sleep):
+        source = self.root / 'source.flv'
+        source.write_bytes(b'FLV')
+        identity = smoke.process(os.getpid())
+        app = forensic_node('app', pid=os.getpid())
+        desktop = forensic_node('desktop', [app])
+        registry = Mock()
+        registry.getDesktop.return_value = desktop
+        request = self.root / 'failure-probe-request.json'
+        request.write_text(json.dumps({'pid': os.getpid(), 'source': str(source), 'appIdentity': identity,
+                                       'knownProcesses': [identity]}))
+        with source.open('rb') as stream, patch.dict(sys.modules, {'pyatspi': SimpleNamespace(Registry=registry)}):
+            smoke.failure_probe(request)
+            result = json.loads((self.root / 'failure-probe.json').read_text())
+            self.assertEqual(len(result['processSamples']), 2)
+            for sample in result['processSamples']:
+                self.assertTrue(sample['complete'])
+                self.assertIn({'pid': os.getpid(), 'fd': str(stream.fileno())}, sample['sourceFDs'])
+            self.assertTrue(result['ui']['complete'])
+        self.assertEqual(source.read_bytes(), b'FLV')
+        self.assertFalse(app.queryAction.called)
+
+        def failed_ui(_):
+            partial = json.loads((self.root / 'failure-probe.json').read_text())
+            self.assertEqual(len(partial['processSamples']), 2)
+            raise RuntimeError('UI bus unavailable')
+
+        registry.getDesktop.side_effect = failed_ui
+        with patch.dict(sys.modules, {'pyatspi': SimpleNamespace(Registry=registry)}):
+            smoke.failure_probe(request)
+        partial = json.loads((self.root / 'failure-probe.json').read_text())
+        self.assertFalse(partial['ui']['complete'])
+        self.assertIn('UI bus unavailable', partial['ui']['error'])
+
+    def test_failure_observation_keeps_primary_error_and_timeout_partial_receipt(self):
+        result = {'passed': False, 'error': 'original close error', 'traceback': 'original stack'}
+        with patch.object(smoke, 'capture_failure_observation', side_effect=OSError('probe failed')):
+            smoke.record_failure_observation(result, self.root, None, None, {})
+        self.assertEqual(result['error'], 'original close error')
+        self.assertEqual(result['traceback'], 'original stack')
+        self.assertIn('probe failed', result['failureObservationError'])
+        self.assertFalse(result['passed'])
+        self.assertEqual(json.loads((self.root / 'native-result.json').read_text())['error'], 'original close error')
+
+        def timed_out(command):
+            self.assertIn('failure_probe', command[3])
+            smoke.save(self.root, 'failure-probe.json', {'processSamples': [{'complete': True, 'sourceFDs': []}],
+                       'ui': {'complete': True, 'nodes': [], 'errors': []}})
+            return {'timedOut': True, 'terminationSignal': 'SIGKILL', 'reaped': True}
+
+        app = Mock(pid=42)
+        app.poll.side_effect = [None, 0]
+        with patch.object(smoke, 'run_failure_probe', side_effect=timed_out):
+            receipt = smoke.capture_failure_observation(self.root, app, self.root / 'source.flv',
+                         {42: {'pid': 42, 'startTicks': 'original'}}, [{'state': 'actionPending'}])
+        self.assertEqual((receipt['appPollBefore'], receipt['appPollAfter']), (None, 0))
+        self.assertFalse(receipt['ui']['complete'])
+        self.assertTrue(receipt['ui']['interrupted'])
+        self.assertFalse(receipt['actionReplayed'])
+        self.assertNotIn('passed', receipt)
 
     def test_export_requires_selected_tag_detail_and_matching_hex(self):
         report = {'session': {'scan': {'complete': True}}, 'selectedTag': {'id': '4', 'offset': '100'},

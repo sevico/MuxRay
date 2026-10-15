@@ -113,6 +113,84 @@ class SideInfoOracleTests(unittest.TestCase):
             with self.subTest(mutation=mutation), self.assertRaises(RuntimeError):
                 oracle.source_field(data, bad, 100)
 
+    def test_source_window_matches_whole_bit_oracle_at_every_alignment(self):
+        data = bytes((i * 73 + 19) % 256 for i in range(35))
+        whole = ''.join(f'{byte:08b}' for byte in data)
+        for base in (0, 100, 1 << 40):
+            for start in range(len(whole)):
+                for width in (1, 7, 8, 9, 12, 31):
+                    if start + width > len(whole):
+                        continue
+                    encoded = whole[start:start + width]
+                    field = {'path': 'independent', 'value': int(encoded, 2), 'encodedBits': encoded,
+                             'span': {'byteOffset': base + start // 8, 'bitOffset': start % 8, 'bitLength': width}}
+                    oracle.source_field(data, field, base)
+
+    def test_source_window_rejects_negative_aliases_invalid_types_and_truncation(self):
+        data = bytes.fromhex('aa55aa55')
+        good = {'path': 'edge', 'value': 0x55, 'encodedBits': '01010101',
+                'span': {'byteOffset': 103, 'bitOffset': 0, 'bitLength': 8}}
+        oracle.source_field(data, good, 100)
+        # Python's old whole-bit negative slice could alias valid tail bytes;
+        # an out-of-range bitOffset could similarly normalize into another byte.
+        for span in ({'byteOffset': 98, 'bitOffset': 0, 'bitLength': 8},
+                     {'byteOffset': 101, 'bitOffset': 8, 'bitLength': 8}):
+            alias = {'path': 'alias', 'value': 0xaa, 'encodedBits': '10101010', 'span': span}
+            start = (span['byteOffset'] - 100) * 8 + span['bitOffset']
+            self.assertEqual(''.join(f'{b:08b}' for b in data)[start:start + 8], alias['encodedBits'])
+            with self.assertRaises(RuntimeError):
+                oracle.source_field(data, alias, 100)
+        for key, value in [('byteOffset', 99), ('byteOffset', 104), ('byteOffset', 103.0),
+                           ('byteOffset', True), ('bitOffset', -1), ('bitOffset', 8),
+                           ('bitOffset', False), ('bitLength', 0), ('bitLength', -8),
+                           ('bitLength', 9), ('bitLength', 1 << 40), ('bitLength', '8')]:
+            bad = copy.deepcopy(good)
+            bad['span'][key] = value
+            with self.subTest(key=key, value=value), self.assertRaises(RuntimeError):
+                oracle.source_field(data, bad, 100)
+        for offset in (-1, True, 100.0):
+            with self.subTest(source_offset=offset), self.assertRaises(RuntimeError):
+                oracle.source_field(data, good, offset)
+        for key, value in [('value', 0x54), ('value', 85.0), ('value', True),
+                           ('encodedBits', '01010100'), ('encodedBits', '1010101'), ('encodedBits', '0101010x')]:
+            bad = {**good, key: value}
+            with self.subTest(key=key, value=value), self.assertRaises(RuntimeError):
+                oracle.source_field(data, bad, 100)
+
+    def test_source_window_reads_only_necessary_late_bytes(self):
+        class MeasuredSource:
+            def __init__(self):
+                self.reads = []
+
+            def __len__(self):
+                return 2 << 20
+
+            def __getitem__(self, key):
+                self.reads.append(key)
+                return b'\x01\x80'
+
+            def __iter__(self):
+                raise AssertionError('whole-source iteration is forbidden')
+
+        source = MeasuredSource()
+        field = {'path': 'late', 'value': 3, 'encodedBits': '11',
+                 'span': {'byteOffset': 100 + (1 << 20), 'bitOffset': 7, 'bitLength': 2}}
+        oracle.source_field(source, field, 100)
+        self.assertEqual(source.reads, [slice(1 << 20, (1 << 20) + 2)])
+
+    def test_benchmark_compares_byte_work_without_latency_threshold(self):
+        from source_field_benchmark import compare, main
+        result = compare(64, 2)
+        self.assertTrue(result['passed'])
+        self.assertEqual(result['fieldsPerPass'], 62)
+        old, new = (result['algorithms'][key] for key in ('whole_source_reference', 'span_window'))
+        self.assertEqual(old['sourceBytesVisited'], 64 * 62 * 2)
+        self.assertLess(new['sourceBytesVisited'], old['sourceBytesVisited'])
+        self.assertEqual(len(new['seconds']), 2)
+        for args in (['--source-bytes', '31'], ['--source-bytes', '2097153'], ['--repetitions', '4']):
+            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                main(args)
+
     def test_mutation_preserves_every_bit_outside_target(self):
         data = bytes(32)
         field = oracle.parse_side_info(data, 3, 2, 25)['fields'][11]
