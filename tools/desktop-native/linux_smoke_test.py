@@ -41,6 +41,127 @@ def forensic_node(name, children=(), pid=42):
     return node
 
 
+class PickerSubmitTest(unittest.TestCase):
+    def setUp(self):
+        self.now, self.stage, self.check_parent = 0, {}, Mock()
+        self.clock = patch.object(smoke.time, 'monotonic', side_effect=lambda: self.now)
+        self.sleep = patch.object(smoke.time, 'sleep', side_effect=self.advance)
+        self.clock.start()
+        self.sleep.start()
+        self.addCleanup(self.clock.stop)
+        self.addCleanup(self.sleep.stop)
+
+    def advance(self, seconds):
+        self.now += seconds
+
+    def button(self, enabled):
+        node = Mock()
+        node.getState.return_value.contains.return_value = enabled
+        node.queryAction.return_value.nActions = 1
+        node.queryAction.return_value.doAction.return_value = True
+        return node
+
+    def submit(self, lookup, name='Open'):
+        smoke.submit_picker_once(lookup, 'enabled', name, self.check_parent, self.stage, seconds=.5)
+
+    def test_waits_for_fresh_enabled_target_then_acts_once(self):
+        for name in ('Open', 'Save'):
+            with self.subTest(name=name):
+                disabled, ready = self.button(False), self.button(True)
+                lookup = Mock(side_effect=[[], [disabled], [ready]])
+                self.submit(lookup, name)
+                self.assertEqual(lookup.call_count, 3)
+                disabled.queryAction.assert_not_called()
+                ready.queryAction.return_value.doAction.assert_called_once_with(0)
+                self.assertEqual([row['enabled'] for row in self.stage['readiness']], [None, False, True])
+                self.assertEqual(self.stage['state'], 'actionReturned')
+                self.assertTrue(self.stage['actionAccepted'])
+
+    def test_permanent_disabled_or_missing_target_times_out_without_action(self):
+        for missing in (False, True):
+            with self.subTest(missing=missing):
+                disabled = self.button(False)
+                lookup = Mock(return_value=[] if missing else [disabled])
+                start = self.now
+                with self.assertRaisesRegex(RuntimeError, 'timeout: enabled picker target: Open'):
+                    self.submit(lookup)
+                self.assertAlmostEqual(self.now - start, .5)
+                self.assertEqual(lookup.call_count, 3)
+                disabled.queryAction.assert_not_called()
+                self.assertFalse(self.stage['actionAttempted'])
+                self.assertEqual(self.stage['state'], 'readinessTimeout')
+
+    def test_ambiguous_target_is_rejected_even_when_only_one_is_enabled(self):
+        disabled, ready = self.button(False), self.button(True)
+        lookup = Mock(return_value=[disabled, ready])
+        with self.assertRaisesRegex(RuntimeError, 'ambiguous accessible picker target'):
+            self.submit(lookup)
+        lookup.assert_called_once_with()
+        disabled.queryAction.assert_not_called()
+        ready.queryAction.assert_not_called()
+        self.assertEqual(self.stage['targetCount'], 2)
+
+    def test_parent_exit_during_wait_or_before_action_never_submits(self):
+        for before_action in (False, True):
+            with self.subTest(before_action=before_action):
+                node = self.button(before_action)
+                lookup = Mock(return_value=[node])
+                self.check_parent.side_effect = [None, RuntimeError('parent exited early: 1')]
+                with self.assertRaisesRegex(RuntimeError, 'parent exited early'):
+                    self.submit(lookup)
+                lookup.assert_called_once_with()
+                node.queryAction.return_value.doAction.assert_not_called()
+                self.assertFalse(self.stage['actionAttempted'])
+
+    def test_state_query_failure_is_not_treated_as_ready(self):
+        node = self.button(True)
+        node.getState.side_effect = RuntimeError('AT-SPI state unavailable')
+        lookup = Mock(return_value=[node])
+        with self.assertRaisesRegex(RuntimeError, 'state unavailable'):
+            self.submit(lookup)
+        lookup.assert_called_once_with()
+        node.queryAction.assert_not_called()
+
+    def test_target_disabled_again_before_action_is_rejected_without_retry(self):
+        node = self.button(True)
+        node.getState.return_value.contains.side_effect = [True, False]
+        lookup = Mock(return_value=[node])
+        with self.assertRaisesRegex(RuntimeError, 'disabled target: Open'):
+            self.submit(lookup)
+        lookup.assert_called_once_with()
+        node.queryAction.return_value.doAction.assert_not_called()
+        self.assertFalse(self.stage['actionAttempted'])
+
+    def test_readiness_query_that_exhausts_deadline_does_not_submit(self):
+        node = self.button(True)
+
+        def slow_lookup():
+            self.advance(.5)
+            return [node]
+
+        with self.assertRaisesRegex(RuntimeError, 'timeout: enabled picker target'):
+            self.submit(slow_lookup)
+        node.queryAction.return_value.doAction.assert_not_called()
+        self.assertEqual(self.stage['state'], 'readinessTimeout')
+
+    def test_failed_action_is_never_replayed(self):
+        for outcome in (RuntimeError('AT-SPI no reply'), False):
+            with self.subTest(outcome=outcome):
+                node = self.button(True)
+                action = node.queryAction.return_value
+                if isinstance(outcome, Exception):
+                    action.doAction.side_effect = outcome
+                else:
+                    action.doAction.return_value = outcome
+                lookup = Mock(return_value=[node])
+                with self.assertRaises(RuntimeError):
+                    self.submit(lookup)
+                lookup.assert_called_once_with()
+                action.doAction.assert_called_once_with(0)
+                self.assertTrue(self.stage['actionAttempted'])
+                self.assertEqual(self.stage['state'], 'actionPending' if isinstance(outcome, Exception) else 'actionReturned')
+
+
 class LinuxSmokeTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

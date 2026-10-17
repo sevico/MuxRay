@@ -394,6 +394,37 @@ def accessible_action_once(action, name, stage=None):
     require(accepted, 'action failed: ' + name)
 
 
+def submit_picker_once(get_targets, enabled_state, name, check_parent, stage, seconds=35):
+    # Reading back a GTK chooser path does not establish that its response
+    # button is ready. Reacquire the target while waiting, before any action.
+    deadline = time.monotonic() + seconds
+    stage.update(state='waitingEnabled', startedUnixSeconds=time.time(), polls=0,
+                 actionAttempted=False, actionReturned=False, readiness=[])
+    node = None
+    while time.monotonic() < deadline:
+        check_parent()
+        matches = get_targets()
+        stage.update(polls=stage['polls'] + 1, targetCount=len(matches))
+        require(len(matches) <= 1, 'ambiguous accessible picker target: ' + name)
+        enabled = bool(matches[0].getState().contains(enabled_state)) if matches else None
+        if not stage['readiness'] or stage['readiness'][-1]['enabled'] != enabled:
+            stage['readiness'].append({'poll': stage['polls'], 'unixSeconds': time.time(), 'enabled': enabled})
+        if enabled:
+            node = matches[0]
+            break
+        time.sleep(min(.2, max(0, deadline - time.monotonic())))
+    if node is not None:
+        action = node.queryAction()
+        check_parent()
+        require(node.getState().contains(enabled_state), 'disabled target: ' + name)
+    if node is None or time.monotonic() >= deadline:
+        stage['state'] = 'readinessTimeout'
+        raise RuntimeError('native UI timeout: enabled picker target: ' + name)
+    # A failed action may already have affected the dialog. Never put the
+    # action itself inside the retry loop.
+    accessible_action_once(action, name, stage)
+
+
 def choose_accessible_option(get_combo, index, label, expected_name=None):
     # A page update can invalidate any descendant proxy. Discard the entire
     # enumeration and acquire the combo again; skipping a child shifts indices.
@@ -598,6 +629,18 @@ def run_worker(args):
         require(entry.queryEditableText().setTextContents(str(path)), 'picker path write failed')
         require(node_text(entry) == str(path), 'picker path readback mismatch')
 
+    def submit_picker(name):
+        stage = {'name': name}
+        result.setdefault('pickerSubmitStages', []).append(stage)
+
+        def check_parent():
+            observe(app.pid, known)
+            require(app.poll() is None, f'parent exited early: {app.returncode}')
+
+        submit_picker_once(lambda: [node for node, _, role, label in rows()
+                                   if role == 'push button' and label == name],
+                           pyatspi.STATE_ENABLED, name, check_parent, stage)
+
     def select_tag(tag):
         entry = find('entry', 'Tag ID')
         require(entry.queryComponent().grabFocus(), 'Tag ID focus failed')
@@ -678,7 +721,7 @@ def run_worker(args):
         click('导出诊断 JSON')
         find('push button', 'Save')
         picker_path(path, 6)
-        click('Save')
+        submit_picker('Save')
         wait_text('已保存 ' + name)
         snapshot = json.loads(path.read_text())
         if tag is not None:
@@ -695,7 +738,7 @@ def run_worker(args):
         focus('选择 FLV 文件')
         combo('l')
         picker_path(source, 11)
-        click('Open')
+        submit_picker('Open')
         # A broad '部分结果' match also occurs in the still-scanning placeholder.
         wait_text('容器索引完整', 90)
         focus('MuxRay · 码流透镜')
