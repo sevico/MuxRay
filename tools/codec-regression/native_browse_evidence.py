@@ -16,7 +16,9 @@ from generate import ROOT, BFRAMES, Commands, digest, executable, flv_tags, load
 from native import verify_case
 from native_context_side import mp3_fields, native_span
 from native_v3 import child_fields, compare_prefix, first_b_tag, SLICE_FIELDS
+from paged_codec_oracle import sei_oracle
 from side_info_oracle import source_field
+from verify_paged_codec import check_native_mapped
 from verify_side_info import BOOLEAN_FIELDS, expected_dependency
 
 
@@ -89,13 +91,104 @@ def source_bits(source, span):
     return ''.join(str((source[bit // 8] >> (7 - bit % 8)) & 1) for bit in range(offset, offset + count))
 
 
+def exact_children(detail, parent, names, label):
+    children = [field for field in detail['fields'] if field['parentId'] == parent]
+    require(len(children) == len(names) and {field['name'] for field in children} == set(names),
+            label + ': missing, duplicate or unexpected fields')
+    return {field['name']: field for field in children}
+
+
+def verify_avc_preview_omission(snapshot, source, nals):
+    """Only source-proven SEI user-data previews may set truncated in this fixture.
+
+    This is deliberately scoped to the FFmpeg browse fixture's type-5 messages;
+    other SEI syntax needs its own independent oracle before being admitted.
+    """
+    detail = snapshot['detail']['detail']
+    fields = detail['fields']
+    require(detail['complete'] and not detail['diagnostics'], 'AVC detail incomplete/diagnosed')
+    sei_nals = [nal for nal in nals if nal['type'] == 6]
+    roots = [field for field in fields if field['name'].startswith('SEI messages ')]
+    require(len(roots) == len(sei_nals) and {field['name'] for field in roots} ==
+            {f'SEI messages NAL[{nal["nalIndex"]}]' for nal in sei_nals}, 'SEI sequence inventory differs')
+    omitted, messages = False, 0
+    require(sum(nal['bytes'] - 1 for nal in sei_nals) <= 256 << 10, 'SEI source exceeds the aggregate byte budget')
+    if sei_nals:
+        seen = {''}
+        for index, field in enumerate(fields):
+            require(field['id'] == str(index) and field['parentId'] in seen, 'AVC field identity/parent differs')
+            seen.add(field['id'])
+        # A field/wire cap can also set truncated without changing complete or
+        # diagnostics. Require headroom for any next builder field: its three
+        # strings have <=256 UTF-8 bytes each (<=4608 JSON bytes after escaping),
+        # and numeric IDs/span plus member names fit comfortably in 8 KiB.
+        # ensure_ascii and HTML escaping conservatively bound Go's JSON size.
+        encoded = json.dumps(fields, ensure_ascii=True, separators=(',', ':'))
+        for char, escaped in [('<', '\\u003c'), ('>', '\\u003e'), ('&', '\\u0026')]:
+            encoded = encoded.replace(char, escaped)
+        require(len(fields) < 512 and len(encoded) + 8192 < (256 << 10) - 512,
+                'AVC projection is too near the field/JSON budget')
+        require(all(len(field[key].encode('utf-8')) <= 256 and
+                    '\u2026' not in field[key] and '\ufffd' not in field[key]
+                    for field in fields for key in ('name', 'type', 'value')), 'AVC string preview is not allowed')
+        contexts = [field for field in fields if field['name'] == 'Parameter context']
+        require(len(contexts) == 1 and contexts[0]['value'] == 'found', 'AVC parameter context is incomplete')
+    for nal in sei_nals:
+        raw = source[nal['offset']:nal['offset'] + nal['bytes']]
+        require(len(raw) == nal['bytes'] and raw and raw[0] == 6, 'SEI NAL source/header differs')
+        require(len(raw) - 1 <= 65536, 'SEI source exceeds the NAL byte budget')
+        oracle = sei_oracle(raw, nal['offset'])
+        require(oracle['complete'] and oracle['framingComplete'] and oracle['messages'] and
+                all(message['complete'] and message['payloadComplete'] and
+                    message['kind'] == 'userDataUnregistered' for message in oracle['messages']),
+                'SEI source is incomplete or outside the browse fixture syntax scope')
+        require(len(oracle['messages']) <= 64 and messages + len(oracle['messages']) <= 256,
+                'SEI source exceeds the message budget')
+        root = next(field for field in roots if field['name'] == f'SEI messages NAL[{nal["nalIndex"]}]')
+        meta_names = ('seiFramingComplete', 'seiComplete', 'seiBytesRead', 'seiSyntaxBits', 'seiMessageCount')
+        meta = exact_children(detail, root['id'], [*meta_names, 'seiTrailingBits',
+                              *(f'SEI message[{message["index"]}]' for message in oracle['messages'])], 'SEI sequence')
+        for name, value in zip(meta_names, ('true', 'true', str(len(raw) - 1),
+                                          str(oracle['rbspBytes'] * 8), str(len(oracle['messages'])))):
+            require(meta[name]['value'] == value, 'SEI sequence coverage differs: ' + name)
+        trailing = meta['seiTrailingBits']
+        require(raw[-1] == 0x80 and trailing['span'] ==
+                {'byteOffset': str(nal['offset'] + len(raw) - 1), 'bitOffset': 0, 'bitLength': 8} and
+                not any(field['parentId'] == trailing['id'] for field in fields), 'SEI trailing source differs')
+        for message in oracle['messages']:
+            group = meta[f'SEI message[{message["index"]}]']
+            require(group['type'] == 'SEI message' and group['value'] == 'userDataUnregistered', 'SEI message kind differs')
+            names = ['syntaxSupported', 'payloadComplete', 'messageComplete', 'payloadType', 'payloadSize',
+                     'seiPayload', 'uuid', 'userDataBytes', 'userDataPreviewTruncated']
+            if message['dataBytes']:
+                names.append('userDataPreview')
+            got = exact_children(detail, group['id'], names, 'SEI message')
+            for name in ('syntaxSupported', 'payloadComplete', 'messageComplete'):
+                require(got[name]['value'] == 'true', 'SEI message coverage differs: ' + name)
+            for name in ('payloadType', 'payloadSize'):
+                require(got[name]['value'] == str(message[name]['value']), 'SEI source value differs: ' + name)
+                check_native_mapped(detail, got[name], message[name], name)
+            check_native_mapped(detail, got['seiPayload'], message['payloadSpan'], 'SEI payload')
+            for name, key in [('uuid', 'uuid')] + ([('userDataPreview', 'dataPreview')] if message['dataBytes'] else []):
+                require(got[name]['value'].lower() == message[key]['hex'], 'SEI source bytes differ: ' + name)
+                check_native_mapped(detail, got[name], message[key]['span'], name)
+            require(got['userDataBytes']['value'] == str(message['dataBytes']) and
+                    got['userDataPreviewTruncated']['value'] == str(message['previewTruncated']).lower(),
+                    'SEI preview coverage differs from source')
+            omitted |= message['previewTruncated']
+            messages += 1
+    require(detail['truncated'] == omitted, 'AVC truncation is not exactly the source-proven SEI preview omission')
+    return {'seiMessagesCompared': messages, 'seiUserDataPreviewOmitted': omitted}
+
+
 def verify_avc_evidence(snapshot, expected, source, tag_id):
     detail, oracle = snapshot['detail']['detail'], expected['h264BFrames']
     require(snapshot['selectedTag']['id'] == str(tag_id) and detail['kind'] == 'avcVideo', 'AVC selected Tag differs')
-    require(detail['complete'] and not detail['truncated'] and not detail['diagnostics'], 'AVC detail incomplete/diagnosed')
+    require(detail['complete'] and not detail['diagnostics'], 'AVC detail incomplete/diagnosed')
     tags = flv_tags(source)
     tag, fields = tags[tag_id], detail['fields']
     nals = [n for n in oracle['nals'] if n['tagId'] == tag_id]
+    preview = verify_avc_preview_omission(snapshot, source, nals)
     traces = [b for b in oracle['traceBlocks'] if b['kind'] == 'Slice Header' and b['tagId'] == tag_id]
     require(len(traces) >= 2 and nals, 'fixture no longer provides a multi-slice Tag')
     declaration, idrs = source[tag['payloadOffset']] >> 4, [n for n in nals if n['type'] == 5]
@@ -128,7 +221,7 @@ def verify_avc_evidence(snapshot, expected, source, tag_id):
         roots = [f for f in fields if f['name'] == f'Slice prefix NAL[{trace["nalIndex"]}]']
         require(len(roots) == 1, 'slice prefix omitted')
         compared += compare_prefix(child_fields(fields, roots[0]['id']), trace, SLICE_FIELDS)
-    return {'selectedTagId': tag_id, 'declarationRelation': relation, 'sliceTypes': types, 'prefixFieldsCompared': compared}
+    return {'selectedTagId': tag_id, 'declarationRelation': relation, 'sliceTypes': types, 'prefixFieldsCompared': compared, **preview}
 
 
 def curve_oracle(source):

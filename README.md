@@ -93,7 +93,7 @@ go run ./cmd/muxray detail --tag 0 --pretty sample.flv
 后续分页详情、汇总帧联动与 SEI 的结果见 [MP3 分页与 SEI 验收](docs/desktop-page-sei-20261013.md)。
 帧号直达、SEI 时序语法及后台性能基线见 [帧号直达与时序验收](docs/desktop-timing-navigation-20261013.md)。
 MP3 变化、SEI 批量检索及回归工具提速与关闭取证见 [检索与回归工具验收](docs/desktop-codec-change-sei-search-20261015.md)。
-最新 Windows 复核、文件选择器焦点与通信修复及各项验收边界见 [Windows 稳定性记录](docs/desktop-windows-stability-20261016.md)。
+最新 Windows 严格复验失败、单次诊断结果及验收边界见 [Windows 稳定性记录](docs/desktop-windows-stability-20261017.md)。
 失效 CI 基线的重新登记及固定提交对照见 [回归基线记录](docs/codec-timing-baseline-20261016.md)。
 
 新增编解码器的生成样本、独立字段/源位对照和 Linux 基础、PPS/slice、side-info/长文件原生验收已固化到 [回归工具](tools/codec-regression/README.md)，CI 使用相同入口，生成媒体不进入 Git。
@@ -161,6 +161,6 @@ Go 应用层新增 `internal/session.Open`：一个会话拥有一个后台扫�
 后续 [`具体图像列表与引用持有者`](docs/desktop-gdi-reference-20261004.md)：两次取消后，manager 剩余引用均为 1，并继续持有 lookup 和核心图像列表。第二周期进一步验证 `CDefCollection → CEnumerableObjectCollection → 数组元素 → manager` 的具体持有槽与 AddRef 调用；集合清空和析构有对应 Release 路径，上层集合为何继续存在仍待定位。未修改生产释放逻辑。
 新增 [`CDefCollection 引用来源与集合清理边界`](docs/desktop-gdi-collection-20261007.md)：两个新进程各取消一次、工作线程退出 60 秒以上后，集合仍为 2、元素集合为 1、manager 为 1；A 的 Clear、B 的 RemoveObjectAt 及两组集合析构入口均未命中。取得/释放对偶与内联引用增量已核实，析构后残留指针不能当作活持有者；最后两份引用仍未归属。两组正常退出与采集清理通过，下一步建议验证文件选择器辅助进程原型，尚未实施生产修复。
 
-Linux 现提供 `desktop/build-production.sh` 和 Ubuntu 24.04 非 GUI CI；Linux Mint 22.3 上的真实 GTK/WebKit 打开、取消、诊断、导出、源释放和正常退出结果见 [`Linux 验证记录`](docs/desktop-linux-20261007.md)。Windows 辅助选择器的独立结果与限制见 [`Windows 稳定性记录`](docs/desktop-windows-stability-20261016.md)。
+Linux 现提供 `desktop/build-production.sh` 和 Ubuntu 24.04 非 GUI CI；Linux Mint 22.3 上的真实 GTK/WebKit 打开、取消、诊断、导出、源释放和正常退出结果见 [`Linux 验证记录`](docs/desktop-linux-20261007.md)。Windows 辅助选择器的独立结果与限制见 [`Windows 稳定性记录`](docs/desktop-windows-stability-20261017.md)。
 
 项目许可证尚待确定；在许可证落定前，不应把代码作为已授权的正式发行版分发。
