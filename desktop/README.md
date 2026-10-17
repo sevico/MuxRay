@@ -27,7 +27,7 @@ AVC 上下文查找和准确源位置见 [ADR-014](../docs/decisions/014-bounded
 `go test -race -tags pickerprocess -count=1 ./...`。测试子进程不会弹出文件对话框。
 
 [原型验证记录](../docs/desktop-picker-process-20261007.md) 保留首次原生取消尝试期间的主进程退出码 1。
-最新 [Windows 稳定性记录](../docs/desktop-windows-stability-20261016.md) 区分历史退出、焦点诊断与通信污染，并记录修复及六轮资源回收验收状态。原型暂不用于默认发布。
+最新 [Windows 稳定性记录](../docs/desktop-windows-stability-20261017.md) 记录严格复验 C1 异常退出、默认流程单次通过和两次未复现的诊断；严格六轮仍未通过。原型暂不用于默认发布。
 
 ## 范围
 
@@ -76,7 +76,7 @@ MP3 每批最多 256 Tag / 1,024 帧头；在大 Tag 内保留准确帧边界和
 仍使用 v3。v4 仅冻结当前页，不遍历历史或补做分析；v1–v3 输出保持兼容。
 完整规则见 [ADR-032](../docs/decisions/032-codec-change-and-sei-search.md)。
 固定构建、Linux 原生结果和工具性能计量见 [检索与回归工具验收](../docs/desktop-codec-change-sei-search-20261015.md)。
-Windows 实际快照的独立重检入口见 [Windows codec 验收说明](../tools/codec-regression/WINDOWS_ACCEPTANCE.md)，本轮实际结果与限制见 [Windows 稳定性记录](../docs/desktop-windows-stability-20261016.md)。
+Windows 实际快照的独立重检入口见 [Windows codec 验收说明](../tools/codec-regression/WINDOWS_ACCEPTANCE.md)，2026-10-16 的实际结果与限制见 [Windows 稳定性记录](../docs/desktop-windows-stability-20261016.md)。
 
 ## 媒体码率与 GOP 曲线
 
