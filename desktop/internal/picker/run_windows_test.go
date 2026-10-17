@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -46,42 +47,96 @@ func testChild() int {
 		return 31
 	}
 	os.WriteFile(filepath.Join(dir, "request-received"), []byte("ok"), 0600)
-	response := Response{Version: 1, Nonce: req.Nonce, Status: "selected", Path: `C:\fixture\sample.flv`}
+	out, err := openResponsePipe(req.ResponseHandle)
+	if err != nil {
+		return 32
+	}
+	defer out.Close()
+	response := Response{Version: Version, Nonce: req.Nonce, Status: "selected", Path: `C:\fixture\sample.flv`}
 	switch mode {
-	case "selected":
+	case "noisy_selected", "noisy_canceled":
+		// Use the native standard handle, as a Shell DLL with cached CRT stdout
+		// would; this must never become part of the protocol response.
+		h, err := windows.GetStdHandle(windows.STD_OUTPUT_HANDLE)
+		if err != nil {
+			return 38
+		}
+		warning := []byte("[WARNING] Ignore caches that are heterogeneous\r\n")
+		var n uint32
+		if err := windows.WriteFile(h, warning, &n, nil); err != nil || int(n) != len(warning) {
+			return 38
+		}
+		if mode == "noisy_canceled" {
+			response.Status, response.Path = "canceled", ""
+		}
+		WriteResponse(out, response)
+		if n, err := os.Stdout.Write([]byte{0xff, 0xfe, '\n'}); err != nil || n != 3 {
+			return 38
+		}
+		diagnostic := []byte("native diagnostic\n")
+		if n, err := os.Stderr.Write(diagnostic); err != nil || n != len(diagnostic) {
+			return 38
+		}
+	case "stdout_boundary":
+		if n, err := os.Stdout.Write([]byte(strings.Repeat("x", MaxMessageBytes))); err != nil || n != MaxMessageBytes {
+			return 38
+		}
+		WriteResponse(out, response)
+	case "stdout_oversize":
+		os.Stdout.Write([]byte(strings.Repeat("x", MaxMessageBytes+1)))
+		time.Sleep(time.Hour)
+	case "stdout_response_only":
 		WriteResponse(os.Stdout, response)
+	case "response_prefix":
+		out.Write([]byte("[WARNING] Ignore caches that are heterogeneous\r\n"))
+		WriteResponse(out, response)
+	case "response_extra_json":
+		WriteResponse(out, response)
+		WriteResponse(out, response)
+	case "selected":
+		WriteResponse(out, response)
 		time.Sleep(150 * time.Millisecond)
 	case "canceled":
 		response.Status = "canceled"
 		response.Path = ""
-		WriteResponse(os.Stdout, response)
+		WriteResponse(out, response)
 	case "error":
 		response.Status = "error"
 		response.Path = ""
 		response.Error = "dialog_show"
-		WriteResponse(os.Stdout, response)
+		WriteResponse(out, response)
 	case "crash":
 		return 17
 	case "valid_then_crash":
-		WriteResponse(os.Stdout, response)
+		WriteResponse(out, response)
 		return 17
 	case "mismatch":
 		response.Nonce = strings.Repeat("0", 32)
-		WriteResponse(os.Stdout, response)
+		WriteResponse(out, response)
 	case "utf8":
-		os.Stdout.Write([]byte{0xff, 0xfe})
+		out.Write([]byte{0xff, 0xfe})
 		time.Sleep(time.Hour)
 	case "oversize":
-		os.Stdout.Write([]byte(strings.Repeat("x", MaxMessageBytes+1)))
+		out.Write([]byte(strings.Repeat("x", MaxMessageBytes+1)))
 		time.Sleep(time.Hour)
 	case "stderr_oversize":
 		os.Stderr.Write([]byte(strings.Repeat("x", MaxMessageBytes+1)))
 		time.Sleep(time.Hour)
 	case "hang", "parentdeath_child":
 		time.Sleep(time.Hour)
-	case "grandchild_hold_pipe":
+	case "grandchild_hold_pipe", "grandchild_hold_response":
 		child := exec.Command(os.Args[0], ChildArg)
-		configureChild(child)
+		configureChild(child, nil)
+		if mode == "grandchild_hold_response" {
+			// Deliberately leak a duplicate into a descendant to exercise the
+			// Job boundary even if an extension retains our protocol pipe.
+			var leaked windows.Handle
+			if windows.DuplicateHandle(windows.CurrentProcess(), windows.Handle(out.(*os.File).Fd()), windows.CurrentProcess(), &leaked, 0, true, windows.DUPLICATE_SAME_ACCESS) != nil {
+				return 37
+			}
+			defer windows.CloseHandle(leaked)
+			child.SysProcAttr.AdditionalInheritedHandles = []syscall.Handle{syscall.Handle(leaked)}
+		}
 		child.Env = append(os.Environ(), "PICKER_TEST_CHILD_MODE=grandchild")
 		child.Stdout = os.Stdout
 		child.Stderr = os.Stderr
@@ -91,11 +146,11 @@ func testChild() int {
 		if !waitFile(filepath.Join(dir, "grandchild.pid"), time.Second) {
 			return 36
 		}
-		WriteResponse(os.Stdout, response)
+		WriteResponse(out, response)
 	case "handshake":
 		response.Status = "canceled"
 		response.Path = ""
-		WriteResponse(os.Stdout, response)
+		WriteResponse(out, response)
 	default:
 		return 39
 	}
@@ -146,7 +201,7 @@ func TestRunnerSubprocesses(t *testing.T) {
 	for _, tc := range []struct {
 		mode string
 		want error
-	}{{"selected", nil}, {"canceled", ErrCanceled}, {"error", ErrChildFailed}, {"crash", ErrChildFailed}, {"valid_then_crash", ErrChildFailed}, {"mismatch", ErrProtocol}, {"utf8", context.DeadlineExceeded}, {"oversize", ErrProtocol}, {"stderr_oversize", ErrProtocol}, {"hang", context.DeadlineExceeded}, {"grandchild_hold_pipe", nil}} {
+	}{{"selected", nil}, {"canceled", ErrCanceled}, {"noisy_selected", nil}, {"noisy_canceled", ErrCanceled}, {"stdout_boundary", nil}, {"stdout_oversize", ErrProtocol}, {"stdout_response_only", ErrProtocol}, {"response_prefix", ErrProtocol}, {"response_extra_json", ErrProtocol}, {"error", ErrChildFailed}, {"crash", ErrChildFailed}, {"valid_then_crash", ErrChildFailed}, {"mismatch", ErrProtocol}, {"utf8", context.DeadlineExceeded}, {"oversize", ErrProtocol}, {"stderr_oversize", ErrProtocol}, {"hang", context.DeadlineExceeded}, {"grandchild_hold_pipe", nil}, {"grandchild_hold_response", nil}} {
 		t.Run(tc.mode, func(t *testing.T) {
 			dir := t.TempDir()
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -199,7 +254,7 @@ func TestRunnerSubprocesses(t *testing.T) {
 func TestChildNoRequestNoWork(t *testing.T) {
 	dir := t.TempDir()
 	cmd := exec.Command(os.Args[0], ChildArg)
-	configureChild(cmd)
+	configureChild(cmd, nil)
 	cmd.Env = append(os.Environ(), "PICKER_TEST_CHILD_MODE=handshake", "PICKER_TEST_DIR="+dir)
 	pipe, err := cmd.StdinPipe()
 	if err != nil {
@@ -224,7 +279,7 @@ func TestChildNoRequestNoWork(t *testing.T) {
 func TestParentDeathKillsContainedChild(t *testing.T) {
 	dir := t.TempDir()
 	cmd := exec.Command(os.Args[0], ChildArg)
-	configureChild(cmd)
+	configureChild(cmd, nil)
 	cmd.Env = append(os.Environ(), "PICKER_TEST_CHILD_MODE=parent", "PICKER_TEST_DIR="+dir)
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "registeredOn": "2026-10-16",
+  "baselineCommit": "bc799d6afebc7206d3c7bac1e6a8cc49dc1c41c1",
+  "baselineTree": "0d060c10e60e3c0c6ed299a398353b1ead3f9920",
+  "featureCommit": "bff653bf74307a0249759a5c485a29276c69a73e",
+  "retiredUnavailableCommit": "0e853bebd90f12658c1123f8703fb247cbf61530",
+  "registration": "New reachable v1-v5 baseline immediately before SEI timing v6. Equivalence to the unavailable historical commit has not been established."
+}

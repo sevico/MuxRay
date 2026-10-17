@@ -86,16 +86,21 @@ func nativeChildOperations() childOperations {
 
 // ChildMain handles exactly one bounded request. The caller must dispatch this
 // mode before starting Wails. No COM or UI runs before ReadRequest succeeds.
-func ChildMain(in io.Reader, out io.Writer) int {
-	return childMainWithOperations(in, out, nativeChildOperations())
+func ChildMain(in io.Reader) int {
+	return childMainWithOperations(in, openResponsePipe, nativeChildOperations())
 }
 
-func childMainWithOperations(in io.Reader, out io.Writer, operations childOperations) int {
+func childMainWithOperations(in io.Reader, openOutput func(string) (io.WriteCloser, error), operations childOperations) int {
 	req, err := ReadRequest(in)
 	if err != nil {
 		// An invalid request has no trustworthy nonce to echo.
 		return 2
 	}
+	out, err := openOutput(req.ResponseHandle)
+	if err != nil {
+		return 2
+	}
+	defer out.Close()
 	response := childDialogResponse(req, operations)
 	if err := WriteResponse(out, response); err != nil {
 		return 3

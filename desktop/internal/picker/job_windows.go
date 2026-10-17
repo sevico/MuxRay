@@ -47,6 +47,9 @@ func parentCreated() (string, error) {
 	return strconv.FormatUint(uint64(created.HighDateTime)<<32|uint64(created.LowDateTime), 10), nil
 }
 
-func configureChild(cmd *exec.Cmd) {
+func configureChild(cmd *exec.Cmd, response *os.File) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
+	if response != nil {
+		cmd.SysProcAttr.AdditionalInheritedHandles = []syscall.Handle{syscall.Handle(response.Fd())}
+	}
 }

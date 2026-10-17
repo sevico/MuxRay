@@ -14,7 +14,8 @@ AVC 上下文查找和准确源位置见 [ADR-014](../docs/decisions/014-bounded
 `build/bin/MuxRay-picker-prototype.exe`。每次 FLV 打开由一个子进程显示原生对话框，
 主进程等它实际退出并核对回复后才加载媒体；取消分支不创建会话。已实现超时、
 子进程崩溃和协议错误的清理及窗口恢复逻辑，既有请求恢复不会重复启动文件选择器。
-原生窗口恢复尚未通过验收，已知问题见下方验证记录。
+后续修复移除了父窗口的提前禁用，并通过独立回复管道隔离标准输出噪声；
+实际原生验收结果与边界见下方验证记录。
 
 这是 [ADR-021](../docs/decisions/021-isolated-file-picker-prototype.md) 定义的可选原型。
 默认生产构建、JSON 保存对话框及非 Windows 路径保持原实现。子进程仍包含同一 EXE
@@ -25,7 +26,8 @@ AVC 上下文查找和准确源位置见 [ADR-014](../docs/decisions/014-bounded
 `go vet -tags pickerprocess ./...`，具备 gcc 时再运行
 `go test -race -tags pickerprocess -count=1 ./...`。测试子进程不会弹出文件对话框。
 
-[原型验证记录](../docs/desktop-picker-process-20261007.md)：自动测试通过，首次原生取消出现主进程退出码 1，正在诊断。六轮资源回收验收尚未通过，暂不用于默认发布。
+[原型验证记录](../docs/desktop-picker-process-20261007.md) 保留首次原生取消尝试期间的主进程退出码 1。
+最新 [Windows 稳定性记录](../docs/desktop-windows-stability-20261016.md) 区分历史退出、焦点诊断与通信污染，并记录修复及六轮资源回收验收状态。原型暂不用于默认发布。
 
 ## 范围
 
@@ -74,6 +76,7 @@ MP3 每批最多 256 Tag / 1,024 帧头；在大 Tag 内保留准确帧边界和
 仍使用 v3。v4 仅冻结当前页，不遍历历史或补做分析；v1–v3 输出保持兼容。
 完整规则见 [ADR-032](../docs/decisions/032-codec-change-and-sei-search.md)。
 固定构建、Linux 原生结果和工具性能计量见 [检索与回归工具验收](../docs/desktop-codec-change-sei-search-20261015.md)。
+Windows 实际快照的独立重检入口见 [Windows codec 验收说明](../tools/codec-regression/WINDOWS_ACCEPTANCE.md)，本轮实际结果与限制见 [Windows 稳定性记录](../docs/desktop-windows-stability-20261016.md)。
 
 ## 媒体码率与 GOP 曲线
 

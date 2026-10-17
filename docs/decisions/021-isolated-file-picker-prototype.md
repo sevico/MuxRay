@@ -31,6 +31,18 @@ validates these before creating a single IFileOpenDialog on a locked STA thread.
 Only an absolute filesystem path, cancellation or a generic error is returned.
 Paths are not placed in command-line arguments, temporary files or diagnostic logs.
 
+Private protocol v2 also identifies a dedicated inherited response-pipe handle
+in that request. The parent explicitly inherits only the response write end in
+addition to standard streams and closes its local write end after process start.
+The child validates the pipe handle, clears its inheritance flag and owns its
+closure. Standard output and standard error are separately drained and discarded
+within fixed budgets; neither stream is accepted as the protocol response.
+A native cancellation produced a valid reply preceded by an unrelated warning
+on stdout. Separating the channel preserves strict JSON and nonce validation
+without accepting arbitrary prefixes. The warning's originating component has
+not been established, and this channel separation is not a security boundary
+against code already running inside the child.
+
 The parent creates a Job with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`. It starts the
 child waiting for input, assigns the Job, and only then writes the request. If the
 parent exits before assignment, closing the input pipe prevents picker dialog admission;
@@ -39,15 +51,22 @@ the Job fails the request without opening an in-process fallback dialog.
 
 The parent validates the bounded reply and nonce, waits for actual child exit and
 closes its process/pipe/Job resources before publishing a selected path. A reply
-alone is not completion. Nonzero exit, malformed or oversized output, deadline or
+alone is not completion. Nonzero exit, a malformed response, an oversized response
+or standard stream, deadline or
 host shutdown rejects the path and triggers child cleanup. The hard interaction
 deadline is ten minutes; parent shutdown cancels sooner. Cancellation is distinct
 from launch, protocol and child failures. Existing recovery returns the stored
 result rather than starting a second child or opening the media twice.
 
 The owner is the unique visible, unowned top-level window of the parent process,
-never another application's foreground window. The parent restores its enabled
-state on success, cancellation and failure. Host close cancels the picker context
+never another application's foreground window. It must be enabled when passed
+to IFileDialog. The parent does not pre-disable it and leaves modality to the
+native dialog. A diagnostic reproduction observed WebView2 focus restoration
+while the owner was disabled, before the parent's cleanup could run. Removing
+the pre-disable is intended to avoid this ordering; real native cancellation
+and selection must validate that behavior. The parent retains an identity-checked enabled-state
+recovery on success, cancellation and failure, including a child terminated
+before modal cleanup. Host close cancels the picker context
 and performs bounded cleanup waiting. A parent crash is handled by the Job, not
 by relying on an OnShutdown callback.
 
@@ -61,6 +80,9 @@ Process tests must cover successful/cancelled results, malformed and oversized
 messages, wrong nonce, nonzero exit, a reply followed by a still-running child,
 timeout/cancellation, and Job lifetime when the parent exits. They use controlled
 non-UI children; no automated test should unexpectedly open a dialog.
+They also cover valid replies alongside stdout noise, malformed data on the
+dedicated response pipe, bounded stdout/stderr, invalid response handles, and
+pipe cleanup when child descendants retain inherited handles.
 
 Native acceptance uses the real Shell dialog and the same FLV for three cancel
 and three successful opens in one parent process. It records exact process
@@ -77,5 +99,11 @@ Actual results and any unmet acceptance criteria belong in the validation report
 
 The [2026-10-07 validation report](../desktop-picker-process-20261007.md) records
 passing automated checks but an abnormal parent exit during the first native
-cancel attempt. Native acceptance is incomplete; the prototype is not ready for
-default rollout.
+cancel attempt. That run did not complete native acceptance and remains a failed
+historical observation; it is not replaced by later results.
+
+The [2026-10-16 Windows follow-up](../desktop-windows-stability-20261016.md)
+separates the historical exit timing, disabled-owner focus reproduction and
+stdout contamination. It records the fixes, native results and deviations from
+the registered acceptance protocol. The prototype remains opt-in; these local
+results do not approve default rollout.

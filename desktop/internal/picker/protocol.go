@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	ChildArg        = "--muxray-picker-child-v1"
-	Version         = 1
+	ChildArg        = "--muxray-picker-child-v2"
+	Version         = 2
 	MaxMessageBytes = 64 * 1024
 )
 
@@ -29,12 +29,13 @@ var (
 )
 
 type Request struct {
-	Version       int    `json:"version"`
-	Nonce         string `json:"nonce"`
-	Owner         string `json:"owner"`
-	Kind          string `json:"kind"`
-	ParentPID     uint32 `json:"parentPID"`
-	ParentCreated string `json:"parentCreated"`
+	Version        int    `json:"version"`
+	Nonce          string `json:"nonce"`
+	Owner          string `json:"owner"`
+	Kind           string `json:"kind"`
+	ParentPID      uint32 `json:"parentPID"`
+	ParentCreated  string `json:"parentCreated"`
+	ResponseHandle string `json:"responseHandle"`
 }
 
 type Response struct {
@@ -60,7 +61,8 @@ func decimal(s string, bits int) bool {
 
 func validRequest(r Request) bool {
 	return r.Version == Version && validNonce(r.Nonce) && decimal(r.Owner, strconv.IntSize) &&
-		r.Kind == "open" && r.ParentPID != 0 && decimal(r.ParentCreated, 64)
+		r.Kind == "open" && r.ParentPID != 0 && decimal(r.ParentCreated, 64) &&
+		decimal(r.ResponseHandle, strconv.IntSize) && r.ResponseHandle != strconv.FormatUint(uint64(^uintptr(0)), 10)
 }
 
 // readMessage waits for EOF. Closing stdin is part of the request handshake;
@@ -73,7 +75,7 @@ func readMessage(r io.Reader, v any) error {
 	var allowed map[string]bool
 	switch v.(type) {
 	case *Request:
-		allowed = map[string]bool{"version": true, "nonce": true, "owner": true, "kind": true, "parentPID": true, "parentCreated": true}
+		allowed = map[string]bool{"version": true, "nonce": true, "owner": true, "kind": true, "parentPID": true, "parentCreated": true, "responseHandle": true}
 	case *Response:
 		allowed = map[string]bool{"version": true, "nonce": true, "status": true, "path": true, "error": true}
 	default:

@@ -43,7 +43,7 @@ func runPickerChild() (bool, int) {
 		if len(os.Args) != 2 {
 			return true, 64
 		}
-		return true, picker.ChildMain(os.Stdin, os.Stdout)
+		return true, picker.ChildMain(os.Stdin)
 	}
 	return false, 0
 }
@@ -60,26 +60,20 @@ func openFileDialog(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// Restore the original enabled state even if the child crashes or is killed.
-	// Native Show may change the cross-process owner state while it is modal.
-	var ownerPID uint32
-	pickerWindowPID.Call(owner, uintptr(unsafe.Pointer(&ownerPID)))
-	if ownerPID != uint32(os.Getpid()) {
-		return "", errors.New("picker owner unavailable")
-	}
-	enabled, _, _ := pickerEnabled.Call(owner)
-	if enabled == 0 {
-		return "", errors.New("picker owner unavailable")
-	}
-	pickerEnable.Call(owner, 0)
-	defer func() {
-		var pid uint32
-		pickerWindowPID.Call(owner, uintptr(unsafe.Pointer(&pid)))
-		if pid == uint32(os.Getpid()) {
-			pickerEnable.Call(owner, 1)
-		}
-	}()
-	path, err := picker.Run(ctx, exe, owner)
+	path, err := runWithPickerOwner(owner, uint32(os.Getpid()), pickerOwnerAccess{
+		processID: func(hwnd uintptr) uint32 {
+			var pid uint32
+			pickerWindowPID.Call(hwnd, uintptr(unsafe.Pointer(&pid)))
+			return pid
+		},
+		enabled: func(hwnd uintptr) bool {
+			enabled, _, _ := pickerEnabled.Call(hwnd)
+			return enabled != 0
+		},
+		restore: func(hwnd uintptr) { pickerEnable.Call(hwnd, 1) },
+	}, func() (string, error) {
+		return picker.Run(ctx, exe, owner)
+	})
 	if errors.Is(err, picker.ErrCanceled) {
 		return "", nil
 	}

@@ -335,7 +335,8 @@ jobs:
         run: |
           mkdir -p .cache/tn-ci "$RUNNER_TEMP/muxray-timing-baseline"
           git rev-parse HEAD > .cache/tn-ci/source-revision.log
-          git archive 0e853bebd90f12658c1123f8703fb247cbf61530 | tar -x -C "$RUNNER_TEMP/muxray-timing-baseline"
+          baseline_commit=$(/usr/bin/python3 -B tools/codec-regression/check_timing_baseline.py --output .cache/tn-ci/baseline.json --print-commit)
+          git archive "$baseline_commit" | tar -x -C "$RUNNER_TEMP/muxray-timing-baseline"
           go -C "$RUNNER_TEMP/muxray-timing-baseline" build -trimpath -o "$PWD/.cache/tn-ci/baseline-cli" ./cmd/muxray
           go build -trimpath -o .cache/tn-ci/muxray ./cmd/muxray
           ./desktop/build-production.sh 2>&1 | tee .cache/tn-ci/build.log

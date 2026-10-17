@@ -42,6 +42,13 @@ func run(ctx context.Context, exe string, owner uintptr, extraEnv []string) (str
 		return "", ErrStart
 	}
 	req := Request{Version: Version, Nonce: hex.EncodeToString(nonce), Owner: strconv.FormatUint(uint64(owner), 10), Kind: "open", ParentPID: uint32(os.Getpid()), ParentCreated: created}
+	responseR, responseW, err := newResponsePipe()
+	if err != nil {
+		return "", ErrStart
+	}
+	defer responseR.Close()
+	defer responseW.Close()
+	req.ResponseHandle = strconv.FormatUint(uint64(responseW.Fd()), 10)
 	if !validRequest(req) {
 		return "", ErrProtocol
 	}
@@ -77,13 +84,14 @@ func run(ctx context.Context, exe string, owner uintptr, extraEnv []string) (str
 	defer stderrR.Close()
 	defer stderrW.Close()
 	cmd := exec.Command(exe, ChildArg)
-	configureChild(cmd)
+	configureChild(cmd, responseW)
 	cmd.Env = append(os.Environ(), extraEnv...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdinR, stdoutW, stderrW
 	if err = cmd.Start(); err != nil {
 		return "", ErrStart
 	}
 	stdinR.Close()
+	responseW.Close()
 	stdoutW.Close()
 	stderrW.Close()
 	wait := make(chan error, 1)
@@ -107,16 +115,11 @@ func run(ctx context.Context, exe string, owner uintptr, extraEnv []string) (str
 		err      error
 	}
 	output := make(chan responseResult, 1)
-	go func() { r, e := readResponse(stdoutR, req.Nonce); output <- responseResult{r, e} }()
-	stderr := make(chan error, 1)
-	go func() {
-		n, e := io.Copy(io.Discard, io.LimitReader(stderrR, MaxMessageBytes+1))
-		if e != nil || n > MaxMessageBytes {
-			stderr <- ErrProtocol
-		} else {
-			stderr <- nil
-		}
-	}()
+	go func() { r, e := readResponse(responseR, req.Nonce); output <- responseResult{r, e} }()
+	// Shell components may write diagnostics to either standard stream. Neither
+	// carries protocol data, and both remain bounded to prevent a blocked child.
+	stdout := drainChildOutput(stdoutR)
+	stderr := drainChildOutput(stderrR)
 	input := make(chan error, 1)
 	go func() { e := WriteRequest(stdinW, req); stdinW.Close(); input <- e }()
 	var response Response
@@ -135,6 +138,7 @@ func run(ctx context.Context, exe string, owner uintptr, extraEnv []string) (str
 		}
 		cmd.Process.Kill() // Covers a failed Job close; harmless after actual exit.
 		stdinW.Close()
+		responseR.Close()
 		stdoutR.Close()
 		stderrR.Close()
 		cleanupTimer = time.NewTimer(cleanupDuration)
@@ -146,7 +150,7 @@ func run(ctx context.Context, exe string, owner uintptr, extraEnv []string) (str
 		}
 	}()
 	ctxDone := ctx.Done()
-	for wait != nil || output != nil || stderr != nil || input != nil {
+	for wait != nil || output != nil || stdout != nil || stderr != nil || input != nil {
 		select {
 		case e := <-wait:
 			wait = nil
@@ -162,6 +166,11 @@ func run(ctx context.Context, exe string, owner uintptr, extraEnv []string) (str
 			output = nil
 			response = r.response
 			if r.err != nil {
+				stop(ErrProtocol)
+			}
+		case e := <-stdout:
+			stdout = nil
+			if e != nil {
 				stop(ErrProtocol)
 			}
 		case e := <-stderr:
@@ -195,4 +204,17 @@ func run(ctx context.Context, exe string, owner uintptr, extraEnv []string) (str
 	default:
 		return "", ErrChildFailed // Never expose child error text or paths.
 	}
+}
+
+func drainChildOutput(r io.Reader) <-chan error {
+	done := make(chan error, 1)
+	go func() {
+		n, err := io.Copy(io.Discard, io.LimitReader(r, MaxMessageBytes+1))
+		if err != nil || n > MaxMessageBytes {
+			done <- ErrProtocol
+		} else {
+			done <- nil
+		}
+	}()
+	return done
 }

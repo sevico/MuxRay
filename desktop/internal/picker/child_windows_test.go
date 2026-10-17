@@ -132,7 +132,7 @@ func (f *fakeChildCOM) operations() childOperations {
 }
 
 func childTestRequest() Request {
-	return Request{Version: Version, Nonce: strings.Repeat("a", 32), Owner: "12345", Kind: "open", ParentPID: 1, ParentCreated: "1"}
+	return Request{Version: Version, Nonce: strings.Repeat("a", 32), Owner: "12345", Kind: "open", ParentPID: 1, ParentCreated: "1", ResponseHandle: "456"}
 }
 
 func TestChildCOMABIAndTeardownBeforeResponse(t *testing.T) {
@@ -159,7 +159,7 @@ func TestChildCOMABIAndTeardownBeforeResponse(t *testing.T) {
 		}
 		return response.Write(p)
 	})
-	if exit := childMainWithOperations(&request, writer, f.operations()); exit != 0 {
+	if exit := childMainWithOperations(&request, func(string) (io.WriteCloser, error) { return writer, nil }, f.operations()); exit != 0 {
 		t.Fatalf("exit = %d", exit)
 	}
 	var got Response
@@ -204,15 +204,16 @@ func TestChildHRESULTAndFailureCleanup(t *testing.T) {
 type childTestWriter func([]byte) (int, error)
 
 func (w childTestWriter) Write(p []byte) (int, error) { return w(p) }
+func (w childTestWriter) Close() error                { return nil }
 
 func TestChildRejectsInvalidRequestBeforeNativeCalls(t *testing.T) {
 	for _, input := range []string{"", "{}", strings.Repeat("x", MaxMessageBytes+1)} {
-		if exit := childMainWithOperations(strings.NewReader(input), io.Discard, childOperations{}); exit != 2 {
+		if exit := childMainWithOperations(strings.NewReader(input), nil, childOperations{}); exit != 2 {
 			t.Fatalf("invalid input returned %d", exit)
 		}
 	}
 	// A reader error before EOF must also prevent all native operations.
-	if exit := childMainWithOperations(childFailingReader{}, io.Discard, childOperations{}); exit != 2 {
+	if exit := childMainWithOperations(childFailingReader{}, nil, childOperations{}); exit != 2 {
 		t.Fatalf("read failure returned %d", exit)
 	}
 }

@@ -408,10 +408,23 @@ picture-timing bits with independent original-source mappings, plus a 3,000-fram
 MP3 Tag. They are structural fixtures, not decoding-conformance media.
 `verify_timing_navigation.py` checks v6 values, context identity, partial states,
 source bits and budgets, then compares every v1–v5 output byte-for-byte with a
-frozen prior CLI. Build that baseline from commit
-`0e853bebd90f12658c1123f8703fb247cbf61530`; the independent Linux CI job builds both.
+frozen prior CLI. The registered baseline in `timing_baseline.json` is
+`bc799d6afebc7206d3c7bac1e6a8cc49dc1c41c1`, the direct parent of the timing-v6
+feature commit. `check_timing_baseline.py` verifies the object, pinned source tree,
+first-parent relationship and ancestry of the checkout before CI archives it.
+The former `0e853bebd90f12658c1123f8703fb247cbf61530` object is unavailable in the
+current complete checkout. This is a newly registered baseline; equivalence to
+that historical source has not been established. Historical acceptance records
+retain their original identities. See the [baseline registration](../../docs/codec-timing-baseline-20261016.md).
 
 ```sh
+baseline_commit=$(python3 -B tools/codec-regression/check_timing_baseline.py --print-commit)
+# Keep the archive outside this checkout so it cannot inherit this checkout's VCS identity.
+baseline_source=$(mktemp -d)
+mkdir -p "$PWD/.cache"
+git archive "$baseline_commit" | tar -x -C "$baseline_source"
+go -C "$baseline_source" build -trimpath -o "$PWD/.cache/baseline-cli" ./cmd/muxray
+go build -trimpath -o "$PWD/.cache/muxray" ./cmd/muxray
 python3 -B tools/codec-regression/timing_navigation_oracle.py --output-dir "$PWD/.cache/tn-samples"
 python3 -B tools/codec-regression/verify_timing_navigation.py --input-dir "$PWD/.cache/tn-samples" --cli "$PWD/.cache/muxray" --baseline-cli "$PWD/.cache/baseline-cli" --output-dir "$PWD/.cache/tn-cli"
 /usr/bin/python3 -B tools/codec-regression/native_timing_navigation.py --input-dir "$PWD/.cache/tn-samples" --binary "$PWD/desktop/build/bin/MuxRay" --output-dir "$PWD/.cache/tn-native" --timeout-seconds 900
