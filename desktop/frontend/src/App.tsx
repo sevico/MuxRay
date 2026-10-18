@@ -118,6 +118,15 @@ export function App({ controller }: { controller: Controller }) {
           <p className="snapshot-scope">导出诊断 JSON 保存当前已载入的概览、事件页、Tag 详情、Hex、趋势、媒体曲线页与 H.264 检索页，不代表全文件分析。报告可能包含有限媒体字节和 AMF 字段文本。</p>
         </section>
 
+        <nav className="analysis-nav" aria-label="分析导航">
+          <span>分析导航</span>
+          <a href="#time-search">时间戳检索</a>
+          <a href="#tag-trends">趋势</a>
+          <a href="#tag-results">Tag 索引</a>
+          {view.selectedTag && <a href="#tag-detail">当前详情</a>}
+          <a href="#hex-panel">Hex</a>
+        </nav>
+
         <CodecSearchPanel view={view} controller={controller} disabled={!scanReady || !!isClosing} message={fault} />
         <AVCSearchPanel view={view} controller={controller} disabled={!scanReady || !!isClosing} message={fault} />
 
@@ -130,7 +139,7 @@ export function App({ controller }: { controller: Controller }) {
         <TagTrendPanel key={session.sessionId} view={view} controller={controller} disabled={!scanReady || !!operation || view.timeSearchRunning} readDisabled={!canPage || !!operation} message={fault} />
 
         <div className={`result-layout ${view.selectedTag ? 'has-detail' : ''}`}>
-        <section className="results" aria-label="扫描结果">
+        <section id="tag-results" className="results" aria-label="扫描结果">
           <div className="results-toolbar">
             <div className="tabs" role="tablist" aria-label="结果类型">
               <button role="tab" aria-selected={view.tab === 'tags'} onClick={() => controller.select('tags')} disabled={!canPage || isClosing}>Tag 索引</button>
@@ -181,7 +190,10 @@ function DetailPanel({ view, onRetry, onContinue, onSelectMP3, onPageMP3, onJump
   const replay = avcReplayProgress(detail);
   return <section id="tag-detail" className="detail-panel" aria-label={`Tag ${view.selectedTag!.id} 详情`} aria-busy={busy}>
     <div className="detail-heading"><div><p className="eyebrow">按需解析 · TAG {view.selectedTag!.id}</p><h2>{kind}</h2></div>
-      {view.trendPage && <a className="trend-return" href="#tag-trends">返回趋势 ↑</a>}
+      <div className="panel-heading-links">
+        {view.timeSearchPage && <a href="#time-search">返回时间戳检索 ↑</a>}
+        {view.trendPage && <a href="#tag-trends">返回趋势 ↑</a>}
+      </div>
       {detail && <div className="detail-badges"><span className={`status ${detail.complete ? '' : 'partial'}`}>{detail.complete ? '语法解析完成' : '部分解析'}</span>{detail.truncated && <span className="status partial">内容截断或展示省略</span>}</div>}
     </div>
     {busy && <p className="detail-note" role="status">{view.detailState === 'recovering' ? '正在确认详情请求…' : '正在读取当前 Tag 的详情…'}</p>}

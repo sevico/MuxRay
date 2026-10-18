@@ -30,7 +30,7 @@ export function TagTrendPanel({ view, controller, disabled, readDisabled, messag
   const sourcePartial = view.session?.scan && !view.session.scan.complete;
   const unknown = points.filter(point => point.context === 'budget_exhausted').length;
   return <section id="tag-trends" className="trend-panel" aria-label="Tag 趋势与异常定位" aria-busy={busy}>
-    <div className="trend-heading"><div><p className="eyebrow">文件顺序 · 容器 TAG</p><h2>趋势观察与异常定位</h2></div><span className="trend-budget">每窗 256 Tag · 按需查看</span></div>
+    <div className="trend-heading"><div><p className="eyebrow">文件顺序 · 容器 TAG</p><h2>趋势观察与异常定位</h2></div><div className="panel-heading-links">{view.timeSearchPage && <a href="#time-search">返回时间戳检索 ↑</a>}<span className="trend-budget">每窗 256 Tag · 按需查看</span></div></div>
     <form className="trend-window-form" onSubmit={event => { event.preventDefault(); controller.loadTagTrends(start); }}>
       <label htmlFor="trend-start">窗口起始 Tag ID</label><input id="trend-start" inputMode="numeric" value={start} disabled={disabled} onChange={event => setStart(event.target.value)} />
       <button className="primary" disabled={disabled}>{page ? '查看指定窗口' : '查看趋势'}</button>

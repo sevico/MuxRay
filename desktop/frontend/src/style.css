@@ -26,6 +26,12 @@ main { width: 100%; max-width: 1600px; margin: 0 auto; flex: 1; padding: 25px 32
 .empty-state .scope-note { font-size: 12px; color: #8d98a7; margin-top: 45px; }
 .scan-card, .results { background: white; border: 1px solid #dfe6ee; border-radius: 9px; }
 .scan-card { padding: 23px 25px 18px; margin-bottom: 22px; }
+.analysis-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin: 0 0 22px; padding: 12px 16px; background: #eef6f8; border-radius: 7px; font-size: 12px; }
+.analysis-nav > span { color: #617389; }
+.analysis-nav a, .panel-heading-links a { color: #126c83; font-size: 12px; }
+.panel-heading-links { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 16px; margin-left: auto; }
+.panel-heading-links a { white-space: nowrap; }
+#tag-results { scroll-margin-top: 16px; }
 .scan-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .scan-heading > div { min-width: 0; }
 .eyebrow { color: #7c8a9c; font-size: 11px; margin: 0 0 6px; letter-spacing: 1px; }
@@ -91,7 +97,7 @@ footer i { display: inline-block; width: 6px; height: 6px; background: #7aafa2; 
 .has-detail .results th:first-child, .has-detail .results td:first-child { position: sticky; left: 0; background: #fff; }
 .has-detail .results th:first-child { z-index: 2; background: #f9fbfd; }
 .has-detail .results .selected-tag td:first-child { background: #eaf5f8; }
-.detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.detail-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .detail-heading h2 { font-size: 18px; margin: 0; }
 .detail-badges { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .detail-note { font-size: 12px; color: #718094; line-height: 1.7; margin: 10px 0 14px; }
