@@ -8,6 +8,12 @@ Wails **v2.14.0** + React **18.3.1** + TypeScript **5.9.3**，构建工具 Vite
 AVC 上下文查找和准确源位置见 [ADR-014](../docs/decisions/014-bounded-desktop-avc-context.md)。
 长媒体的配置候选索引见 [ADR-020](../docs/decisions/020-indexed-desktop-avc-context.md)。
 
+当前基线（2026-10-18）：`4815c54` 的 CI 10/10 通过；复用
+[10 月 16 日默认生产验收](../docs/desktop-windows-stability-20261016.md) 的六案例、32 次
+原生 JSON 导出及清理退出结果。旧默认 exit 1 仍未归因，原型严格复验仍为 0/6，
+不提升为默认实现。当前范围与工作原则见 [项目说明](../README.md)。两项任务试用、Hex
+返回页首导出改进及最终构建定向复验已完成，详见 [默认桌面试用记录](../docs/desktop-default-trial-20261018.md)。
+
 ## Windows 文件选择辅助进程原型
 
 `./build-picker-prototype.ps1` 通过 `pickerprocess` 构建标记生成独立命名的
