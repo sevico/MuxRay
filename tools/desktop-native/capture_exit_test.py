@@ -290,6 +290,102 @@ class CaptureExitTests(unittest.TestCase):
         self.assertFalse(stream["persistenceComplete"])
         self.assertFalse(record["captureComplete"])
 
+    def test_final_receipt_failure_marks_saved_receipt_as_stale(self):
+        original = capture_exit.write_json
+
+        def fail_final(path, value):
+            if path.name == "capture.json" and value["phase"] == "exited":
+                raise OSError("Synthetic final receipt failure")
+            return original(path, value)
+
+        with mock.patch.object(capture_exit, "write_json", fail_final):
+            record = self.run_child("import os; os.write(2,b'last'); os._exit(1)")
+        self.assertEqual(record["exitCode"], 1)
+        self.assertTrue(record["streams"]["stderr"]["persistenceComplete"])
+        self.assertTrue(record["receiptMayBeStale"])
+        self.assertFalse(record["captureComplete"])
+        self.assertEqual(record["errors"][0]["stage"], "receipt_write")
+        self.assertEqual(capture_exit.collector_exit_code(record), 2)
+        saved = json.loads((self.output / "capture.json").read_text(encoding="utf-8"))
+        self.assertNotEqual(saved["phase"], "exited")
+
+    def test_interrupt_while_waiting_for_final_writer_marks_receipt_stale(self):
+        release = threading.Event()
+        original_init = capture_exit.DiskWriter.__init__
+        original_sync = capture_exit.DiskWriter._sync
+
+        def interrupt_once(writer, *args):
+            original_init(writer, *args)
+            wait = writer.done.wait
+
+            def interrupted_wait(timeout=None):
+                if not release.is_set():
+                    release.set()
+                    raise KeyboardInterrupt
+                return wait(timeout)
+
+            writer.done.wait = interrupted_wait
+
+        def stalled(writer, file):
+            if not release.wait(4):
+                raise OSError("Synthetic disk stall was not released")
+            return original_sync(writer, file)
+
+        try:
+            with mock.patch.object(capture_exit.DiskWriter, "__init__", interrupt_once), mock.patch.object(
+                    capture_exit.DiskWriter, "_sync", stalled):
+                record = self.run_child("import os; os.write(1,b'output'); os._exit(0)")
+        finally:
+            release.set()
+        self.assertEqual(record["collectorInterruptions"], 1)
+        self.assertEqual(record["exitCode"], 0)
+        self.assertTrue(record["captureComplete"])
+        self.assertTrue(record["receiptMayBeStale"])
+        self.assertEqual(capture_exit.collector_exit_code(record), 2)
+        saved = json.loads((self.output / "capture.json").read_text(encoding="utf-8"))
+        self.assertEqual(saved["collectorInterruptions"], 0)
+
+    def test_late_final_receipt_cannot_upgrade_returned_timeout_result(self):
+        release = threading.Event()
+        blocked = threading.Event()
+        writers = []
+        original_init = capture_exit.DiskWriter.__init__
+        original_write = capture_exit.write_json
+
+        def remember(writer, *args):
+            original_init(writer, *args)
+            writers.append(writer)
+
+        def stalled_final(path, value):
+            if path.name == "capture.json" and value["phase"] == "exited":
+                blocked.set()
+                if not release.wait(4):
+                    raise OSError("Synthetic receipt stall was not released")
+            return original_write(path, value)
+
+        try:
+            with mock.patch.object(capture_exit.DiskWriter, "__init__", remember), mock.patch.object(
+                    capture_exit, "write_json", stalled_final):
+                record = self.run_child("import os; os.write(1,b'output'); os._exit(0)",
+                                        writer_wait_seconds=.1)
+                self.assertTrue(blocked.is_set())
+                self.assertTrue(record["writerTimedOut"])
+                self.assertTrue(record["receiptMayBeStale"])
+                self.assertFalse(record["captureComplete"])
+                release.set()
+                self.assertTrue(writers[0].done.wait(3))
+        finally:
+            release.set()
+            for writer in writers:
+                self.assertTrue(writer.done.wait(3))
+        # The snapshot was prepared before the writer wait expired. The CLI
+        # result must stay incomplete even when that snapshot arrives later.
+        saved = json.loads((self.output / "capture.json").read_text(encoding="utf-8"))
+        self.assertTrue(saved["captureComplete"])
+        self.assertFalse(saved["writerTimedOut"])
+        self.assertFalse(record["captureComplete"])
+        self.assertEqual(capture_exit.collector_exit_code(record), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

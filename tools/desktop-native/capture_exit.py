@@ -24,8 +24,7 @@ product. At the deadline capture-timeout.json is queued for the independent
 writer, and timedOut=true is recorded in memory; collection continues until the
 user closes the product. Disk stalls can delay receipt persistence. Ctrl+C in
 the observation/wait loops records an interruption and continues collecting.
-Do not kill
-the collector while the product is running: closing its pipes can affect output
+Do not kill the collector while the product is running: closing its pipes can affect output
 writers, and a final exit/tail record would be unavailable.
 
 After the target exits, --drain-timeout-seconds limits the wait for pipe EOF (a
@@ -33,7 +32,9 @@ descendant may retain a pipe). A missing EOF is explicitly incomplete evidence;
 no descendant is terminated. No automatic retry or product restart is performed.
 Final persistence has a five-second wait limit. If the writer is stalled, the
 CLI summary reports writerTimedOut=true and receiptMayBeStale=true; the on-disk
-receipt may be older or missing. Such a run is incomplete, never a success.
+receipt may be older, missing, or a final snapshot prepared before that timeout.
+The CLI's incomplete result remains authoritative even if that previously
+prepared receipt reaches disk later; the receipt alone cannot upgrade the run.
 
 Collector exit codes: 0 = complete capture, target exit 0, no deadline/interrupt;
 1 = complete capture of a nonzero target exit; 2 = timeout, interruption, launch
@@ -293,7 +294,7 @@ class DiskWriter:
             result["streams"][name] = item
         result["errors"].extend(errors)
         result["writerTimedOut"] = timed_out
-        result["receiptMayBeStale"] = timed_out
+        result["receiptMayBeStale"] = timed_out or bool(errors)
         result["persistenceComplete"] = final and not errors and all(
             item["persistenceComplete"] for item in result["streams"].values())
         result["captureComplete"] = (
@@ -356,6 +357,8 @@ class DiskWriter:
         result = self.result or self.snapshot_record(record)
         # An interrupt while awaiting persistence remains a collector failure
         # even when an already-written receipt predates that interrupt.
+        if result["collectorInterruptions"] != record["collectorInterruptions"]:
+            result["receiptMayBeStale"] = True
         result["collectorInterruptions"] = record["collectorInterruptions"]
         with self.lock:
             close_errors = [error for error in self.errors if error not in result["errors"]]
@@ -526,6 +529,8 @@ def main(argv=None):
                       "captureComplete": record["captureComplete"], "timedOut": record["timedOut"],
                       "persistenceComplete": record["persistenceComplete"],
                       "writerTimedOut": record["writerTimedOut"],
+                      "collectorInterruptions": record["collectorInterruptions"],
+                      "drainTimedOut": record["drainTimedOut"],
                       "receiptMayBeStale": record["receiptMayBeStale"],
                       "receipt": str(args.output / "capture.json")}))
     return collector_exit_code(record)
