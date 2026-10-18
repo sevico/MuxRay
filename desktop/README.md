@@ -1,45 +1,19 @@
-# MuxRay 最小桌面版
+# MuxRay 桌面开发
 
-Wails **v2.14.0** + React **18.3.1** + TypeScript **5.9.3**，构建工具 Vite
-**7.3.6**。项目采用 [MIT 许可证](../LICENSE)，目前仍是本地开发预览；签名、安装器及正式稳定版门禁尚未完成。
-架构边界见 [ADR-011](../docs/decisions/011-minimal-wails-shell.md)。
-面向使用者的操作步骤见 [预览版使用指南](../docs/preview-guide.md)，支持范围和
-交付条件见 [预览版范围](../docs/preview-scope.md)。分析区域快捷链接只移动页面，
-不会自动执行检索或重新读取媒体。
-打开响应恢复协议见 [ADR-012](../docs/decisions/012-recoverable-native-open.md)。
-文件所有权和有界详情协议见 [ADR-013](../docs/decisions/013-retained-document-details.md)。
-AVC 上下文查找和准确源位置见 [ADR-014](../docs/decisions/014-bounded-desktop-avc-context.md)。
-长媒体的配置候选索引见 [ADR-020](../docs/decisions/020-indexed-desktop-avc-context.md)。
+桌面程序使用 Wails **v2.14.0**、React **18.3.1**、TypeScript **5.9.3** 和
+Vite **7.3.6**，采用 [MIT 许可证](../LICENSE)。本页面向桌面开发与集成，介绍
+构建、测试、接口和资源边界。
 
-当前基线（2026-10-18）：`4815c54` 的 CI 10/10 通过；复用
-[10 月 16 日默认生产验收](../docs/desktop-windows-stability-20261016.md) 的六案例、32 次
-原生 JSON 导出及清理退出结果。旧默认 exit 1 仍未归因，原型严格复验仍为 0/6，
-不提升为默认实现。当前范围与工作原则见 [项目说明](../README.md)。两项任务试用、Hex
-返回页首导出改进及最终构建定向复验已完成，详见 [默认桌面试用记录](../docs/desktop-default-trial-20261018.md)。
+使用软件请先阅读[使用指南](../docs/preview-guide.md)、[支持范围](../docs/preview-scope.md)
+和 [v0.1.0 发行说明](../docs/releases/v0.1.0.md)。开发环境从
+[Windows 构建](#windows-构建)或 [Linux 构建](#linux-构建)开始，日常验证见
+[检查与开发](#检查与开发)。
 
-长文件时间戳检索及三批尾部定位的 Windows 原生流程已完成，详见
-[时间戳检索验收](../docs/desktop-time-search-20261018.md)。这是一次默认生产构建的功能验收。
-
-## Windows 文件选择辅助进程原型
-
-`./build-picker-prototype.ps1` 通过 `pickerprocess` 构建标记生成独立命名的
-`build/bin/MuxRay-picker-prototype.exe`。每次 FLV 打开由一个子进程显示原生对话框，
-主进程等它实际退出并核对回复后才加载媒体；取消分支不创建会话。已实现超时、
-子进程崩溃和协议错误的清理及窗口恢复逻辑，既有请求恢复不会重复启动文件选择器。
-后续修复移除了父窗口的提前禁用，并通过独立回复管道隔离标准输出噪声；
-实际原生验收结果与边界见下方验证记录。
-
-这是 [ADR-021](../docs/decisions/021-isolated-file-picker-prototype.md) 定义的可选原型。
-默认生产构建、JSON 保存对话框及非 Windows 路径保持原实现。子进程仍包含同一 EXE
-的 Go 依赖初始化，但不进入 Wails 主循环、不创建 WebView、不扫描媒体。它提供进程
-资源隔离，不是安全沙箱，也没有修复尚未归属的 Shell 内部引用。
-
-非界面验证命令为 `go test -tags pickerprocess -count=1 ./...`、
-`go vet -tags pickerprocess ./...`，具备 gcc 时再运行
-`go test -race -tags pickerprocess -count=1 ./...`。测试子进程不会弹出文件对话框。
-
-[原型验证记录](../docs/desktop-picker-process-20261007.md) 保留首次原生取消尝试期间的主进程退出码 1。
-最新 [Windows 稳定性记录](../docs/desktop-windows-stability-20261017.md) 记录严格复验 C1 异常退出、默认流程单次通过和两次未复现的诊断；严格六轮仍未通过。原型暂不用于默认发布。
+核心设计见 [ADR-011](../docs/decisions/011-minimal-wails-shell.md)；打开恢复、详情所有权与
+AVC 配置定位分别见 [ADR-012](../docs/decisions/012-recoverable-native-open.md)、
+[ADR-013](../docs/decisions/013-retained-document-details.md)、
+[ADR-014](../docs/decisions/014-bounded-desktop-avc-context.md) 和
+[ADR-020](../docs/decisions/020-indexed-desktop-avc-context.md)。
 
 ## 范围
 
@@ -525,15 +499,14 @@ OS 管理的浏览器 profile；应用不把它用作扫描数据库。
 
 ## 依赖与发布边界
 
-Vite 7.3.6 替换了本机旧缓存版本，参考维护者的
-[Windows 路径修复公告](https://github.com/vitejs/vite/security/advisories/GHSA-fx2h-pf6j-xcff)。
-2026-09-06 的 `npm audit` 返回 0 项已知问题，不代表完整供应链安全审计。
-Wails API/构建选项核对使用本机 v2.14.0 源码以及
-[官方 CLI 文档](https://wails.io/docs/reference/cli/)；官网可能展示更高版本，
-不能据此自动升级本项目。项目已采用 MIT；每次公开发行仍须核对 Go/npm/原生组件
-许可通知及安全公告，并按所宣称的分发方式验证运行时、启动与退出。Windows portable
-ZIP 不包含安装器，不宣称已完成代码签名或安装/卸载验收。本轮结果见
-[发行准备记录](../docs/release-readiness-20261018.md)。
+Go 与前端依赖版本分别由模块文件和 npm lockfile 固定；构建时使用 Wails v2.14.0。
+升级依赖时同步检查生成绑定、许可通知及安全检查，构建选项参考对应版本源码和
+[官方 CLI 文档](https://wails.io/docs/reference/cli/)。
+
+当前 [v0.1.0 发行版](../docs/releases/v0.1.0.md) 提供 Windows x64 portable ZIP，
+需预装 WebView2 Runtime，不附安装器。项目采用 MIT，发行包包含对应构建的第三方
+许可通知及构建身份；后续发行应重新核对产物与依赖。准备过程另存为
+[历史开发记录](../docs/release-readiness-20261018.md)。
 
 ## 构建版本与退出采集
 
@@ -545,3 +518,24 @@ CLI、原生窗口标题和诊断快照的 `producer.version` 共用构建版本
 复现异常退出时可使用仓库的 `tools/desktop-native/capture_exit.py` 启动器，
 同时保存同代 stdout、stderr、EXE 摘要和实际进程退出码；使用方法见脚本帮助。
 原始日志可能包含本机路径，应留在本地并在分享前检查。该工具只采集，不修复退出。
+
+## Windows 文件选择辅助进程原型
+
+`./build-picker-prototype.ps1` 通过 `pickerprocess` 构建标记生成独立命名的
+`build/bin/MuxRay-picker-prototype.exe`。每次 FLV 打开由一个子进程显示原生对话框，
+主进程等它实际退出并核对回复后才加载媒体；取消分支不创建会话。已实现超时、
+子进程崩溃和协议错误的清理及窗口恢复逻辑，既有请求恢复不会重复启动文件选择器。
+后续修复移除了父窗口的提前禁用，并通过独立回复管道隔离标准输出噪声；
+实际原生验收结果与边界见下方验证记录。
+
+这是 [ADR-021](../docs/decisions/021-isolated-file-picker-prototype.md) 定义的可选原型。
+默认生产构建、JSON 保存对话框及非 Windows 路径保持原实现。子进程仍包含同一 EXE
+的 Go 依赖初始化，但不进入 Wails 主循环、不创建 WebView、不扫描媒体。它提供进程
+资源隔离，不是安全沙箱，也没有修复尚未归属的 Shell 内部引用。
+
+非界面验证命令为 `go test -tags pickerprocess -count=1 ./...`、
+`go vet -tags pickerprocess ./...`，具备 gcc 时再运行
+`go test -race -tags pickerprocess -count=1 ./...`。测试子进程不会弹出文件对话框。
+
+[原型验证记录](../docs/desktop-picker-process-20261007.md) 保留首次原生取消尝试期间的主进程退出码 1。
+最新 [Windows 稳定性记录](../docs/desktop-windows-stability-20261017.md) 记录严格复验 C1 异常退出、默认流程单次通过和两次未复现的诊断；严格六轮仍未通过。原型暂不用于默认发布。
