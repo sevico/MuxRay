@@ -193,4 +193,6 @@ Go 应用层新增 `internal/session.Open`：一个会话拥有一个后台扫�
 
 Linux 现提供 `desktop/build-production.sh` 和 Ubuntu 24.04 非 GUI CI；Linux Mint 22.3 上的真实 GTK/WebKit 打开、取消、诊断、导出、源释放和正常退出结果见 [`Linux 验证记录`](docs/desktop-linux-20261007.md)。Windows 辅助选择器的独立结果与限制见 [`Windows 稳定性记录`](docs/desktop-windows-stability-20261017.md)。
 
-项目许可证尚待确定；在许可证落定前，不应把代码作为已授权的正式发行版分发。
+项目采用 [MIT 许可证](LICENSE)。第三方依赖保留各自许可；发行包须包含对应构建的第三方许可通知。正式稳定版仍须通过发行质量门禁。
+
+本轮公开发行准备、依赖安全修复及尚未关闭的稳定性门禁见 [稳定版发行准备](docs/release-readiness-20261018.md)。

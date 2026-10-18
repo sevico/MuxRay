@@ -80,7 +80,7 @@ jobs:
         run: python -m pip install --disable-pip-version-check -r tools/requirements-schema.txt
       - name: Native evidence tool tests (no media generation or GUI)
         working-directory: tools/desktop-native
-        run: python -B -m unittest long_media_test resource_probe_test handle_probe_test snapshot_check_test scan_compare_test resource_cycles_test -v
+        run: python -B -m unittest long_media_test resource_probe_test handle_probe_test snapshot_check_test scan_compare_test resource_cycles_test capture_exit_test -v
       - name: Native gate self-tests (PowerShell 7, no GUI)
         working-directory: .
         shell: pwsh
@@ -93,6 +93,12 @@ jobs:
         run: |
           & ./tools/desktop-native/self-test.ps1
           & ./tools/desktop-native/summary-recovery-self-test.ps1
+      - name: Production build argument self-tests (PowerShell 7, no build)
+        shell: pwsh
+        run: ./build-production-test.ps1
+      - name: Production build argument self-tests (Windows PowerShell 5.1, no build)
+        shell: powershell
+        run: ./build-production-test.ps1
       - name: Production Windows build (no installer)
         run: ./build-production.ps1
 
@@ -104,13 +110,13 @@ jobs:
       run:
         working-directory: desktop
     env:
-      GOTOOLCHAIN: go1.27.0
+      GOTOOLCHAIN: go1.27.2
       CGO_ENABLED: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.27.0'
+          go-version: '1.27.2'
           cache: false
       - uses: actions/setup-node@v4
         with:
@@ -184,13 +190,13 @@ jobs:
       run:
         shell: bash
     env:
-      GOTOOLCHAIN: go1.27.0
+      GOTOOLCHAIN: go1.27.2
       CGO_ENABLED: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.27.0'
+          go-version: '1.27.2'
           cache: false
       - uses: actions/setup-node@v4
         with:
@@ -243,13 +249,13 @@ jobs:
       run:
         shell: bash
     env:
-      GOTOOLCHAIN: go1.27.0
+      GOTOOLCHAIN: go1.27.2
       CGO_ENABLED: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.27.0'
+          go-version: '1.27.2'
           cache: false
       - uses: actions/setup-node@v4
         with:
@@ -312,7 +318,7 @@ jobs:
       run:
         shell: bash
     env:
-      GOTOOLCHAIN: go1.27.0
+      GOTOOLCHAIN: go1.27.2
       CGO_ENABLED: '1'
     steps:
       - uses: actions/checkout@v4
@@ -320,7 +326,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.27.0'
+          go-version: '1.27.2'
           cache: false
       - uses: actions/setup-node@v4
         with:
@@ -378,13 +384,13 @@ jobs:
       run:
         shell: bash
     env:
-      GOTOOLCHAIN: go1.27.0
+      GOTOOLCHAIN: go1.27.2
       CGO_ENABLED: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.27.0'
+          go-version: '1.27.2'
           cache: false
       - uses: actions/setup-node@v4
         with:

@@ -1,3 +1,3 @@
 module github.com/sevico/muxray
 
-go 1.27
+go 1.27.2

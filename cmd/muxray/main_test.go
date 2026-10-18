@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sevico/muxray/internal/buildinfo"
 	"github.com/sevico/muxray/internal/flv"
 	"github.com/sevico/muxray/internal/report"
 )
@@ -26,7 +27,8 @@ func TestRunHelpVersionAndUsage(t *testing.T) {
 	}{
 		{name: "no args", wantExit: exitUsage, wantOutput: "Usage:"},
 		{name: "help", args: []string{"help"}, wantExit: exitOK, wantOutput: "inspect"},
-		{name: "version", args: []string{"version"}, wantExit: exitOK, wantOutput: "muxray dev"},
+		{name: "version", args: []string{"version"}, wantExit: exitOK, wantOutput: "muxray " + buildinfo.Version},
+		{name: "version flag", args: []string{"--version"}, wantExit: exitOK, wantOutput: "muxray " + buildinfo.Version},
 		{name: "unknown", args: []string{"wat"}, wantExit: exitUsage, wantOutput: "unknown command"},
 	}
 

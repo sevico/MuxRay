@@ -1,0 +1,85 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go-vulnerabilities:
+    name: Go vulnerabilities (${{ matrix.module }}, Windows)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - module: core
+            directory: .
+            go-mod: go.mod
+          - module: desktop
+            directory: desktop
+            go-mod: desktop/go.mod
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: ${{ matrix.directory }}
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ matrix.go-mod }}
+          cache: false
+      - name: Install pinned vulnerability checker
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/setup-node@v4
+        if: matrix.module == 'desktop'
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+      - name: Build actual embedded desktop assets
+        if: matrix.module == 'desktop'
+        working-directory: desktop/frontend
+        run: |
+          npm ci --include=dev --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Check reachable Go vulnerabilities
+        # Text mode exits nonzero for findings and operational failures.
+        # JSON mode is unsuitable as the sole gate because findings exit zero.
+        run: |
+          if ('${{ matrix.module }}' -eq 'desktop') {
+            govulncheck -format text -tags 'desktop,production,wv2runtime.error' ./...
+          } else {
+            govulncheck -format text ./...
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  npm-vulnerabilities:
+    name: npm vulnerabilities (including development dependencies)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+        working-directory: desktop/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+      - name: Install locked dependencies including development tools
+        run: npm ci --include=dev --no-audit --no-fund
+      - name: Reject high or critical vulnerabilities
+        run: npm audit --include=dev --audit-level=high

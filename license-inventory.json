@@ -1,0 +1,1448 @@
+{
+  "schemaVersion": 1,
+  "scope": "Windows amd64 default production executable and embedded frontend; license evidence inventory, not a legal clearance opinion",
+  "auditStatus": "Audited executable and current production dependency graph; use the recorded binary SHA-256 for distribution.",
+  "auditedBinary": {
+    "file": "MuxRay.exe",
+    "sha256": "18c7f66b6b5e73893ba4b828400df9e601eb308d8e4ffcac25a1162cd9318e32",
+    "bytes": 12137472,
+    "goVersion": "go1.27.2",
+    "buildTags": [
+      "desktop",
+      "wv2runtime.error",
+      "production"
+    ]
+  },
+  "inputs": [
+    {
+      "file": "REPO/go.mod",
+      "sha256": "213a9bcaf098245550b3b56726cd537865e53034c6164f5bfa6f77a7d30a867a"
+    },
+    {
+      "file": "REPO/desktop/go.mod",
+      "sha256": "83dd1ca89232c33f25b8a8bbb6e926d58ee84ea4227f19fe63ed5e1d6c0bb339"
+    },
+    {
+      "file": "REPO/desktop/go.sum",
+      "sha256": "d61560258a29be79f1f68fdbc63d976fada605eacf2f6c7645396d67bf50c7f1"
+    },
+    {
+      "file": "REPO/desktop/frontend/package.json",
+      "sha256": "708291f09832d600e6e1fa2823de0bc8d503b22648bd07a15a7d95405a41e7d1"
+    },
+    {
+      "file": "REPO/desktop/frontend/package-lock.json",
+      "sha256": "d551dfdc18b7adaacb27d0a6b5d0b8e0578e9a65faff30b0b1821bf1294ce376"
+    }
+  ],
+  "components": [
+    {
+      "id": "go-git.sr.ht__jackmordaunt_go-toast_v2",
+      "name": "git.sr.ht/~jackmordaunt/go-toast/v2",
+      "version": "v2.0.3",
+      "licenseDeclaredOrObserved": "Unlicense OR MIT",
+      "inclusionBasis": {
+        "kind": "production-go-module",
+        "binaryBuildInfo": true,
+        "packages": [
+          "git.sr.ht/~jackmordaunt/go-toast/v2/tmpl",
+          "git.sr.ht/~jackmordaunt/go-toast/v2/internal/winrt/data/xml/dom",
+          "git.sr.ht/~jackmordaunt/go-toast/v2/internal/winrt/ui/notifications",
+          "git.sr.ht/~jackmordaunt/go-toast/v2/wintoast",
+          "git.sr.ht/~jackmordaunt/go-toast/v2"
+        ]
+      },
+      "sourceURL": "https://git.sr.ht/~jackmordaunt/go-toast/v2",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/git.sr.ht/~jackmordaunt/go-toast/v2@v2.0.3/LICENSE",
+          "sourceSHA256": "1b57eeb121b97d5920085fddd4cf395e71b8b027051a367bec8228688d68292f",
+          "lineRange": null,
+          "copiedFile": "licenses/go-git.sr.ht__jackmordaunt_go-toast_v2/01-LICENSE",
+          "copiedSHA256": "1b57eeb121b97d5920085fddd4cf395e71b8b027051a367bec8228688d68292f",
+          "bytes": 2561
+        }
+      ],
+      "notes": [
+        "Module-level notice coverage; Go linker may remove unused functions."
+      ]
+    },
+    {
+      "id": "go-github.com_bep_debounce",
+      "name": "github.com/bep/debounce",
+      "version": "v1.2.1",
+      "licenseDeclaredOrObserved": "MIT",
+      "inclusionBasis": {
+        "kind": "production-go-module",
+        "binaryBuildInfo": true,
+        "packages": [
+          "github.com/bep/debounce"
+        ]
+      },
+      "sourceURL": "https://github.com/bep/debounce",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/github.com/bep/debounce@v1.2.1/LICENSE",
+          "sourceSHA256": "77d1b21a5460ffc70d50101e9490a44b35dd713dab8a6f847c54ce4d3e81234a",
+          "lineRange": null,
+          "copiedFile": "licenses/go-github.com_bep_debounce/01-LICENSE",
+          "copiedSHA256": "77d1b21a5460ffc70d50101e9490a44b35dd713dab8a6f847c54ce4d3e81234a",
+          "bytes": 1087
+        }
+      ],
+      "notes": [
+        "Module-level notice coverage; Go linker may remove unused functions."
+      ]
+    },
+    {
+      "id": "go-github.com_go-ole_go-ole",
+      "name": "github.com/go-ole/go-ole",
+      "version": "v1.3.0",
+      "licenseDeclaredOrObserved": "MIT",
+      "inclusionBasis": {
+        "kind": "production-go-module",
+        "binaryBuildInfo": true,
+        "packages": [
+          "github.com/go-ole/go-ole"
+        ]
+      },
+      "sourceURL": "https://github.com/go-ole/go-ole",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/github.com/go-ole/go-ole@v1.3.0/LICENSE",
+          "sourceSHA256": "d883dbca28769ff23dd4368a8edb7ad9f9f23a8f86adde2875c6e41a828aac62",
+          "lineRange": null,
+          "copiedFile": "licenses/go-github.com_go-ole_go-ole/01-LICENSE",
+          "copiedSHA256": "d883dbca28769ff23dd4368a8edb7ad9f9f23a8f86adde2875c6e41a828aac62",
+          "bytes": 1119
+        }
+      ],
+      "notes": [
+        "Module-level notice coverage; Go linker may remove unused functions."
+      ]
+    },
+    {
+      "id": "go-github.com_google_uuid",
+      "name": "github.com/google/uuid",
+      "version": "v1.6.0",
+      "licenseDeclaredOrObserved": "BSD-3-Clause",
+      "inclusionBasis": {
+        "kind": "production-go-module",
+        "binaryBuildInfo": true,
+        "packages": [
+          "github.com/google/uuid"
+        ]
+      },
+      "sourceURL": "https://github.com/google/uuid",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/github.com/google/uuid@v1.6.0/LICENSE",
+          "sourceSHA256": "0a8d61ed3cbfd5312326e8126c31ce9c627a283adc99131b56896d29ada04b2d",
+          "lineRange": null,
+          "copiedFile": "licenses/go-github.com_google_uuid/01-LICENSE",
+          "copiedSHA256": "0a8d61ed3cbfd5312326e8126c31ce9c627a283adc99131b56896d29ada04b2d",
+          "bytes": 1480
+        }
+      ],
+      "notes": [
+        "Module-level notice coverage; Go linker may remove unused functions."
+      ]
+    },
+    {
+      "id": "go-github.com_leaanthony_go-ansi-parser",
+      "name": "github.com/leaanthony/go-ansi-parser",
+      "version": "v1.6.1",
+      "licenseDeclaredOrObserved": "MIT",
+      "inclusionBasis": {
+        "kind": "production-go-module",
+        "binaryBuildInfo": true,
+        "packages": [
+          "github.com/leaanthony/go-ansi-parser"
+        ]
+      },
+      "sourceURL": "https://github.com/leaanthony/go-ansi-parser",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/github.com/leaanthony/go-ansi-parser@v1.6.1/LICENSE",
+          "sourceSHA256": "d0817a3112cb46c57b987f58db0d8c71ca99f26d448a351073e3d69b6702e541",
+          "lineRange": null,
+          "copiedFile": "licenses/go-github.com_leaanthony_go-ansi-parser/01-LICENSE",
+          "copiedSHA256": "d0817a3112cb46c57b987f58db0d8c71ca99f26d448a351073e3d69b6702e541",
+          "bytes": 1076
+        }
+      ],
+      "notes": [
+        "Module-level notice coverage; Go linker may remove unused functions."
+      ]
+    },
+    {
+      "id": "go-github.com_leaanthony_slicer",
+      "name": "github.com/leaanthony/slicer",
+      "version": "v1.6.0",
+      "licenseDeclaredOrObserved": "MIT",
+      "inclusionBasis": {
+        "kind": "production-go-module",
+        "binaryBuildInfo": true,
+        "packages": [
+          "github.com/leaanthony/slicer"
+        ]
+      },
+      "sourceURL": "https://github.com/leaanthony/slicer",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/github.com/leaanthony/slicer@v1.6.0/LICENSE",
+          "sourceSHA256": "6ec71bfac83b3a260158e53408a81392f84982fe19c43b4c2b6e2b6f0b44457b",
+          "lineRange": null,
+          "copiedFile": "licenses/go-github.com_leaanthony_slicer/01-LICENSE",
+          "copiedSHA256": "6ec71bfac83b3a260158e53408a81392f84982fe19c43b4c2b6e2b6f0b44457b",
+          "bytes": 1068
+        }
+      ],
+      "notes": [
+        "Module-level notice coverage; Go linker may remove unused functions."
+      ]
+    },
+    {
+      "id": "go-github.com_leaanthony_u",
+      "name": "github.com/leaanthony/u",
+      "version": "v1.1.1",
+      "licenseDeclaredOrObserved": "MIT",
+      "inclusionBasis": {
+        "kind": "production-go-module",
+        "binaryBuildInfo": true,
+        "packages": [
+          "github.com/leaanthony/u"
+        ]
+      },
+      "sourceURL": "https://github.com/leaanthony/u",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/github.com/leaanthony/u@v1.1.1/LICENSE",
+          "sourceSHA256": "ff3448b5ffd013b261466bb5d7898094a845756f8a69773331ebbf66518f4109",
+          "lineRange": null,
+          "copiedFile": "licenses/go-github.com_leaanthony_u/01-LICENSE",
+          "copiedSHA256": "ff3448b5ffd013b261466bb5d7898094a845756f8a69773331ebbf66518f4109",
+          "bytes": 1076
+        }
+      ],
+      "notes": [
+        "Module-level notice coverage; Go linker may remove unused functions."
+      ]
+    },
+    {
+      "id": "go-github.com_pkg_browser",
+      "name": "github.com/pkg/browser",
+      "version": "v0.0.0-20240102092130-5ac0b6a4141c",
+      "licenseDeclaredOrObserved": "BSD-2-Clause",
+      "inclusionBasis": {
+        "kind": "production-go-module",
+        "binaryBuildInfo": true,
+        "packages": [
+          "github.com/pkg/browser"
+        ]
+      },
+      "sourceURL": "https://github.com/pkg/browser",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/github.com/pkg/browser@v0.0.0-20240102092130-5ac0b6a4141c/LICENSE",
+          "sourceSHA256": "4801bb0c5d70b980b3e1f63d1d2df8d84fec22548e3d73f03a68df1fb808791f",
+          "lineRange": null,
+          "copiedFile": "licenses/go-github.com_pkg_browser/01-LICENSE",
+          "copiedSHA256": "4801bb0c5d70b980b3e1f63d1d2df8d84fec22548e3d73f03a68df1fb808791f",
+          "bytes": 1312
+        }
+      ],
+      "notes": [
+        "Module-level notice coverage; Go linker may remove unused functions."
+      ]
+    },
+    {
+      "id": "go-github.com_pkg_errors",
+      "name": "github.com/pkg/errors",
+      "version": "v0.9.1",
+      "licenseDeclaredOrObserved": "BSD-2-Clause",
+      "inclusionBasis": {
+        "kind": "production-go-module",
+        "binaryBuildInfo": true,
+        "packages": [
+          "github.com/pkg/errors"
+        ]
+      },
+      "sourceURL": "https://github.com/pkg/errors",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/github.com/pkg/errors@v0.9.1/LICENSE",
+          "sourceSHA256": "8d427fd87bc9579ea368fde3d49f9ca22eac857f91a9dec7e3004bdfab7dee86",
+          "lineRange": null,
+          "copiedFile": "licenses/go-github.com_pkg_errors/01-LICENSE",
+          "copiedSHA256": "8d427fd87bc9579ea368fde3d49f9ca22eac857f91a9dec7e3004bdfab7dee86",
+          "bytes": 1312
+        }
+      ],
+      "notes": [
+        "Module-level notice coverage; Go linker may remove unused functions."
+      ]
+    },
+    {
+      "id": "go-github.com_rivo_uniseg",
+      "name": "github.com/rivo/uniseg",
+      "version": "v0.4.7",
+      "licenseDeclaredOrObserved": "MIT",
+      "inclusionBasis": {
+        "kind": "production-go-module",
+        "binaryBuildInfo": true,
+        "packages": [
+          "github.com/rivo/uniseg"
+        ]
+      },
+      "sourceURL": "https://github.com/rivo/uniseg",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/github.com/rivo/uniseg@v0.4.7/LICENSE.txt",
+          "sourceSHA256": "a59885f5f0f3b3c07cf9444db5fe399b6f0791eac82055f7b85cc65500551039",
+          "lineRange": null,
+          "copiedFile": "licenses/go-github.com_rivo_uniseg/01-LICENSE.txt",
+          "copiedSHA256": "a59885f5f0f3b3c07cf9444db5fe399b6f0791eac82055f7b85cc65500551039",
+          "bytes": 1072
+        }
+      ],
+      "notes": [
+        "Module-level notice coverage; Go linker may remove unused functions."
+      ]
+    },
+    {
+      "id": "go-github.com_samber_lo",
+      "name": "github.com/samber/lo",
+      "version": "v1.49.1",
+      "licenseDeclaredOrObserved": "MIT",
+      "inclusionBasis": {
+        "kind": "production-go-module",
+        "binaryBuildInfo": true,
+        "packages": [
+          "github.com/samber/lo/internal/constraints",
+          "github.com/samber/lo/internal/rand",
+          "github.com/samber/lo/mutable",
+          "github.com/samber/lo"
+        ]
+      },
+      "sourceURL": "https://github.com/samber/lo",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/github.com/samber/lo@v1.49.1/LICENSE",
+          "sourceSHA256": "adb3ac2e3e382989de6befdd489f4714785af8aca47c01193a9892e8b26b3860",
+          "lineRange": null,
+          "copiedFile": "licenses/go-github.com_samber_lo/01-LICENSE",
+          "copiedSHA256": "adb3ac2e3e382989de6befdd489f4714785af8aca47c01193a9892e8b26b3860",
+          "bytes": 1075
+        }
+      ],
+      "notes": [
+        "Module-level notice coverage; Go linker may remove unused functions."
+      ]
+    },
+    {
+      "id": "go-github.com_tkrajina_go-reflector",
+      "name": "github.com/tkrajina/go-reflector",
+      "version": "v0.5.8",
+      "licenseDeclaredOrObserved": "Apache-2.0",
+      "inclusionBasis": {
+        "kind": "production-go-module",
+        "binaryBuildInfo": true,
+        "packages": [
+          "github.com/tkrajina/go-reflector/reflector"
+        ]
+      },
+      "sourceURL": "https://github.com/tkrajina/go-reflector",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/github.com/tkrajina/go-reflector@v0.5.8/LICENSE.txt",
+          "sourceSHA256": "3f1fc64a3fded0d8c44382af796cc434fb4026a5d3d56da296dd272277dc336f",
+          "lineRange": null,
+          "copiedFile": "licenses/go-github.com_tkrajina_go-reflector/01-LICENSE.txt",
+          "copiedSHA256": "3f1fc64a3fded0d8c44382af796cc434fb4026a5d3d56da296dd272277dc336f",
+          "bytes": 11348
+        }
+      ],
+      "notes": [
+        "Module-level notice coverage; Go linker may remove unused functions."
+      ]
+    },
+    {
+      "id": "go-github.com_wailsapp_go-webview2",
+      "name": "github.com/wailsapp/go-webview2",
+      "version": "v1.0.22",
+      "licenseDeclaredOrObserved": "MIT",
+      "inclusionBasis": {
+        "kind": "production-go-module",
+        "binaryBuildInfo": true,
+        "packages": [
+          "github.com/wailsapp/go-webview2/internal/w32",
+          "github.com/wailsapp/go-webview2/pkg/combridge",
+          "github.com/wailsapp/go-webview2/webviewloader",
+          "github.com/wailsapp/go-webview2/pkg/edge"
+        ]
+      },
+      "sourceURL": "https://github.com/wailsapp/go-webview2",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/github.com/wailsapp/go-webview2@v1.0.22/LICENSE",
+          "sourceSHA256": "3f10f3374cf30076196eb239667ce6063c64e4275afd2b397f6343f69676bb79",
+          "lineRange": null,
+          "copiedFile": "licenses/go-github.com_wailsapp_go-webview2/01-LICENSE",
+          "copiedSHA256": "3f10f3374cf30076196eb239667ce6063c64e4275afd2b397f6343f69676bb79",
+          "bytes": 1117
+        }
+      ],
+      "notes": [
+        "Module-level notice coverage; Go linker may remove unused functions."
+      ]
+    },
+    {
+      "id": "go-github.com_wailsapp_mimetype",
+      "name": "github.com/wailsapp/mimetype",
+      "version": "v1.4.1",
+      "licenseDeclaredOrObserved": "MIT",
+      "inclusionBasis": {
+        "kind": "production-go-module",
+        "binaryBuildInfo": true,
+        "packages": [
+          "github.com/wailsapp/mimetype/internal/charset",
+          "github.com/wailsapp/mimetype/internal/json",
+          "github.com/wailsapp/mimetype/internal/magic",
+          "github.com/wailsapp/mimetype"
+        ]
+      },
+      "sourceURL": "https://github.com/wailsapp/mimetype",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/github.com/wailsapp/mimetype@v1.4.1/LICENSE",
+          "sourceSHA256": "4335e2ceb33d8d7e75125192466ae8604617b0a67492b919604fe52dc56018d9",
+          "lineRange": null,
+          "copiedFile": "licenses/go-github.com_wailsapp_mimetype/01-LICENSE",
+          "copiedSHA256": "4335e2ceb33d8d7e75125192466ae8604617b0a67492b919604fe52dc56018d9",
+          "bytes": 1076
+        }
+      ],
+      "notes": [
+        "Module-level notice coverage; Go linker may remove unused functions."
+      ]
+    },
+    {
+      "id": "go-github.com_wailsapp_wails_v2",
+      "name": "github.com/wailsapp/wails/v2",
+      "version": "v2.14.0",
+      "licenseDeclaredOrObserved": "MIT",
+      "inclusionBasis": {
+        "kind": "production-go-module",
+        "binaryBuildInfo": true,
+        "packages": [
+          "github.com/wailsapp/wails/v2/internal/goversion",
+          "github.com/wailsapp/wails/v2/internal/fs",
+          "github.com/wailsapp/wails/v2/pkg/logger",
+          "github.com/wailsapp/wails/v2/internal/logger",
+          "github.com/wailsapp/wails/v2/internal/typescriptify",
+          "github.com/wailsapp/wails/v2/internal/binding",
+          "github.com/wailsapp/wails/v2/pkg/menu/keys",
+          "github.com/wailsapp/wails/v2/pkg/menu",
+          "github.com/wailsapp/wails/v2/pkg/options/assetserver",
+          "github.com/wailsapp/wails/v2/pkg/options/linux",
+          "github.com/wailsapp/wails/v2/pkg/options/mac",
+          "github.com/wailsapp/wails/v2/pkg/options/windows",
+          "github.com/wailsapp/wails/v2/pkg/options",
+          "github.com/wailsapp/wails/v2/internal/frontend",
+          "github.com/wailsapp/wails/v2/internal/system/operatingsystem",
+          "github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32",
+          "github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc",
+          "github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/win32",
+          "github.com/wailsapp/wails/v2/internal/frontend/originvalidator",
+          "github.com/wailsapp/wails/v2/internal/frontend/runtime",
+          "github.com/wailsapp/wails/v2/internal/frontend/utils",
+          "github.com/wailsapp/wails/v2/internal/go-common-file-dialog/cfd",
+          "github.com/wailsapp/wails/v2/internal/platform/win32",
+          "github.com/wailsapp/wails/v2/pkg/assetserver/webview",
+          "github.com/wailsapp/wails/v2/pkg/assetserver",
+          "github.com/wailsapp/wails/v2/internal/frontend/desktop/windows",
+          "github.com/wailsapp/wails/v2/internal/frontend/desktop",
+          "github.com/wailsapp/wails/v2/pkg/runtime",
+          "github.com/wailsapp/wails/v2/internal/frontend/dispatcher",
+          "github.com/wailsapp/wails/v2/internal/menumanager",
+          "github.com/wailsapp/wails/v2/internal/webview2runtime",
+          "github.com/wailsapp/wails/v2/internal/wv2installer",
+          "github.com/wailsapp/wails/v2/internal/app",
+          "github.com/wailsapp/wails/v2/internal/signal",
+          "github.com/wailsapp/wails/v2/pkg/application",
+          "github.com/wailsapp/wails/v2"
+        ]
+      },
+      "sourceURL": "https://github.com/wailsapp/wails/v2",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/github.com/wailsapp/wails/v2@v2.14.0/LICENSE",
+          "sourceSHA256": "cede95c28e6e9d67d1c1e49e8ba3c20250c7d4080c3faca1579b6732327ae40d",
+          "lineRange": null,
+          "copiedFile": "licenses/go-github.com_wailsapp_wails_v2/01-LICENSE",
+          "copiedSHA256": "cede95c28e6e9d67d1c1e49e8ba3c20250c7d4080c3faca1579b6732327ae40d",
+          "bytes": 1076
+        }
+      ],
+      "notes": [
+        "Module-level notice coverage; Go linker may remove unused functions."
+      ]
+    },
+    {
+      "id": "go-golang.org_x_net",
+      "name": "golang.org/x/net",
+      "version": "v0.60.0",
+      "licenseDeclaredOrObserved": "BSD-3-Clause",
+      "inclusionBasis": {
+        "kind": "production-go-module",
+        "binaryBuildInfo": true,
+        "packages": [
+          "golang.org/x/net/html/atom",
+          "golang.org/x/net/html"
+        ]
+      },
+      "sourceURL": "https://golang.org/x/net",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/golang.org/x/net@v0.60.0/LICENSE",
+          "sourceSHA256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+          "lineRange": null,
+          "copiedFile": "licenses/go-golang.org_x_net/01-LICENSE",
+          "copiedSHA256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+          "bytes": 1453
+        },
+        {
+          "sourceFile": "GOMODCACHE/golang.org/x/net@v0.60.0/PATENTS",
+          "sourceSHA256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
+          "lineRange": null,
+          "copiedFile": "licenses/go-golang.org_x_net/02-PATENTS",
+          "copiedSHA256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
+          "bytes": 1303
+        }
+      ],
+      "notes": [
+        "Module-level notice coverage; Go linker may remove unused functions."
+      ]
+    },
+    {
+      "id": "go-golang.org_x_sys",
+      "name": "golang.org/x/sys",
+      "version": "v0.48.0",
+      "licenseDeclaredOrObserved": "BSD-3-Clause",
+      "inclusionBasis": {
+        "kind": "production-go-module",
+        "binaryBuildInfo": true,
+        "packages": [
+          "golang.org/x/sys/windows",
+          "golang.org/x/sys/windows/registry"
+        ]
+      },
+      "sourceURL": "https://golang.org/x/sys",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/golang.org/x/sys@v0.48.0/LICENSE",
+          "sourceSHA256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+          "lineRange": null,
+          "copiedFile": "licenses/go-golang.org_x_sys/01-LICENSE",
+          "copiedSHA256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+          "bytes": 1453
+        },
+        {
+          "sourceFile": "GOMODCACHE/golang.org/x/sys@v0.48.0/PATENTS",
+          "sourceSHA256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
+          "lineRange": null,
+          "copiedFile": "licenses/go-golang.org_x_sys/02-PATENTS",
+          "copiedSHA256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
+          "bytes": 1303
+        }
+      ],
+      "notes": [
+        "Module-level notice coverage; Go linker may remove unused functions."
+      ]
+    },
+    {
+      "id": "go-golang.org_x_text",
+      "name": "golang.org/x/text",
+      "version": "v0.42.0",
+      "licenseDeclaredOrObserved": "BSD-3-Clause",
+      "inclusionBasis": {
+        "kind": "production-go-module",
+        "binaryBuildInfo": true,
+        "packages": [
+          "golang.org/x/text/internal/tag",
+          "golang.org/x/text/internal/language",
+          "golang.org/x/text/internal/language/compact",
+          "golang.org/x/text/language",
+          "golang.org/x/text/internal",
+          "golang.org/x/text/transform",
+          "golang.org/x/text/unicode/norm",
+          "golang.org/x/text/cases"
+        ]
+      },
+      "sourceURL": "https://golang.org/x/text",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/golang.org/x/text@v0.42.0/LICENSE",
+          "sourceSHA256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+          "lineRange": null,
+          "copiedFile": "licenses/go-golang.org_x_text/01-LICENSE",
+          "copiedSHA256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+          "bytes": 1453
+        },
+        {
+          "sourceFile": "GOMODCACHE/golang.org/x/text@v0.42.0/PATENTS",
+          "sourceSHA256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
+          "lineRange": null,
+          "copiedFile": "licenses/go-golang.org_x_text/02-PATENTS",
+          "copiedSHA256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
+          "bytes": 1303
+        }
+      ],
+      "notes": [
+        "Module-level notice coverage; Go linker may remove unused functions."
+      ]
+    },
+    {
+      "id": "wails-winc",
+      "name": "Wails vendored winc",
+      "version": "v2.14.0",
+      "licenseDeclaredOrObserved": "MIT",
+      "inclusionBasis": {
+        "kind": "vendored-go-subcomponent",
+        "reason": "Windows window/control integration"
+      },
+      "sourceURL": null,
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/github.com/wailsapp/wails/v2@v2.14.0/internal/frontend/desktop/windows/winc/LICENSE",
+          "sourceSHA256": "bccedbce38390429aa2fbb6cdff1e5622be8cd14c2b5b6b1f522db1813cdbb46",
+          "lineRange": null,
+          "copiedFile": "licenses/wails-winc/01-LICENSE",
+          "copiedSHA256": "bccedbce38390429aa2fbb6cdff1e5622be8cd14c2b5b6b1f522db1813cdbb46",
+          "bytes": 1069
+        }
+      ],
+      "notes": []
+    },
+    {
+      "id": "wails-file-dialog",
+      "name": "Wails vendored go-common-file-dialog",
+      "version": "v2.14.0",
+      "licenseDeclaredOrObserved": "MIT",
+      "inclusionBasis": {
+        "kind": "vendored-go-subcomponent",
+        "reason": "Default Windows native file dialog"
+      },
+      "sourceURL": null,
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/github.com/wailsapp/wails/v2@v2.14.0/internal/go-common-file-dialog/LICENSE",
+          "sourceSHA256": "2c09e92358414ef4da9739026acadfbd0663118e590238b306d70ccf60db3159",
+          "lineRange": null,
+          "copiedFile": "licenses/wails-file-dialog/01-LICENSE",
+          "copiedSHA256": "2c09e92358414ef4da9739026acadfbd0663118e590238b306d70ccf60db3159",
+          "bytes": 1071
+        }
+      ],
+      "notes": []
+    },
+    {
+      "id": "wails-typescriptify",
+      "name": "Wails vendored typescriptify",
+      "version": "v2.14.0",
+      "licenseDeclaredOrObserved": "Apache-2.0",
+      "inclusionBasis": {
+        "kind": "vendored-go-subcomponent",
+        "reason": "Present in production Go package graph"
+      },
+      "sourceURL": null,
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/github.com/wailsapp/wails/v2@v2.14.0/internal/typescriptify/LICENSE.txt",
+          "sourceSHA256": "e4794d2db458f14f6bcbd2958b58729c91f274a27c08068e65d9e521d2bd941d",
+          "lineRange": null,
+          "copiedFile": "licenses/wails-typescriptify/01-LICENSE.txt",
+          "copiedSHA256": "e4794d2db458f14f6bcbd2958b58729c91f274a27c08068e65d9e521d2bd941d",
+          "bytes": 11348
+        }
+      ],
+      "notes": []
+    },
+    {
+      "id": "go-webview2-loader",
+      "name": "Go WebView2 loader / OpenWebView2Loader port",
+      "version": "v1.0.22",
+      "licenseDeclaredOrObserved": "ISC",
+      "inclusionBasis": {
+        "kind": "vendored-go-subcomponent",
+        "reason": "Default !native_webview2loader Go implementation"
+      },
+      "sourceURL": null,
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/github.com/wailsapp/go-webview2@v1.0.22/webviewloader/LICENSE",
+          "sourceSHA256": "e2c9290019954c3c3664428b73b34186b2bb8faad9b2c50605d7cdd9df5c7177",
+          "lineRange": null,
+          "copiedFile": "licenses/go-webview2-loader/01-LICENSE",
+          "copiedSHA256": "e2c9290019954c3c3664428b73b34186b2bb8faad9b2c50605d7cdd9df5c7177",
+          "bytes": 794
+        }
+      ],
+      "notes": []
+    },
+    {
+      "id": "wails-ringqueue",
+      "name": "ringqueue by Erik Dubbelboer, vendored in Wails",
+      "version": "vendored in pinned module",
+      "licenseDeclaredOrObserved": "MIT",
+      "inclusionBasis": {
+        "kind": "source-header-notice"
+      },
+      "sourceURL": "https://github.com/erikdubbelboer/ringqueue",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/github.com/wailsapp/wails/v2@v2.14.0/pkg/assetserver/ringqueue.go",
+          "sourceSHA256": "b4df9f8dffd23300b1ed757623639573738f96f081c0387a09169ea498055af8",
+          "lineRange": [
+            3,
+            23
+          ],
+          "copiedFile": "licenses/wails-ringqueue/01-ringqueue.go-lines-3-23.txt",
+          "copiedSHA256": "09307ac162bba795c94d84c4d487b6a13710fc5c45bbd7fd1fb61d04865f3088",
+          "bytes": 1082
+        }
+      ],
+      "notes": []
+    },
+    {
+      "id": "go-webview2-guid",
+      "name": "go-ole adapted GUID code in go-webview2",
+      "version": "vendored in pinned module",
+      "licenseDeclaredOrObserved": "MIT",
+      "inclusionBasis": {
+        "kind": "source-header-notice"
+      },
+      "sourceURL": "https://github.com/go-ole/go-ole",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/github.com/wailsapp/go-webview2@v1.0.22/pkg/edge/guid.go",
+          "sourceSHA256": "06f1900355283957ad34ffb7c72dd3278faaebf9ee88cfe036279a2696ed4a1f",
+          "lineRange": [
+            8,
+            30
+          ],
+          "copiedFile": "licenses/go-webview2-guid/01-guid.go-lines-8-30.txt",
+          "copiedSHA256": "9921e690a55786d405468e30b88a55bc11c382908995bdd2f9d308d75e281b6b",
+          "bytes": 1121
+        }
+      ],
+      "notes": []
+    },
+    {
+      "id": "wails-js-runtime",
+      "name": "Wails embedded JavaScript desktop runtime",
+      "version": "Wails v2.14.0 / package 2.0.0",
+      "licenseDeclaredOrObserved": "MIT at module root; ISC in runtime package metadata",
+      "inclusionBasis": {
+        "kind": "go-embedded-javascript",
+        "assets": [
+          "internal/frontend/runtime/ipc.js",
+          "internal/frontend/runtime/runtime_prod_desktop.js"
+        ]
+      },
+      "sourceURL": "https://github.com/wailsapp/wails",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/github.com/wailsapp/wails/v2@v2.14.0/LICENSE",
+          "sourceSHA256": "cede95c28e6e9d67d1c1e49e8ba3c20250c7d4080c3faca1579b6732327ae40d",
+          "lineRange": null,
+          "copiedFile": "licenses/wails-js-runtime/01-LICENSE",
+          "copiedSHA256": "cede95c28e6e9d67d1c1e49e8ba3c20250c7d4080c3faca1579b6732327ae40d",
+          "bytes": 1076
+        },
+        {
+          "sourceFile": "GOMODCACHE/github.com/wailsapp/wails/v2@v2.14.0/internal/frontend/runtime/desktop/main.js",
+          "sourceSHA256": "2f3f53b9c4d6189fc1c1c44cd51d803c0553a1d17bf68477b162deeb2c286ba5",
+          "lineRange": [
+            1,
+            10
+          ],
+          "copiedFile": "licenses/wails-js-runtime/02-main.js-lines-1-10.txt",
+          "copiedSHA256": "4669d52fdfc473aa299aca32d6cd0b4e957f72ede41bbdd7de6008ad8766a66a",
+          "bytes": 207
+        }
+      ],
+      "notes": [
+        "runtime/package.json declares ISC; no dedicated full ISC license file is included in that runtime directory. Root MIT text and source copyright are preserved; metadata discrepancy remains for publisher review."
+      ]
+    },
+    {
+      "id": "npm-react",
+      "name": "react",
+      "version": "18.3.1",
+      "licenseDeclaredOrObserved": "MIT",
+      "inclusionBasis": {
+        "kind": "rendered-production-frontend-module",
+        "modules": [
+          "REPO/desktop/frontend/node_modules/react/cjs/react.production.min.js",
+          "REPO/desktop/frontend/node_modules/react/index.js",
+          "REPO/desktop/frontend/node_modules/react/cjs/react-jsx-runtime.production.min.js",
+          "REPO/desktop/frontend/node_modules/react/jsx-runtime.js"
+        ]
+      },
+      "sourceURL": "https://registry.npmjs.org/react/-/react-18.3.1.tgz",
+      "noticeSources": [
+        {
+          "sourceFile": "REPO/desktop/frontend/node_modules/react/LICENSE",
+          "sourceSHA256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85",
+          "lineRange": null,
+          "copiedFile": "licenses/npm-react/01-LICENSE",
+          "copiedSHA256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85",
+          "bytes": 1086
+        }
+      ],
+      "notes": []
+    },
+    {
+      "id": "npm-react-dom",
+      "name": "react-dom",
+      "version": "18.3.1",
+      "licenseDeclaredOrObserved": "MIT",
+      "inclusionBasis": {
+        "kind": "rendered-production-frontend-module",
+        "modules": [
+          "REPO/desktop/frontend/node_modules/react-dom/cjs/react-dom.production.min.js",
+          "REPO/desktop/frontend/node_modules/react-dom/index.js",
+          "REPO/desktop/frontend/node_modules/react-dom/client.js"
+        ]
+      },
+      "sourceURL": "https://registry.npmjs.org/react-dom/-/react-dom-18.3.1.tgz",
+      "noticeSources": [
+        {
+          "sourceFile": "REPO/desktop/frontend/node_modules/react-dom/LICENSE",
+          "sourceSHA256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85",
+          "lineRange": null,
+          "copiedFile": "licenses/npm-react-dom/01-LICENSE",
+          "copiedSHA256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85",
+          "bytes": 1086
+        }
+      ],
+      "notes": []
+    },
+    {
+      "id": "npm-scheduler",
+      "name": "scheduler",
+      "version": "0.23.2",
+      "licenseDeclaredOrObserved": "MIT",
+      "inclusionBasis": {
+        "kind": "rendered-production-frontend-module",
+        "modules": [
+          "REPO/desktop/frontend/node_modules/scheduler/cjs/scheduler.production.min.js",
+          "REPO/desktop/frontend/node_modules/scheduler/index.js"
+        ]
+      },
+      "sourceURL": "https://registry.npmjs.org/scheduler/-/scheduler-0.23.2.tgz",
+      "noticeSources": [
+        {
+          "sourceFile": "REPO/desktop/frontend/node_modules/scheduler/LICENSE",
+          "sourceSHA256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85",
+          "lineRange": null,
+          "copiedFile": "licenses/npm-scheduler/01-LICENSE",
+          "copiedSHA256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85",
+          "bytes": 1086
+        }
+      ],
+      "notes": []
+    },
+    {
+      "id": "vite-modulepreload",
+      "name": "Vite injected modulepreload polyfill",
+      "version": "7.3.6",
+      "licenseDeclaredOrObserved": "MIT",
+      "inclusionBasis": {
+        "kind": "injected-production-javascript",
+        "module": "vite/modulepreload-polyfill.js"
+      },
+      "sourceURL": "https://github.com/vitejs/vite",
+      "noticeSources": [
+        {
+          "sourceFile": "REPO/desktop/frontend/node_modules/vite/LICENSE.md",
+          "sourceSHA256": "a77a1c089806b39ad339535bdf3677f636c91d96693e8ad7b11fe733f650ea64",
+          "lineRange": [
+            1,
+            25
+          ],
+          "copiedFile": "licenses/vite-modulepreload/01-LICENSE.md-lines-1-25.txt",
+          "copiedSHA256": "444c5ec3bf7f798af5c5179d734673cbcb115b22b1ef48e6d85bc941ac8777a2",
+          "bytes": 1163
+        }
+      ],
+      "notes": [
+        "Only the injected helper is attributed. The Vite CLI, server, compiler and unrelated bundled build dependencies are not shipped."
+      ]
+    },
+    {
+      "id": "go-runtime",
+      "name": "Go runtime and standard library",
+      "version": "go1.27.2",
+      "licenseDeclaredOrObserved": "BSD-3-Clause",
+      "inclusionBasis": {
+        "kind": "linked-toolchain-runtime",
+        "standardPackages": [
+          "internal/goarch",
+          "unsafe",
+          "internal/abi",
+          "internal/unsafeheader",
+          "internal/cpu",
+          "internal/bytealg",
+          "internal/byteorder",
+          "internal/chacha8rand",
+          "internal/coverage/rtcov",
+          "internal/godebugs",
+          "internal/goexperiment",
+          "internal/goos",
+          "internal/profilerecord",
+          "internal/runtime/atomic",
+          "internal/runtime/exithook",
+          "internal/runtime/gc",
+          "internal/runtime/sys",
+          "internal/runtime/gc/scan",
+          "internal/asan",
+          "internal/msan",
+          "internal/race",
+          "internal/runtime/math",
+          "math/bits",
+          "internal/runtime/maps",
+          "internal/runtime/pprof/label",
+          "internal/runtime/syscall/windows",
+          "internal/strconv",
+          "internal/stringslite",
+          "internal/trace/tracev2",
+          "runtime",
+          "internal/reflectlite",
+          "errors",
+          "sync/atomic",
+          "internal/sync",
+          "internal/synctest",
+          "sync",
+          "internal/syscall/windows/sysdll",
+          "internal/oserror",
+          "cmp",
+          "iter",
+          "slices",
+          "unicode/utf16",
+          "unicode/utf8",
+          "syscall",
+          "internal/syscall/windows/registry",
+          "time",
+          "context",
+          "io",
+          "path",
+          "io/fs",
+          "embed",
+          "math",
+          "strconv",
+          "unicode",
+          "reflect",
+          "internal/fmtsort",
+          "structs",
+          "internal/syscall/windows",
+          "internal/filepathlite",
+          "internal/bisect",
+          "internal/godebug",
+          "internal/poll",
+          "internal/syscall/execenv",
+          "internal/testlog",
+          "os",
+          "fmt",
+          "strings",
+          "encoding/hex",
+          "bytes",
+          "encoding",
+          "encoding/json/internal",
+          "encoding/json/internal/jsonflags",
+          "encoding/json/internal/jsonopts",
+          "encoding/json/internal/jsonwire",
+          "encoding/json/jsontext",
+          "encoding/base32",
+          "encoding/base64",
+          "encoding/binary",
+          "encoding/json/v2",
+          "encoding/json",
+          "hash",
+          "crypto",
+          "crypto/internal/fips140deps/godebug",
+          "crypto/internal/fips140",
+          "crypto/internal/fips140/alias",
+          "crypto/internal/fips140deps/byteorder",
+          "crypto/internal/fips140deps/cpu",
+          "crypto/internal/impl",
+          "crypto/internal/fips140/sha256",
+          "crypto/internal/constanttime",
+          "crypto/internal/fips140/subtle",
+          "crypto/internal/fips140/sha3",
+          "crypto/internal/fips140/sha512",
+          "crypto/internal/fips140/hmac",
+          "crypto/internal/fips140/check",
+          "crypto/internal/fips140/aes",
+          "crypto/internal/fips140deps/time",
+          "crypto/internal/entropy/v1.0.0",
+          "crypto/internal/sysrand",
+          "crypto/internal/fips140/drbg",
+          "crypto/internal/fips140/aes/gcm",
+          "crypto/fips140",
+          "crypto/internal/fips140only",
+          "crypto/subtle",
+          "crypto/cipher",
+          "crypto/internal/boring/sig",
+          "crypto/internal/boring",
+          "crypto/sha256",
+          "math/rand",
+          "math/big",
+          "path/filepath",
+          "bufio",
+          "sort",
+          "crypto/md5",
+          "log/internal",
+          "log",
+          "regexp/syntax",
+          "regexp",
+          "compress/flate",
+          "hash/crc32",
+          "compress/gzip",
+          "container/list",
+          "crypto/aes",
+          "crypto/des",
+          "crypto/internal/fips140/nistec/fiat",
+          "crypto/internal/fips140/nistec",
+          "crypto/internal/fips140/ecdh",
+          "crypto/internal/fips140/edwards25519/field",
+          "math/rand/v2",
+          "crypto/internal/randutil",
+          "crypto/internal/rand",
+          "crypto/ecdh",
+          "crypto/elliptic",
+          "crypto/internal/boring/bbig",
+          "crypto/internal/fips140/bigmod",
+          "crypto/internal/fips140/ecdsa",
+          "weak",
+          "crypto/internal/fips140cache",
+          "crypto/sha3",
+          "crypto/internal/fips140hash",
+          "crypto/sha512",
+          "internal/saferio",
+          "encoding/asn1",
+          "crypto/ecdsa",
+          "crypto/internal/fips140/edwards25519",
+          "crypto/internal/fips140/ed25519",
+          "crypto/rand",
+          "crypto/ed25519",
+          "crypto/internal/fips140/hkdf",
+          "crypto/hkdf",
+          "crypto/hmac",
+          "crypto/internal/fips140/mlkem",
+          "crypto/mlkem",
+          "crypto/hpke",
+          "crypto/internal/fips140/tls12",
+          "crypto/internal/fips140/tls13",
+          "crypto/internal/fips140/mldsa",
+          "crypto/mldsa",
+          "crypto/rc4",
+          "crypto/internal/fips140/rsa",
+          "crypto/rsa",
+          "crypto/sha1",
+          "crypto/tls/internal/fips140tls",
+          "crypto/dsa",
+          "crypto/x509/pkix",
+          "encoding/pem",
+          "maps",
+          "internal/nettrace",
+          "internal/singleflight",
+          "unique",
+          "net/netip",
+          "net",
+          "net/url",
+          "crypto/x509",
+          "crypto/tls",
+          "net/textproto",
+          "mime",
+          "mime/quotedprintable",
+          "mime/multipart",
+          "net/http/httptrace",
+          "net/http/internal",
+          "net/http/internal/ascii",
+          "net/http/internal/httpcommon",
+          "net/http/internal/httpsfv",
+          "net/http/internal/http2",
+          "net/http",
+          "html",
+          "text/template/parse",
+          "text/template",
+          "os/exec",
+          "database/sql/internal",
+          "uuid",
+          "database/sql/driver",
+          "io/ioutil",
+          "image/color",
+          "image",
+          "hash/adler32",
+          "compress/zlib",
+          "image/png",
+          "encoding/xml",
+          "debug/dwarf",
+          "debug/macho",
+          "encoding/csv",
+          "html/template",
+          "net/http/httputil",
+          "os/signal"
+        ]
+      },
+      "sourceURL": "https://go.dev/",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/golang.org/toolchain@v0.0.1-go1.27.2.windows-amd64/LICENSE",
+          "sourceSHA256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+          "lineRange": null,
+          "copiedFile": "licenses/go-runtime/01-LICENSE",
+          "copiedSHA256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+          "bytes": 1453
+        }
+      ],
+      "notes": [
+        "Source-header third-party notices are preserved separately below."
+      ]
+    },
+    {
+      "id": "go-stdlib-vendor-crypto",
+      "name": "Go standard-library vendored golang.org/x/crypto",
+      "version": "v0.52.1-0.20260526024921-9beb694f9766",
+      "licenseDeclaredOrObserved": "BSD-3-Clause",
+      "inclusionBasis": {
+        "kind": "toolchain-vendored-package",
+        "packages": [
+          "vendor/golang.org/x/crypto/cryptobyte/asn1",
+          "vendor/golang.org/x/crypto/cryptobyte",
+          "vendor/golang.org/x/crypto/internal/alias",
+          "vendor/golang.org/x/crypto/chacha20",
+          "vendor/golang.org/x/crypto/internal/poly1305",
+          "vendor/golang.org/x/crypto/chacha20poly1305"
+        ]
+      },
+      "sourceURL": "https://golang.org/x/crypto",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/golang.org/toolchain@v0.0.1-go1.27.2.windows-amd64/src/vendor/golang.org/x/crypto/LICENSE",
+          "sourceSHA256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+          "lineRange": null,
+          "copiedFile": "licenses/go-stdlib-vendor-crypto/01-LICENSE",
+          "copiedSHA256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+          "bytes": 1453
+        },
+        {
+          "sourceFile": "GOMODCACHE/golang.org/toolchain@v0.0.1-go1.27.2.windows-amd64/src/vendor/golang.org/x/crypto/PATENTS",
+          "sourceSHA256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
+          "lineRange": null,
+          "copiedFile": "licenses/go-stdlib-vendor-crypto/02-PATENTS",
+          "copiedSHA256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
+          "bytes": 1303
+        }
+      ],
+      "notes": []
+    },
+    {
+      "id": "go-stdlib-vendor-net",
+      "name": "Go standard-library vendored golang.org/x/net",
+      "version": "v0.55.1-0.20260731170536-c1d18010be90",
+      "licenseDeclaredOrObserved": "BSD-3-Clause",
+      "inclusionBasis": {
+        "kind": "toolchain-vendored-package",
+        "packages": [
+          "vendor/golang.org/x/net/dns/dnsmessage",
+          "vendor/golang.org/x/net/idna",
+          "vendor/golang.org/x/net/http/httpguts",
+          "vendor/golang.org/x/net/http/httpproxy",
+          "vendor/golang.org/x/net/http2/hpack"
+        ]
+      },
+      "sourceURL": "https://golang.org/x/net",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/golang.org/toolchain@v0.0.1-go1.27.2.windows-amd64/src/vendor/golang.org/x/net/LICENSE",
+          "sourceSHA256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+          "lineRange": null,
+          "copiedFile": "licenses/go-stdlib-vendor-net/01-LICENSE",
+          "copiedSHA256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+          "bytes": 1453
+        },
+        {
+          "sourceFile": "GOMODCACHE/golang.org/toolchain@v0.0.1-go1.27.2.windows-amd64/src/vendor/golang.org/x/net/PATENTS",
+          "sourceSHA256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
+          "lineRange": null,
+          "copiedFile": "licenses/go-stdlib-vendor-net/02-PATENTS",
+          "copiedSHA256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
+          "bytes": 1303
+        }
+      ],
+      "notes": []
+    },
+    {
+      "id": "go-stdlib-vendor-sys",
+      "name": "Go standard-library vendored golang.org/x/sys",
+      "version": "v0.45.0",
+      "licenseDeclaredOrObserved": "BSD-3-Clause",
+      "inclusionBasis": {
+        "kind": "toolchain-vendored-package",
+        "packages": [
+          "vendor/golang.org/x/sys/cpu"
+        ]
+      },
+      "sourceURL": "https://golang.org/x/sys",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/golang.org/toolchain@v0.0.1-go1.27.2.windows-amd64/src/vendor/golang.org/x/sys/LICENSE",
+          "sourceSHA256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+          "lineRange": null,
+          "copiedFile": "licenses/go-stdlib-vendor-sys/01-LICENSE",
+          "copiedSHA256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+          "bytes": 1453
+        },
+        {
+          "sourceFile": "GOMODCACHE/golang.org/toolchain@v0.0.1-go1.27.2.windows-amd64/src/vendor/golang.org/x/sys/PATENTS",
+          "sourceSHA256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
+          "lineRange": null,
+          "copiedFile": "licenses/go-stdlib-vendor-sys/02-PATENTS",
+          "copiedSHA256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
+          "bytes": 1303
+        }
+      ],
+      "notes": []
+    },
+    {
+      "id": "go-stdlib-vendor-text",
+      "name": "Go standard-library vendored golang.org/x/text",
+      "version": "v0.37.0",
+      "licenseDeclaredOrObserved": "BSD-3-Clause",
+      "inclusionBasis": {
+        "kind": "toolchain-vendored-package",
+        "packages": [
+          "vendor/golang.org/x/text/transform",
+          "vendor/golang.org/x/text/unicode/bidi",
+          "vendor/golang.org/x/text/secure/bidirule",
+          "vendor/golang.org/x/text/unicode/norm"
+        ]
+      },
+      "sourceURL": "https://golang.org/x/text",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/golang.org/toolchain@v0.0.1-go1.27.2.windows-amd64/src/vendor/golang.org/x/text/LICENSE",
+          "sourceSHA256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+          "lineRange": null,
+          "copiedFile": "licenses/go-stdlib-vendor-text/01-LICENSE",
+          "copiedSHA256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+          "bytes": 1453
+        },
+        {
+          "sourceFile": "GOMODCACHE/golang.org/toolchain@v0.0.1-go1.27.2.windows-amd64/src/vendor/golang.org/x/text/PATENTS",
+          "sourceSHA256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
+          "lineRange": null,
+          "copiedFile": "licenses/go-stdlib-vendor-text/02-PATENTS",
+          "copiedSHA256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
+          "bytes": 1303
+        }
+      ],
+      "notes": []
+    },
+    {
+      "id": "go-math-sun-1993",
+      "name": "Sun fdlibm notice (1993)",
+      "version": "as distributed with go1.27.2",
+      "licenseDeclaredOrObserved": "source-specific permissive notice",
+      "inclusionBasis": {
+        "kind": "standard-library-source-notice"
+      },
+      "sourceURL": null,
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/golang.org/toolchain@v0.0.1-go1.27.2.windows-amd64/src/math/acosh.go",
+          "sourceSHA256": "e1b20885bef3ccb7763ae868d23120194cf38faef70f1af45d2870ccb1a00140",
+          "lineRange": [
+            13,
+            18
+          ],
+          "copiedFile": "licenses/go-math-sun-1993/01-acosh.go-lines-13-18.txt",
+          "copiedSHA256": "dbd7c05dff1546ded4c36c34669bfe70b4ed3a6a1d3bf03b131893d7af8cb116",
+          "bytes": 261
+        }
+      ],
+      "notes": []
+    },
+    {
+      "id": "go-math-sun-2004",
+      "name": "Sun fdlibm notice (2004)",
+      "version": "as distributed with go1.27.2",
+      "licenseDeclaredOrObserved": "source-specific permissive notice",
+      "inclusionBasis": {
+        "kind": "standard-library-source-notice"
+      },
+      "sourceURL": null,
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/golang.org/toolchain@v0.0.1-go1.27.2.windows-amd64/src/math/exp.go",
+          "sourceSHA256": "75d415ac8eca1afc796cd621b393153ff82d342c24f5b391dfdd6a6e70303f2b",
+          "lineRange": [
+            29,
+            33
+          ],
+          "copiedFile": "licenses/go-math-sun-2004/01-exp.go-lines-29-33.txt",
+          "copiedSHA256": "79f96044c02970668da9736a4337ef0b49941ac1884737cd3e071d1c2f874eef",
+          "bytes": 202
+        }
+      ],
+      "notes": []
+    },
+    {
+      "id": "go-math-cephes",
+      "name": "Cephes / Stephen L. Moshier notice",
+      "version": "as distributed with go1.27.2",
+      "licenseDeclaredOrObserved": "source-specific permissive notice",
+      "inclusionBasis": {
+        "kind": "standard-library-source-notice"
+      },
+      "sourceURL": null,
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/golang.org/toolchain@v0.0.1-go1.27.2.windows-amd64/src/math/atan.go",
+          "sourceSHA256": "777b61ebf72d42b754004fe6a5e9a4ac7fb85fb95cd5e6fef396540ce6c42ee1",
+          "lineRange": [
+            36,
+            52
+          ],
+          "copiedFile": "licenses/go-math-cephes/01-atan.go-lines-36-52.txt",
+          "copiedSHA256": "dcf382b0efb2735ac2a64e0e0a3c98b99d95e059979965aee4f6bddf553a7b7f",
+          "bytes": 751
+        }
+      ],
+      "notes": []
+    },
+    {
+      "id": "go-fiat-nistec",
+      "name": "Fiat Cryptography notice in Go nistec/p256_ordinv.go",
+      "version": "as distributed with go1.27.2",
+      "licenseDeclaredOrObserved": "BSD-1-Clause-like original text",
+      "inclusionBasis": {
+        "kind": "standard-library-source-notice"
+      },
+      "sourceURL": "https://github.com/mit-plv/fiat-crypto",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/golang.org/toolchain@v0.0.1-go1.27.2.windows-amd64/src/crypto/internal/fips140/nistec/p256_ordinv.go",
+          "sourceSHA256": "175611bd57870e7aa046836a21c223696c3f14f3ceefc3ec1b5db04604b5e5d6",
+          "lineRange": [
+            86,
+            106
+          ],
+          "copiedFile": "licenses/go-fiat-nistec/01-p256_ordinv.go-lines-86-106.txt",
+          "copiedSHA256": "0c1d8122a0e7f718fb4764fb9f4cef0cb4c3df1e9f9f7b551aed4d865ad4c816",
+          "bytes": 1181
+        }
+      ],
+      "notes": []
+    },
+    {
+      "id": "go-fiat-edwards25519",
+      "name": "Fiat Cryptography notice in Go edwards25519/scalar.go",
+      "version": "as distributed with go1.27.2",
+      "licenseDeclaredOrObserved": "BSD-1-Clause-like original text",
+      "inclusionBasis": {
+        "kind": "standard-library-source-notice"
+      },
+      "sourceURL": "https://github.com/mit-plv/fiat-crypto",
+      "noticeSources": [
+        {
+          "sourceFile": "GOMODCACHE/golang.org/toolchain@v0.0.1-go1.27.2.windows-amd64/src/crypto/internal/fips140/edwards25519/scalar.go",
+          "sourceSHA256": "b9bc9ba5a2160dccee62ccbb4371c90c5d1c654d55b8ae08f33fa29c58876050",
+          "lineRange": [
+            35,
+            54
+          ],
+          "copiedFile": "licenses/go-fiat-edwards25519/01-scalar.go-lines-35-54.txt",
+          "copiedSHA256": "bf5f3bda77f3c31366fe914105ac77f5f3576c7c91bee210044e00dae51280f2",
+          "bytes": 1212
+        }
+      ],
+      "notes": []
+    },
+    {
+      "id": "unicode-data",
+      "name": "Unicode data used by uniseg generated tables",
+      "version": "Unicode 15.0.0 data; supplied Unicode license text",
+      "licenseDeclaredOrObserved": "Unicode license (see full supplied text)",
+      "inclusionBasis": {
+        "kind": "generated-data-notice",
+        "sourceHeaders": [
+          "GOMODCACHE/github.com/rivo/uniseg@v0.4.7/graphemeproperties.go",
+          "GOMODCACHE/github.com/rivo/uniseg@v0.4.7/wordproperties.go",
+          "GOMODCACHE/github.com/rivo/uniseg@v0.4.7/sentenceproperties.go",
+          "GOMODCACHE/github.com/rivo/uniseg@v0.4.7/lineproperties.go",
+          "GOMODCACHE/github.com/rivo/uniseg@v0.4.7/emojipresentation.go",
+          "GOMODCACHE/github.com/rivo/uniseg@v0.4.7/eastasianwidth.go"
+        ]
+      },
+      "sourceURL": "https://www.unicode.org/license.txt",
+      "noticeSources": [
+        {
+          "sourceFile": "AUDIT/Unicode-LICENSE.txt",
+          "sourceSHA256": "e7a93b009565cfce55919a381437ac4db883e9da2126fa28b91d12732bc53d96",
+          "lineRange": null,
+          "copiedFile": "licenses/unicode-data/01-Unicode-LICENSE.txt",
+          "copiedSHA256": "e7a93b009565cfce55919a381437ac4db883e9da2126fa28b91d12732bc53d96",
+          "bytes": 1995
+        }
+      ],
+      "notes": []
+    }
+  ],
+  "frontendAssets": [
+    {
+      "file": "frontend/dist/assets/index-D33RwMVv.js",
+      "sha256": "d47c76e684e70c8dde70c2b7872fce041d4e79d589d37ff5917b784dccd5fb9d",
+      "bytes": 371147,
+      "fullPayloadOffsetInAuditedEXE": 5430591
+    }
+  ],
+  "nativeExclusions": [
+    {
+      "name": "Microsoft WebView2 native loader x64 (not selected)",
+      "sourceFile": "GOMODCACHE/github.com/wailsapp/go-webview2@v1.0.22/webviewloader/x64/WebView2Loader.dll",
+      "bytes": 137640,
+      "sha256": "c4674acf95f0800793a4a6d61132adf5dfa694c218e482d86093494c4e84100a",
+      "fullPayloadOffsetInAuditedEXE": -1
+    },
+    {
+      "name": "Microsoft WebView2 bootstrapper (not used by error strategy)",
+      "sourceFile": "GOMODCACHE/github.com/wailsapp/wails/v2@v2.14.0/internal/webview2runtime/MicrosoftEdgeWebview2Setup.exe",
+      "bytes": 1793816,
+      "sha256": "7ebc4ce80143ef89cea86a61ea151502868db6caaa678b8b43660a66ace11c3a",
+      "fullPayloadOffsetInAuditedEXE": -1
+    }
+  ],
+  "excludedNotBundled": [
+    "Project-owned MuxRay modules (covered by project LICENSE separately)",
+    "Microsoft WebView2 Runtime (preinstalled prerequisite, not redistributed)",
+    "Microsoft WebView2 native loader DLL (native_webview2loader tag absent)",
+    "Microsoft WebView2 bootstrapper (wv2runtime.error strategy; complete payload absent)",
+    "loose-envify and js-tokens (installed dependency tree but absent from rendered frontend module graph)",
+    "TypeScript compiler/types, Vite CLI/dev-server, esbuild, Rollup and other build/test tooling (not redistributed as packages)",
+    "Wails development Svelte/IPC overlay (production assets selected)"
+  ],
+  "missingLicenseTexts": [],
+  "findingsForPublisherReview": [
+    {
+      "component": "Wails embedded JS runtime",
+      "kind": "license-metadata-discrepancy",
+      "details": "runtime/package.json declares ISC; no dedicated full ISC license file is included in that runtime directory. Root MIT text and source copyright are preserved; metadata discrepancy remains for publisher review."
+    }
+  ],
+  "finalBuildRecheck": "Compare final EXE go version -m module/version set and selected tags, run the frontend module audit after dependency changes, and repeat native payload absence/hash checks before distribution."
+}

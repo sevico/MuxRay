@@ -41,6 +41,62 @@ def forensic_node(name, children=(), pid=42):
     return node
 
 
+class OwnedWindowTest(unittest.TestCase):
+    def window(self, pid, title, legacy_property=False):
+        window = Mock()
+        properties = {'_NET_WM_PID': SimpleNamespace(value=[pid])} if pid is not None else {}
+        if not legacy_property:
+            properties['_NET_WM_NAME'] = SimpleNamespace(value=title.encode('utf-8'))
+        window.get_full_property.side_effect = lambda name, kind: properties.get(name)
+        window.get_wm_name.return_value = title
+        return window
+
+    def lookup(self, windows, title=None):
+        display = Mock()
+        display.intern_atom.side_effect = lambda name: name
+        display.screen.return_value.root.query_tree.return_value.children = windows
+        return smoke.owned_window(display, 42, 0, title)
+
+    def test_selects_only_owned_main_window_for_old_and_versioned_titles(self):
+        titles = ['MuxRay · 码流透镜', 'MuxRay dev · 码流透镜', 'MuxRay 0.1.0-dev · 码流透镜',
+                  'MuxRay 1.0.0 · 码流透镜', 'MuxRay 12.34.56-rc.9+build.005 · 码流透镜']
+        for title in titles:
+            with self.subTest(title=title):
+                target = self.window(42, title)
+                self.assertIs(self.lookup([self.window(17, title), self.window(None, title),
+                                          self.window(42, '选择 FLV 文件'), target]), target)
+
+    def test_legacy_wm_name_fallback_retains_pid_fence(self):
+        target = self.window(42, 'MuxRay · 码流透镜', legacy_property=True)
+        self.assertIs(self.lookup([self.window(17, 'MuxRay · 码流透镜', legacy_property=True), target]), target)
+
+    def test_title_alone_cannot_authorize_foreign_window(self):
+        with self.assertRaisesRegex(RuntimeError, 'missing/ambiguous owned window'):
+            self.lookup([self.window(17, 'MuxRay 4.5.6 · 码流透镜'),
+                         self.window(None, 'MuxRay · 码流透镜')])
+
+    def test_multiple_owned_main_windows_are_rejected_including_mixed_versions(self):
+        for second in ['MuxRay 2.3.4 · 码流透镜', 'MuxRay · 码流透镜']:
+            with self.subTest(second=second), self.assertRaisesRegex(RuntimeError, 'missing/ambiguous owned window'):
+                self.lookup([self.window(42, 'MuxRay 2.3.4 · 码流透镜'), self.window(42, second)])
+
+    def test_owned_similar_titles_are_not_main_windows(self):
+        invalid = ['MuxRay 1.2 · 码流透镜', 'MuxRay 01.2.3 · 码流透镜', 'MuxRay 1.2.3-01 · 码流透镜',
+                   'MuxRay 1.2.3-rc..1 · 码流透镜', 'MuxRay v1.2.3 · 码流透镜', 'MuxRay DEV · 码流透镜',
+                   'MuxRay 1.2.3\n · 码流透镜', 'MuxRay 1.2.3 · 码流透镜 - Save',
+                   'Other MuxRay 1.2.3 · 码流透镜', 'MuxRay 1.0.0+' + 'a' * 59 + ' · 码流透镜']
+        for title in invalid:
+            with self.subTest(title=title), self.assertRaisesRegex(RuntimeError, 'missing/ambiguous owned window'):
+                self.lookup([self.window(42, title)])
+
+    def test_picker_lookup_remains_exact_and_cannot_fall_back_to_main(self):
+        main = self.window(42, 'MuxRay 8.9.10-beta.2 · 码流透镜')
+        picker = self.window(42, '选择 FLV 文件')
+        self.assertIs(self.lookup([main, self.window(17, '选择 FLV 文件'), picker], '选择 FLV 文件'), picker)
+        with self.assertRaisesRegex(RuntimeError, 'missing/ambiguous owned window'):
+            self.lookup([main, self.window(42, '选择 FLV 文件 copy')], '选择 FLV 文件')
+
+
 class PickerSubmitTest(unittest.TestCase):
     def setUp(self):
         self.now, self.stage, self.check_parent = 0, {}, Mock()

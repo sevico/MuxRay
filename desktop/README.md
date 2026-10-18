@@ -1,7 +1,7 @@
 # MuxRay 最小桌面版
 
 Wails **v2.14.0** + React **18.3.1** + TypeScript **5.9.3**，构建工具 Vite
-**7.3.6**。这是本地开发预览，不是已完成清权、签名或安装器验收的发行版。
+**7.3.6**。项目采用 [MIT 许可证](../LICENSE)，目前仍是本地开发预览；签名、安装器及正式稳定版门禁尚未完成。
 架构边界见 [ADR-011](../docs/decisions/011-minimal-wails-shell.md)。
 面向使用者的操作步骤见 [预览版使用指南](../docs/preview-guide.md)，支持范围和
 交付条件见 [预览版范围](../docs/preview-scope.md)。分析区域快捷链接只移动页面，
@@ -420,7 +420,7 @@ sudo apt-get install --no-install-recommends build-essential pkg-config libgtk-3
 ./desktop/build/bin/MuxRay
 ```
 
-脚本固定调用 Wails v2.14.0，默认使用 `GOTOOLCHAIN=go1.27.0`，允许调用者
+脚本固定调用 Wails v2.14.0，默认使用 `GOTOOLCHAIN=go1.27.2`，允许调用者
 显式覆盖该环境变量；不会修改全局 Go 配置。首次运行需要下载对应工具链和
 依赖。构建使用 `webkit2_41` 标记、真实生成的绑定及 lockfile 中的前端依赖，
 并将该版本生成器在 Unix 上添加的绑定文件执行位恢复为 0644。
@@ -431,8 +431,8 @@ Linux 使用 Wails 的 GTK 原生打开/保存对话框，不启用 Windows 的
 
 ```bash
 # 在 desktop/ 下，先完成上述构建
-GOTOOLCHAIN=go1.27.0 go test -race -tags webkit2_41 -count=1 ./...
-GOTOOLCHAIN=go1.27.0 go vet -tags webkit2_41 ./...
+GOTOOLCHAIN=go1.27.2 go test -race -tags webkit2_41 -count=1 ./...
+GOTOOLCHAIN=go1.27.2 go vet -tags webkit2_41 ./...
 ```
 
 Linux CI 在 Ubuntu 24.04 构建并核对生成物、运行前端单测和 Go race/vet，
@@ -530,5 +530,18 @@ Vite 7.3.6 替换了本机旧缓存版本，参考维护者的
 2026-09-06 的 `npm audit` 返回 0 项已知问题，不代表完整供应链安全审计。
 Wails API/构建选项核对使用本机 v2.14.0 源码以及
 [官方 CLI 文档](https://wails.io/docs/reference/cli/)；官网可能展示更高版本，
-不能据此自动升级本项目。公开发布前仍须审核 Go/npm/原生组件许可证与
-安全公告、确定项目许可证、完成签名和安装流程验证。
+不能据此自动升级本项目。项目已采用 MIT；每次公开发行仍须核对 Go/npm/原生组件
+许可通知及安全公告，并按所宣称的分发方式验证运行时、启动与退出。Windows portable
+ZIP 不包含安装器，不宣称已完成代码签名或安装/卸载验收。本轮结果见
+[发行准备记录](../docs/release-readiness-20261018.md)。
+
+## 构建版本与退出采集
+
+Go 最低版本为 **1.27.2**。Windows 生产入口可指定版本：
+`./build-production.ps1 -Version 0.1.0-dev`；默认仍为 `0.1.0-dev`。
+CLI、原生窗口标题和诊断快照的 `producer.version` 共用构建版本，
+`-Version` 不会自动改变预览成熟度、创建 Git tag 或发布 Release。
+
+复现异常退出时可使用仓库的 `tools/desktop-native/capture_exit.py` 启动器，
+同时保存同代 stdout、stderr、EXE 摘要和实际进程退出码；使用方法见脚本帮助。
+原始日志可能包含本机路径，应留在本地并在分享前检查。该工具只采集，不修复退出。

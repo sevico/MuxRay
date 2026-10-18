@@ -20,6 +20,40 @@ import traceback
 ROOT = Path(__file__).resolve().parents[2]
 MIN_SOURCE_LIMIT = 16 << 20
 MAX_SOURCE_LIMIT = 1 << 30
+MAIN_WINDOW_TITLE = 'MuxRay · 码流透镜'
+BUILD_VERSION_PATTERN = re.compile(
+    r'(?:dev|(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)'
+    r'(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)'
+    r'(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?'
+    r'(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)')
+
+
+def is_main_window_title(title):
+    if title == MAIN_WINDOW_TITLE:
+        return True
+    if not isinstance(title, str) or not title.startswith('MuxRay ') or not title.endswith(' · 码流透镜'):
+        return False
+    version = title[len('MuxRay '):-len(' · 码流透镜')]
+    return 1 <= len(version) <= 64 and BUILD_VERSION_PATTERN.fullmatch(version) is not None
+
+
+def owned_window(display, owner_pid, property_type, title=None):
+    """Find one PID-owned native window; None requests the versioned main title."""
+    found = []
+    for item in display.screen().root.query_tree().children:
+        pid = item.get_full_property(display.intern_atom('_NET_WM_PID'), property_type)
+        if not pid or len(pid.value) != 1 or int(pid.value[0]) != owner_pid:
+            continue
+        text = item.get_full_property(display.intern_atom('_NET_WM_NAME'), property_type)
+        try:
+            name = text.value.decode('utf-8') if text else item.get_wm_name()
+        except UnicodeDecodeError:
+            continue
+        matches = is_main_window_title(name) if title is None else name == title
+        if matches:
+            found.append(item)
+    require(len(found) == 1, 'missing/ambiguous owned window: ' + (title or 'MuxRay main window'))
+    return found[0]
 
 
 def arguments(argv=None):
@@ -597,18 +631,11 @@ def run_worker(args):
         # disable the selector while an intermediate detail request is running.
         choose_accessible_option(lambda: find('combo box', label), index, label, expected_name)
 
-    def window(title):
-        found = []
-        for item in screen.screen().root.query_tree().children:
-            pid = item.get_full_property(screen.intern_atom('_NET_WM_PID'), X.AnyPropertyType)
-            text = item.get_full_property(screen.intern_atom('_NET_WM_NAME'), X.AnyPropertyType)
-            name = text.value.decode() if text else item.get_wm_name()
-            if pid and int(pid.value[0]) == app.pid and name == title:
-                found.append(item)
-        require(len(found) == 1, 'missing/ambiguous owned window: ' + title)
-        return found[0]
+    def window(title=None):
+        require(app.poll() is None, f'parent exited early: {app.returncode}')
+        return owned_window(screen, app.pid, X.AnyPropertyType, title)
 
-    def focus(title):
+    def focus(title=None):
         window(title).set_input_focus(X.RevertToParent, X.CurrentTime)
         screen.sync()
 
@@ -741,7 +768,7 @@ def run_worker(args):
         submit_picker('Open')
         # A broad '部分结果' match also occurs in the still-scanning placeholder.
         wait_text('容器索引完整', 90)
-        focus('MuxRay · 码流透镜')
+        focus()
 
     def start_search():
         labels = {'mismatches': 0, 'unknown': 1, 'all': 2}
@@ -1154,7 +1181,7 @@ def run_worker(args):
             require(stream.digest() == before_hash, 'source changed before close completed')
         result['sourceUnchanged'] = True
         dump('closed-ui.json')
-        main = window('MuxRay · 码流透镜')
+        main = window()
         delete = screen.intern_atom('WM_DELETE_WINDOW')
         require(delete in main.get_wm_protocols(), 'window does not accept WM_DELETE_WINDOW')
         main.send_event(protocol.event.ClientMessage(window=main, client_type=screen.intern_atom('WM_PROTOCOLS'),

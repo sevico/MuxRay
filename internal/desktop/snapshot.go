@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/sevico/muxray/internal/buildinfo"
 	"github.com/sevico/muxray/internal/document"
 	"github.com/sevico/muxray/internal/flv"
 	"github.com/sevico/muxray/internal/summaryview"
@@ -173,7 +174,7 @@ func (a *App) CaptureSnapshot(request SnapshotRequest) (SnapshotCapture, *Fault)
 	}
 	report := DiagnosticSnapshot{
 		SchemaVersion: version, DocumentType: "desktopDiagnosticSnapshot", FileName: filepath.Base(e.sourcePath),
-		CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), Producer: SnapshotProducer{Name: "MuxRay", Version: "0.1.0-dev"},
+		CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), Producer: SnapshotProducer{Name: "MuxRay", Version: buildinfo.Version},
 		Scope: SnapshotScope{Kind: "bounded_desktop_snapshot", SourceValidation: "existing_change_latch_only",
 			ScanDiagnostics: "first_100_retained", Summary: "ready_overview_and_requested_event_page",
 			Trend: "requested_source_order_window", TrendInterpretation: "local_display_rule_not_parser_diagnostic"},

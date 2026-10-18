@@ -155,7 +155,7 @@ def build(output):
     if binary.exists():
         raise FileExistsError(binary)
     argv = ['go', 'build', '-mod=readonly', '-trimpath', '-tags', 'desktop,production,webkit2_41', '-overlay', str(output / 'overlay.json'), '-o', str(binary), '.']
-    env = dict(os.environ, GOTOOLCHAIN='go1.27.0')
+    env = dict(os.environ, GOTOOLCHAIN=os.environ.get('GOTOOLCHAIN', 'go1.27.2'))
     with (output / 'build.stdout.log').open('x') as stdout, (output / 'build.stderr.log').open('x') as stderr:
         proc = subprocess.run(argv, cwd=Path(plan['repository']) / 'desktop', env=env, stdout=stdout, stderr=stderr, timeout=180)
     result = {'passed': proc.returncode == 0, 'argv': argv, 'exitCode': proc.returncode, 'binary': str(binary),

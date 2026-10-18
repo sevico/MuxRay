@@ -9,6 +9,6 @@ if ! command -v pkg-config >/dev/null || ! pkg-config --exists gtk+-3.0 webkit2g
     exit 1
 fi
 
-GOTOOLCHAIN="${GOTOOLCHAIN:-go1.27.0}" go run github.com/wailsapp/wails/v2/cmd/wails@v2.14.0 build -tags webkit2_41 -nopackage -trimpath
+GOTOOLCHAIN="${GOTOOLCHAIN:-go1.27.2}" go run github.com/wailsapp/wails/v2/cmd/wails@v2.14.0 build -tags webkit2_41 -nopackage -trimpath
 # Wails v2.14.0 writes generated bindings with Unix executable bits.
 find frontend/wailsjs/go -type f -exec chmod 0644 {} +

@@ -12,7 +12,7 @@ From the repository root, with Python 3, `jsonschema`, FFmpeg/ffprobe including
 ```sh
 python3 -B -m unittest discover -s tools/codec-regression -p '*_test.py' -v
 python3 -B tools/codec-regression/generate.py --output-dir "$PWD/.cache/codec-run/samples"
-GOTOOLCHAIN=go1.27.0 go build -o "$PWD/.cache/codec-run/muxray" ./cmd/muxray
+GOTOOLCHAIN=go1.27.2 go build -o "$PWD/.cache/codec-run/muxray" ./cmd/muxray
 python3 -B tools/codec-regression/verify.py \
   --input-dir "$PWD/.cache/codec-run/samples" \
   --cli "$PWD/.cache/codec-run/muxray" --output-dir "$PWD/.cache/codec-run/cli"
@@ -336,7 +336,7 @@ codec suite. Keep each run in a new directory to preserve failures and hashes:
 
 ```sh
 mkdir -p "$PWD/.cache/fc-run-001"
-GOTOOLCHAIN=go1.27.0 go build -o "$PWD/.cache/fc-run-001/muxray" ./cmd/muxray
+GOTOOLCHAIN=go1.27.2 go build -o "$PWD/.cache/fc-run-001/muxray" ./cmd/muxray
 python3 -B tools/codec-regression/full_codec_oracle.py \
   --output-dir "$PWD/.cache/fc-run-001/samples"
 python3 -B tools/codec-regression/verify_full_codec.py \
@@ -377,7 +377,7 @@ emulation prevention, truncation, syntax ranges and per-NAL/packet budgets.
 ```sh
 python3 -B tools/codec-regression/paged_codec_oracle.py \
   --output-dir "$PWD/.cache/ps-samples"
-GOTOOLCHAIN=go1.27.0 go build -trimpath -o "$PWD/.cache/ps-cli" ./cmd/muxray
+GOTOOLCHAIN=go1.27.2 go build -trimpath -o "$PWD/.cache/ps-cli" ./cmd/muxray
 python3 -B tools/codec-regression/verify_paged_codec.py \
   --input-dir "$PWD/.cache/ps-samples" --cli "$PWD/.cache/ps-cli" \
   --output-dir "$PWD/.cache/ps-cli-check"
@@ -428,7 +428,7 @@ go build -trimpath -o "$PWD/.cache/muxray" ./cmd/muxray
 python3 -B tools/codec-regression/timing_navigation_oracle.py --output-dir "$PWD/.cache/tn-samples"
 python3 -B tools/codec-regression/verify_timing_navigation.py --input-dir "$PWD/.cache/tn-samples" --cli "$PWD/.cache/muxray" --baseline-cli "$PWD/.cache/baseline-cli" --output-dir "$PWD/.cache/tn-cli"
 /usr/bin/python3 -B tools/codec-regression/native_timing_navigation.py --input-dir "$PWD/.cache/tn-samples" --binary "$PWD/desktop/build/bin/MuxRay" --output-dir "$PWD/.cache/tn-native" --timeout-seconds 900
-GOTOOLCHAIN=go1.27.0 /usr/bin/python3 -B tools/codec-regression/performance_baseline.py --output-dir "$PWD/.cache/tn-performance"
+GOTOOLCHAIN=go1.27.2 /usr/bin/python3 -B tools/codec-regression/performance_baseline.py --output-dir "$PWD/.cache/tn-performance"
 ```
 
 Native cases cover frame 2600 through three explicitly continued requests,

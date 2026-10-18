@@ -180,7 +180,7 @@ class AVCSearchGateTests(unittest.TestCase):
             self.skipTest('Go is required to compile the overlay')
         gate.prepare(ROOT, self.source, self.output)
         result = subprocess.run(['go', 'test', '-overlay', str(self.output / 'overlay.json'), '-run', '^$', './internal/document'],
-                                cwd=ROOT, env=dict(os.environ, GOTOOLCHAIN='go1.27.0'),
+                                cwd=ROOT, env=dict(os.environ, GOTOOLCHAIN=os.environ.get('GOTOOLCHAIN', 'go1.27.2')),
                                 text=True, capture_output=True, timeout=180, check=False)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 

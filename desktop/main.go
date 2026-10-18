@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/sevico/muxray/internal/buildinfo"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
@@ -37,7 +38,7 @@ func runDesktop() error {
 
 func appOptions(host *host) *options.App {
 	return &options.App{
-		Title: "MuxRay · 码流透镜", Width: 1200, Height: 800,
+		Title: "MuxRay " + buildinfo.Version + " · 码流透镜", Width: 1200, Height: 800,
 		MinWidth: 860, MinHeight: 560,
 		BackgroundColour: options.NewRGB(245, 247, 250),
 		AssetServer:      &assetserver.Options{Assets: assets, Middleware: securityHeaders},

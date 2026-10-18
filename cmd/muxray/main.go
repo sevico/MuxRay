@@ -13,6 +13,7 @@ import (
 	"github.com/sevico/muxray/internal/amf0"
 	"github.com/sevico/muxray/internal/avc"
 	"github.com/sevico/muxray/internal/avccontext"
+	"github.com/sevico/muxray/internal/buildinfo"
 	"github.com/sevico/muxray/internal/cursor"
 	"github.com/sevico/muxray/internal/flv"
 	"github.com/sevico/muxray/internal/mp3"
@@ -26,8 +27,6 @@ const (
 	exitUsage       = 64
 	exitCanceled    = 130
 )
-
-var version = "dev"
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -64,7 +63,7 @@ func runContext(ctx context.Context, args []string, stdout, stderr io.Writer) (c
 		writeUsage(stdout)
 		return exitOK
 	case "version", "--version":
-		_, _ = fmt.Fprintf(stdout, "muxray %s\n", version)
+		_, _ = fmt.Fprintf(stdout, "muxray %s\n", buildinfo.Version)
 		return exitOK
 	case "inspect":
 		return runInspect(ctx, args[1:], stdout, stderr)
