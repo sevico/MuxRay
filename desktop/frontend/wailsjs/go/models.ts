@@ -1694,6 +1694,151 @@ export namespace desktop {
 		    return a;
 		}
 	}
+	
+	export class TimeSearchRow {
+	    kind: string;
+	    point: TagTrendPoint;
+	
+	    static createFrom(source: any = {}) {
+	        return new TimeSearchRow(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.point = this.convertValues(source["point"], TagTrendPoint);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TimeSearchPage {
+	    cursor: string;
+	    nextCursor: string;
+	    start: string;
+	    next: string;
+	    total: string;
+	    scanned: number;
+	    filter: string;
+	    gapThreshold: string;
+	    exhausted: boolean;
+	    scanComplete: boolean;
+	    unknownPredecessors: number;
+	    rows: TimeSearchRow[];
+	
+	    static createFrom(source: any = {}) {
+	        return new TimeSearchPage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.cursor = source["cursor"];
+	        this.nextCursor = source["nextCursor"];
+	        this.start = source["start"];
+	        this.next = source["next"];
+	        this.total = source["total"];
+	        this.scanned = source["scanned"];
+	        this.filter = source["filter"];
+	        this.gapThreshold = source["gapThreshold"];
+	        this.exhausted = source["exhausted"];
+	        this.scanComplete = source["scanComplete"];
+	        this.unknownPredecessors = source["unknownPredecessors"];
+	        this.rows = this.convertValues(source["rows"], TimeSearchRow);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TimeSearchRequest {
+	    sessionId: string;
+	    requestId: string;
+	    cursor: string;
+	    filter: string;
+	    gapThreshold: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TimeSearchRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.requestId = source["requestId"];
+	        this.cursor = source["cursor"];
+	        this.filter = source["filter"];
+	        this.gapThreshold = source["gapThreshold"];
+	    }
+	}
+	export class TimeSearchResponse {
+	    apiVersion: number;
+	    sessionId: string;
+	    requestId: string;
+	    state: string;
+	    page?: TimeSearchPage;
+	    error?: Fault;
+	
+	    static createFrom(source: any = {}) {
+	        return new TimeSearchResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.apiVersion = source["apiVersion"];
+	        this.sessionId = source["sessionId"];
+	        this.requestId = source["requestId"];
+	        this.state = source["state"];
+	        this.page = this.convertValues(source["page"], TimeSearchPage);
+	        this.error = this.convertValues(source["error"], Fault);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 
 }
 

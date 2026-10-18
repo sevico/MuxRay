@@ -1,3 +1,5 @@
+import type { TimeSearchResponse } from './protocol';
+import { timeSearchFilter, timeSearchKind } from './time-search.ts';
 import type { CodecSearchResponse } from './protocol';
 import { codecSearchKind, codecSearchFilter } from './codec-search.ts';
 import type { GetMediaCurves } from '../wailsjs/go/desktop/Bindings';
@@ -138,5 +140,16 @@ export function codecSearchResponse(value: desktop.CodecSearchResponse): CodecSe
     kind: codecSearchKind(value.page.kind), filter: codecSearchFilter(codecSearchKind(value.page.kind), value.page.filter),
     rows: value.page.rows.map(row => ({ ...row, frameIndex: row.frameIndex ?? null, nalIndex: row.nalIndex ?? null,
       messageIndex: row.messageIndex ?? null, span: row.span ?? null, spsSpan: row.spsSpan ?? null, evidenceSpan: row.evidenceSpan ?? null })),
+  } : null };
+}
+
+export function timeSearchResponse(value: desktop.TimeSearchResponse): TimeSearchResponse {
+  const state = value.state;
+  if (state !== 'pending' && state !== 'canceling' && state !== 'ready' && state !== 'failed') throw Error('Invalid timestamp search state.');
+  return { ...value, state, error: value.error ?? null, page: value.page ? { ...value.page,
+    filter: timeSearchFilter(value.page.filter), rows: value.page.rows.map(row => ({ kind: timeSearchKind(row.kind), point: { ...row.point,
+      previousTagId: row.point.previousTagId ?? null, previousDts: row.point.previousDts ?? null, deltaMs: row.point.deltaMs ?? null,
+      context: trendContext(row.point.context), previousTagSizeState: trendPreviousSize(row.point.previousTagSizeState),
+    } })),
   } : null };
 }

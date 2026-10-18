@@ -19,6 +19,7 @@ export function TagTrendPanel({ view, controller, disabled, readDisabled, messag
   const [issuePage, setIssuePage] = useState(0);
   const page = view.trendPage;
   useEffect(() => { setStart(view.trendStart); }, [view.trendStart]);
+  useEffect(() => { setGapDraft(view.trendGapThreshold); }, [view.trendGapThreshold]);
   useEffect(() => { setIssuePage(0); }, [page, type, gap]);
   const points = useMemo(() => (page?.points ?? []).filter(point => type === 'all' || trendType(point) === type), [page, type]);
   const flagged = useMemo(() => points.map(point => ({ point, issues: trendIssues(point, BigInt(gap)) })).filter(item => item.issues.length), [points, gap]);

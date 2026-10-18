@@ -7,7 +7,7 @@ const reasons: Record<string, string> = { complete: 'NAL 头覆盖完整', filte
   nal_limit: 'NAL 头数量达到上限', invalid_framing: 'NAL 边界不完整', unclassified_header: '存在不能分类的 NAL 头' };
 
 export function AVCSearchPanel({ view, controller, disabled, message }: { view: ViewState; controller: Controller; disabled: boolean; message: (code: string) => string }) {
-  const page = view.avcSearchPage, running = view.avcSearchRunning, blocked = disabled || view.summaryRunning || view.codecSearchRunning;
+  const page = view.avcSearchPage, running = view.avcSearchRunning, blocked = disabled || view.timeSearchRunning || view.summaryRunning || view.codecSearchRunning;
   return <section className="summary-panel" aria-label="H.264 批量证据检索">
     <div className="detail-heading"><div><p className="eyebrow">按批检查 NAL 头</p><h2>H.264 批量证据检索</h2></div>
       <div className="actions">

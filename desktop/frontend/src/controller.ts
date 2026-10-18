@@ -1,3 +1,6 @@
+import { timeSearchFilter, validateTimeSearch } from './time-search.ts';
+import { trendGap } from './tag-trends.ts';
+import type { TimeSearchFilter, TimeSearchPage, TimeSearchRequest, TimeSearchRow } from './protocol.ts';
 import type { MediaCurvePage, MediaCurveRequest } from './protocol.ts';
 import { CURVE_PAGE_SIZE, curveTag, validateMediaCurveResponse } from './media-curves.ts';
 import type { CurveMetric } from './media-curves.ts';
@@ -71,6 +74,15 @@ export interface ViewState {
   hexRetry: '' | 'confirm' | 'reload';
   tagJumpError: string | null;
   sourceChanged: boolean;
+  timeSearchPage: TimeSearchPage | null;
+  timeSearchState: '' | 'loading' | 'pending' | 'canceling' | 'recovering' | 'ready' | 'failed';
+  timeSearchRunning: boolean;
+  timeSearchCancelRequested: boolean;
+  timeSearchError: string | null;
+  timeSearchRetry: '' | 'confirm' | 'reload';
+  timeSearchFilter: TimeSearchFilter;
+  timeSearchCursor: string;
+  timeSearchGapThreshold: string;
   codecSearchPage: CodecSearchPage | null;
   codecSearchState: '' | 'loading' | 'pending' | 'canceling' | 'recovering' | 'ready' | 'failed';
   codecSearchRunning: boolean;
@@ -117,7 +129,7 @@ const scheduler: Scheduler = {
 
 class RequestError extends Error {}
 class ReplyUnconfirmed extends Error {}
-type ReplySlot = 'open' | 'command' | 'status' | 'page' | 'detail' | 'hex' | 'summary' | 'summaryPage' | 'trend' | 'curve' | 'save' | 'avcSearch' | 'codecSearch';
+type ReplySlot = 'open' | 'command' | 'status' | 'page' | 'detail' | 'hex' | 'summary' | 'summaryPage' | 'trend' | 'curve' | 'save' | 'avcSearch' | 'codecSearch' | 'timeSearch';
 function check(response: { apiVersion: number; error: { code: string } | null }): void {
   if (response.apiVersion !== 1) throw new RequestError('incompatible_api');
   if (response.error) throw new RequestError(response.error.code);
@@ -196,7 +208,7 @@ export class Controller {
   private api: API;
   private clock: Scheduler;
   private listeners = new Set<() => void>();
-  private state: ViewState = { fileName: '', session: null, operation: '', error: null, tab: 'tags', start: '0', page: null, loading: false, tagFilter: null, filteredPage: null, filterError: null, filterPrevious: null, filterHistoryLimited: false, trendPage: null, trendLoading: false, trendError: null, trendStart: '0', trendSelectedId: null, trendMetric: 'dts', trendType: 'all', trendGapThreshold: '1000', saveState: '', savePending: false, saveError: null, saveRetry: false, saveSourceName: '', saveSessionId: null, saveFileName: '', saveBytesWritten: '0', selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '', mp3JumpError: null, hex: null, hexSelection: null, hexState: '', hexError: null, hexRetry: '', tagJumpError: null, sourceChanged: false, codecSearchPage: null, codecSearchState: '', codecSearchRunning: false, codecSearchCancelRequested: false, codecSearchError: null, codecSearchRetry: '', codecSearchKind: 'mp3', codecSearchFilter: 'all', codecSearchCursor: '0', avcSearchPage: null, avcSearchState: '', avcSearchRunning: false, avcSearchCancelRequested: false, avcSearchError: null, avcSearchRetry: '', avcSearchFilter: 'mismatches', avcSearchStart: '0', avcSearchPrevious: null, summary: null, summaryState: '', summaryRunning: false, summaryCancelRequested: false, summaryProcessed: '0', summaryTotal: '0', summaryError: null, summaryRetry: '', summaryKind: 'keyframes', summaryStart: '0', summaryPage: null, summaryPageLoading: false, summaryPageError: null, summaryPrevious: null, curvePage: null, curveLoading: false, curveError: null, curveStart: '0', curveSelectedIndex: null, curveMetric: 'audio' };
+  private state: ViewState = { fileName: '', session: null, operation: '', error: null, tab: 'tags', start: '0', page: null, loading: false, tagFilter: null, filteredPage: null, filterError: null, filterPrevious: null, filterHistoryLimited: false, trendPage: null, trendLoading: false, trendError: null, trendStart: '0', trendSelectedId: null, trendMetric: 'dts', trendType: 'all', trendGapThreshold: '1000', saveState: '', savePending: false, saveError: null, saveRetry: false, saveSourceName: '', saveSessionId: null, saveFileName: '', saveBytesWritten: '0', selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '', mp3JumpError: null, hex: null, hexSelection: null, hexState: '', hexError: null, hexRetry: '', tagJumpError: null, sourceChanged: false, timeSearchPage: null, timeSearchState: '', timeSearchRunning: false, timeSearchCancelRequested: false, timeSearchError: null, timeSearchRetry: '', timeSearchFilter: 'regressions', timeSearchCursor: '0', timeSearchGapThreshold: '1000', codecSearchPage: null, codecSearchState: '', codecSearchRunning: false, codecSearchCancelRequested: false, codecSearchError: null, codecSearchRetry: '', codecSearchKind: 'mp3', codecSearchFilter: 'all', codecSearchCursor: '0', avcSearchPage: null, avcSearchState: '', avcSearchRunning: false, avcSearchCancelRequested: false, avcSearchError: null, avcSearchRetry: '', avcSearchFilter: 'mismatches', avcSearchStart: '0', avcSearchPrevious: null, summary: null, summaryState: '', summaryRunning: false, summaryCancelRequested: false, summaryProcessed: '0', summaryTotal: '0', summaryError: null, summaryRetry: '', summaryKind: 'keyframes', summaryStart: '0', summaryPage: null, summaryPageLoading: false, summaryPageError: null, summaryPrevious: null, curvePage: null, curveLoading: false, curveError: null, curveStart: '0', curveSelectedIndex: null, curveMetric: 'audio' };
   private disposed = false;
   private statusVersion = 0;
   private pageVersion = 0;
@@ -211,6 +223,14 @@ export class Controller {
   private stopTimer: (() => void) | null = null;
   private replyStops = new Map<ReplySlot, () => void>();
   private nextReadID = 0n;
+  private timeSearchRequest: TimeSearchRequest | null = null;
+  private timeSearchExpectedStart: string | null = null;
+  private timeSearchPhase: 'start' | 'get' | 'cancel' = 'start';
+  private timeSearchBusy = false;
+  private timeSearchPaused = false;
+  private timeSearchPolls = 0;
+  private stopTimeSearchTimer: (() => void) | null = null;
+  private timeSearchLocateTag: string | null = null;
   private codecSearchRequest: CodecSearchRequest | null = null;
   private codecSearchExpectedStart: CodecSearchPosition | null = null;
   private codecSearchPhase: 'start' | 'get' | 'cancel' = 'start';
@@ -275,7 +295,7 @@ export class Controller {
     if (session.closed && session.terminal) {
       this.clearTrend();
       this.clearFilter();
-      this.clearAVCSearch(); this.clearCodecSearch();
+      this.clearAVCSearch(); this.clearCodecSearch(); this.clearTimeSearch();
       this.clearSummary();
       this.clearDetail();
       this.pageVersion++;
@@ -284,13 +304,14 @@ export class Controller {
       this.jumpTagId = null;
       this.update({ session: null, fileName: '', operation: '', page: null, loading: false, start: '0', sourceChanged: false, error: null });
     } else {
-      if (session.closed) { this.clearTrend(); this.clearFilter(); this.clearAVCSearch(); this.clearCodecSearch(); this.clearSummary(); this.clearDetail(); }
+      if (session.closed) { this.clearTrend(); this.clearFilter(); this.clearAVCSearch(); this.clearCodecSearch(); this.clearTimeSearch(); this.clearSummary(); this.clearDetail(); }
       this.update({ session, operation: session.closed ? 'closing' : '' });
       this.ensureDetail();
       this.ensureHex();
       this.ensureSummary();
       this.ensureAVCSearch();
       this.ensureCodecSearch();
+      this.ensureTimeSearch();
       this.ensureTrend();
     }
   }
@@ -352,7 +373,7 @@ export class Controller {
       this.update({ trendMetric: 'dts', trendType: 'all', trendGapThreshold: '1000' });
       this.clearTrend();
       this.clearFilter();
-      this.clearAVCSearch(); this.clearCodecSearch();
+      this.clearAVCSearch(); this.clearCodecSearch(); this.clearTimeSearch();
       this.clearSummary();
       this.clearDetail();
       this.nextReadID = 0n;
@@ -453,7 +474,7 @@ export class Controller {
     if (operation === 'closing') {
       this.clearTrend();
       this.clearFilter();
-      this.clearAVCSearch(); this.clearCodecSearch();
+      this.clearAVCSearch(); this.clearCodecSearch(); this.clearTimeSearch();
       this.clearSummary();
       this.clearDetail();
       this.pageVersion++;
@@ -523,7 +544,7 @@ export class Controller {
     } finally { this.polling = false; this.schedule(); }
   }
   select(tab: Tab, start = '0'): void {
-    if (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) return;
+    if (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning) return;
     try { unsigned(start); } catch { this.update({ error: 'invalid_argument' }); return; }
     this.clearFilter();
     this.pageVersion++;
@@ -537,7 +558,7 @@ export class Controller {
     this.update({ tagFilter: null, filteredPage: null, filterPrevious: null, filterHistoryLimited: false, filterError: null });
   }
   applyTagFilter(filter: TagFilter): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     try { validateTagFilter(filter); } catch { this.update({ filterError: 'invalid_filter' }); return; }
     this.filterHistory = [];
     this.pageVersion++; this.jumpTagId = null;
@@ -547,12 +568,12 @@ export class Controller {
     this.ensurePage();
   }
   resetTagFilter(): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     this.select('tags');
   }
   pageFilteredTags(direction: 'first' | 'previous' | 'next'): void {
     const page = this.state.filteredPage;
-    if (this.disposed || !page || !this.state.tagFilter || this.state.loading || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || !page || !this.state.tagFilter || this.state.loading || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     let start: string;
     let limited = this.state.filterHistoryLimited;
     if (direction === 'first') { start = '0'; this.filterHistory = []; limited = false; }
@@ -577,6 +598,7 @@ export class Controller {
     return !!session?.terminal && !session.closed && session.scan !== null && this.state.operation !== 'closing' && !this.state.sourceChanged;
   }
   private clearTrend(): void {
+    this.timeSearchLocateTag = null;
     this.trendVersion++; this.trendWanted = false;
     this.replyStops.get('trend')?.();
     this.update({ trendPage: null, trendLoading: false, trendError: null, trendStart: '0', trendSelectedId: null });
@@ -592,10 +614,11 @@ export class Controller {
     this.update(options);
   }
   loadTagTrends(start = '0'): void {
-    if (this.disposed || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || this.state.timeSearchRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
     try {
       if (unsigned(start) > unsigned(this.state.session!.progress!.tagCount)) throw Error('Out of index.');
     } catch { this.update({ trendError: 'invalid_argument' }); return; }
+    this.timeSearchLocateTag = null;
     this.trendVersion++; this.trendWanted = true;
     this.update({ trendStart: start, trendPage: null, trendLoading: true, trendError: null, trendSelectedId: null });
     this.ensureTrend();
@@ -615,7 +638,7 @@ export class Controller {
     this.loadTagTrends(this.state.trendStart);
   }
   private ensureTrend(): void {
-    if (this.disposed || this.trendBusy || !this.trendWanted || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || this.state.timeSearchRunning || this.trendBusy || !this.trendWanted || !this.ready() || this.refreshStatus || this.pollFailed) return;
     void this.readTrend();
   }
   private async readTrend(): Promise<void> {
@@ -634,6 +657,9 @@ export class Controller {
         if (response.page.bounds.total !== session.progress?.tagCount) throw Error('Invalid index coverage.');
       } catch { throw new RequestError('invalid_response'); }
       this.update({ trendPage: response.page });
+      const locate = this.timeSearchLocateTag;
+      this.timeSearchLocateTag = null;
+      if (locate !== null) this.selectTrendTag(locate);
     } catch (error) {
       if (this.disposed || version !== this.trendVersion || this.state.session?.sessionId !== session.sessionId || !this.ready()) return;
       const code = errorCode(error);
@@ -646,12 +672,12 @@ export class Controller {
     }
   }
   selectTrendTag(id: string): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed || !this.state.trendPage?.points.some(point => point.tagId === id)) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed || !this.state.trendPage?.points.some(point => point.tagId === id)) return;
     this.update({ trendSelectedId: id });
     this.jumpTag(id);
   }
   showTrendHex(id: string, target: 'tag' | 'payload'): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     const point = this.state.trendPage?.points.find(item => item.tagId === id);
     if (!point || (target !== 'tag' && target !== 'payload')) return;
     if (this.state.selectedTag?.id !== id) this.clearDetail();
@@ -661,7 +687,7 @@ export class Controller {
       label: target === 'tag' ? `Tag ${id} 范围` : `Tag ${id} payload（实际 ${point.availableDataSize} / 声明 ${point.dataSize} byte）` });
   }
   private ensurePage(): void {
-    if (this.disposed || this.paging || this.refreshStatus || this.pollFailed || !this.ready() || this.state.page || this.state.filteredPage || this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) return;
+    if (this.disposed || this.paging || this.refreshStatus || this.pollFailed || !this.ready() || this.state.page || this.state.filteredPage || this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning) return;
     void this.loadPage();
   }
   private async loadPage(): Promise<void> {
@@ -715,7 +741,8 @@ export class Controller {
     this.ensurePage();
   }
   selectTag(tagId: string, mp3FrameIndex?: number): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    this.timeSearchLocateTag = null;
     if (mp3FrameIndex !== undefined && (!Number.isInteger(mp3FrameIndex) || mp3FrameIndex < 0 || mp3FrameIndex > 4294967295)) return;
     const tags = this.state.filteredPage?.tags ?? (this.state.page?.tab === 'tags' ? this.state.page.data.tags : []);
     const tag = tags.find(item => item.id === tagId);
@@ -739,7 +766,7 @@ export class Controller {
     this.update({ selectedTag: null, detail: null, detailState: '', detailError: null, detailRetry: '', mp3JumpError: null });
   }
   private ensureDetail(): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || this.detailBusy || this.detailPaused || this.stopDetailTimer || !this.detailRequest || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning) || this.detailBusy || this.detailPaused || this.stopDetailTimer || !this.detailRequest || !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (this.detailPhase === 'start') void this.loadDetail();
     else this.stopDetailTimer = this.clock.after(() => { this.stopDetailTimer = null; void this.loadDetail(); }, POLL_MS);
   }
@@ -788,7 +815,7 @@ export class Controller {
   }
   selectMP3Frame(index: number | null): void {
     const frames = mp3FrameSelection(this.state.detail);
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || this.detailBusy || !this.detailPaused || !this.detailRequest ||
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning) || this.detailBusy || !this.detailPaused || !this.detailRequest ||
         this.state.detailState !== 'ready' || !frames || frames.selected === index ||
         !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (index !== null && (!Number.isInteger(index) || !frames.selectable.includes(index))) return;
@@ -802,7 +829,7 @@ export class Controller {
   }
   jumpMP3Frame(text: string): void {
     const page = mp3FramePage(this.state.detail);
-    if (this.disposed || this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.detailBusy || !this.detailPaused || !this.detailRequest ||
+    if (this.disposed || this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning || this.detailBusy || !this.detailPaused || !this.detailRequest ||
         this.state.detailState !== 'ready' || !page || !this.ready() || this.refreshStatus || this.pollFailed) return;
     const index = mp3FrameIndex(text);
     if (index === null) { this.update({ mp3JumpError: '请输入 0–4294967295 之间的十进制整数帧号（索引从 0 开始）。' }); return; }
@@ -824,7 +851,7 @@ export class Controller {
   }
   pageMP3Frames(direction: -1 | 1 | 'continue'): void {
     const page = mp3FramePage(this.state.detail);
-    if (this.disposed || this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.detailBusy || !this.detailPaused || !this.detailRequest ||
+    if (this.disposed || this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning || this.detailBusy || !this.detailPaused || !this.detailRequest ||
         this.state.detailState !== 'ready' || !page || !this.ready() || this.refreshStatus || this.pollFailed) return;
     let request: DetailRequest;
     if (direction === 'continue') {
@@ -844,7 +871,7 @@ export class Controller {
   }
   inspectMP3Dependency(): void {
     const frames = mp3FrameSelection(this.state.detail);
-    if (this.disposed || this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.detailBusy || !this.detailPaused ||
+    if (this.disposed || this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning || this.detailBusy || !this.detailPaused ||
         !this.detailRequest || this.state.detailState !== 'ready' || !frames || !this.ready() || this.refreshStatus || this.pollFailed) return;
     const index = frames.selected ?? mp3FramePage(this.state.detail)?.start ?? 0;
     if (!frames.selectable.includes(index)) return;
@@ -859,13 +886,13 @@ export class Controller {
     const result = mp3Dependency(this.state.detail);
     if (this.state.detailState !== 'ready' || !result?.sources.some(item => item.tagId === source.tagId && item.frameIndex === source.frameIndex &&
         item.current === source.current && item.span.byteOffset === source.span.byteOffset && item.span.bitLength === source.span.bitLength) ||
-        this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+        this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (destination === 'tag') this.jumpTag(source.tagId, source.frameIndex);
     else this.showHex({ offset: source.span.byteOffset, bitOffset: 0, bitLength: source.span.bitLength, label: `MP3 来源 Tag ${source.tagId} 帧 ${source.frameIndex}` });
   }
   continueAVCContext(): void {
     const progress = avcReplayProgress(this.state.detail);
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || this.detailBusy || !this.detailPaused || !this.detailRequest ||
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning) || this.detailBusy || !this.detailPaused || !this.detailRequest ||
         this.state.detailState !== 'ready' || !progress?.canContinue || progress.target !== this.detailRequest.tagId ||
         !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (this.nextReadID === 18446744073709551615n) { this.update({ detailError: 'id_exhausted' }); return; }
@@ -876,7 +903,7 @@ export class Controller {
     this.ensureDetail();
   }
   retryDetail(): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || this.detailBusy || !this.detailPaused || !this.detailRequest || !this.state.detailRetry || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning) || this.detailBusy || !this.detailPaused || !this.detailRequest || !this.state.detailRetry || !this.ready() || this.refreshStatus || this.pollFailed) return;
     // Unconfirmed work keeps its identity. An explicitly failed read is cached
     // by the host, so only a deliberate new read advances the request number.
     if (this.state.detailRetry === 'reload') {
@@ -889,7 +916,8 @@ export class Controller {
     this.ensureDetail();
   }
   jumpTag(text: string, mp3FrameIndex?: number): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    this.timeSearchLocateTag = null;
     try {
       const id = unsigned(text), total = unsigned(this.state.session!.progress!.tagCount);
       if (id >= total) throw new Error('Out of range.');
@@ -901,7 +929,8 @@ export class Controller {
     } catch { this.update({ tagJumpError: 'tag_not_found' }); }
   }
   showHex(selection: HexSelection): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    this.timeSearchLocateTag = null;
     try {
       validateSelection(selection);
       if (unsigned(selection.offset) > unsigned(this.state.session!.progress!.sourceSize)) throw new Error('Out of range.');
@@ -926,7 +955,7 @@ export class Controller {
     if (this.state.detailState !== 'ready') this.update({ detailState: 'failed', detailError: 'detail_superseded', detailRetry: 'reload' });
   }
   private requestHex(offset: string, selection: HexSelection | null): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (this.nextReadID === 18446744073709551615n) { this.update({ hexError: 'id_exhausted' }); return; }
     // A direct byte selection supersedes a Tag jump whose index page is still
     // arriving. Keep that page usable, but do not open its obsolete detail and
@@ -948,7 +977,7 @@ export class Controller {
   private invalidateSource(): void {
     this.clearTrend();
     this.clearFilter();
-    this.clearAVCSearch(); this.clearCodecSearch();
+    this.clearAVCSearch(); this.clearCodecSearch(); this.clearTimeSearch();
     this.clearSummary();
     this.clearDetail();
     this.pageVersion++; this.jumpTagId = null;
@@ -956,7 +985,7 @@ export class Controller {
     this.update({ sourceChanged: true, error: 'source_changed', page: null, loading: false });
   }
   private ensureHex(): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || this.hexBusy || this.hexPaused || this.stopHexTimer || !this.hexRequest || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning) || this.hexBusy || this.hexPaused || this.stopHexTimer || !this.hexRequest || !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (this.hexPhase === 'start') void this.loadHex();
     else this.stopHexTimer = this.clock.after(() => { this.stopHexTimer = null; void this.loadHex(); }, POLL_MS);
   }
@@ -998,7 +1027,7 @@ export class Controller {
     } finally { this.hexBusy = false; this.ensureHex(); }
   }
   retryHex(): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || this.hexBusy || !this.hexPaused || !this.hexRequest || !this.state.hexRetry || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning) || this.hexBusy || !this.hexPaused || !this.hexRequest || !this.state.hexRetry || !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (this.state.hexRetry === 'reload') {
       if (this.nextReadID === 18446744073709551615n) { this.update({ hexError: 'id_exhausted' }); return; }
       this.hexRequest = { ...this.hexRequest, requestId: (++this.nextReadID).toString() };
@@ -1008,14 +1037,14 @@ export class Controller {
     this.ensureHex();
   }
   startAVCSearch(filter: AVCSearchFilter = this.state.avcSearchFilter): void {
-    if (this.disposed || this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
     try { avcSearchFilter(filter); } catch { return; }
     this.avcSearchHistory = [];
     this.requestAVCSearch('0', filter);
   }
   pageAVCSearch(direction: 'previous' | 'next'): void {
     const page = this.state.avcSearchPage;
-    if (!page || (this.state.avcSearchRunning || this.state.codecSearchRunning) || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (!page || (this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning) || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
     let start: string;
     if (direction === 'previous') {
       const previous = this.avcSearchHistory.pop(); if (previous === undefined) return; start = previous;
@@ -1048,7 +1077,7 @@ export class Controller {
     this.ensureAVCSearch();
   }
   retryAVCSearch(): void {
-    if (this.disposed || this.avcSearchBusy || !this.avcSearchPaused || !this.avcSearchRequest || !this.state.avcSearchRetry || !this.ready() || this.state.codecSearchRunning || this.state.summaryRunning || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || this.avcSearchBusy || !this.avcSearchPaused || !this.avcSearchRequest || !this.state.avcSearchRetry || !this.ready() || this.state.codecSearchRunning || this.state.timeSearchRunning || this.state.summaryRunning || this.refreshStatus || this.pollFailed) return;
     if (this.state.avcSearchRetry === 'reload') { this.requestAVCSearch(this.avcSearchRequest.start, this.avcSearchRequest.filter); return; }
     this.avcSearchRequest = { ...this.avcSearchRequest };
     this.avcSearchPhase = this.state.avcSearchCancelRequested ? 'cancel' : this.state.avcSearchError === 'avc_search_not_found' ? 'start' : 'get';
@@ -1117,14 +1146,128 @@ export class Controller {
     if (destination === 'tag') this.jumpTag(row.tagId);
     else if (row.span) this.showHex({ offset: row.span.byteOffset, bitOffset: row.span.bitOffset, bitLength: row.span.bitLength, label: `H.264 Tag ${row.tagId} 证据` });
   }
+  setTimeSearchOptions(options: Partial<Pick<ViewState, 'timeSearchFilter' | 'timeSearchGapThreshold'>>): void {
+    if (this.disposed || this.state.timeSearchRunning || !this.ready()) return;
+    if (options.timeSearchFilter !== undefined) timeSearchFilter(options.timeSearchFilter);
+    this.update(options);
+  }
+  startTimeSearch(filter: TimeSearchFilter = this.state.timeSearchFilter, gapThreshold: string = this.state.timeSearchGapThreshold): void {
+    if (this.disposed || this.state.summaryRunning || this.state.codecSearchRunning || this.state.avcSearchRunning || this.state.timeSearchRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    try { timeSearchFilter(filter); trendGap(gapThreshold); } catch { this.update({ timeSearchError: 'invalid_argument' }); return; }
+    this.requestTimeSearch('0', filter, gapThreshold, '0');
+  }
+  continueTimeSearch(): void {
+    const page = this.state.timeSearchPage;
+    if (this.disposed || !page || this.state.timeSearchState !== 'ready' || page.exhausted || this.state.timeSearchRunning || this.state.codecSearchRunning || this.state.avcSearchRunning || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    this.requestTimeSearch(page.nextCursor, page.filter, page.gapThreshold, page.next);
+  }
+  private requestTimeSearch(cursor: string, filter: TimeSearchFilter, gapThreshold: string, expectedStart: string | null): void {
+    if (this.nextReadID === 18446744073709551615n) { this.update({ timeSearchError: 'id_exhausted' }); return; }
+    this.clearDetail();
+    this.timeSearchLocateTag = null;
+    this.trendVersion++; this.trendWanted = false;
+    this.summaryPageVersion++; this.curveVersion++;
+    this.replyStops.get('trend')?.(); this.replyStops.get('summaryPage')?.(); this.replyStops.get('curve')?.();
+    this.update({ trendLoading: false, summaryPageLoading: false, curveLoading: false });
+    this.pageVersion++; this.jumpTagId = null;
+    this.replyStops.get('page')?.();
+    this.timeSearchRequest = { sessionId: this.state.session!.sessionId, requestId: (++this.nextReadID).toString(), cursor, filter, gapThreshold };
+    this.timeSearchExpectedStart = expectedStart;
+    this.timeSearchPhase = 'start'; this.timeSearchPaused = false; this.timeSearchPolls = 0;
+    this.update({ timeSearchPage: null, timeSearchState: 'loading', timeSearchRunning: true, timeSearchCancelRequested: false,
+      timeSearchError: null, timeSearchRetry: '', timeSearchCursor: cursor, timeSearchFilter: filter, timeSearchGapThreshold: gapThreshold, loading: false });
+    this.ensureTimeSearch();
+  }
+  cancelTimeSearch(): void {
+    if (this.disposed || !this.timeSearchRequest || !this.state.timeSearchRunning || this.state.timeSearchCancelRequested || !this.ready()) return;
+    this.timeSearchRequest = { ...this.timeSearchRequest };
+    this.stopTimeSearchTimer?.(); this.stopTimeSearchTimer = null;
+    this.replyStops.get('timeSearch')?.();
+    this.timeSearchPhase = 'cancel'; this.timeSearchPaused = false; this.timeSearchPolls = 0;
+    this.update({ timeSearchState: 'canceling', timeSearchCancelRequested: true, timeSearchError: null, timeSearchRetry: '' });
+    this.ensureTimeSearch();
+  }
+  retryTimeSearch(): void {
+    if (this.disposed || this.timeSearchBusy || !this.timeSearchPaused || !this.timeSearchRequest || !this.state.timeSearchRetry || !this.ready() || this.state.summaryRunning || this.state.codecSearchRunning || this.state.avcSearchRunning || this.refreshStatus || this.pollFailed) return;
+    if (this.state.timeSearchRetry === 'reload') { this.requestTimeSearch(this.timeSearchRequest.cursor, this.timeSearchRequest.filter, this.timeSearchRequest.gapThreshold, this.timeSearchExpectedStart); return; }
+    this.timeSearchRequest = { ...this.timeSearchRequest };
+    this.timeSearchPhase = this.state.timeSearchCancelRequested ? 'cancel' : this.state.timeSearchError === 'time_search_not_found' ? 'start' : 'get';
+    this.timeSearchPaused = false; this.timeSearchPolls = 0;
+    this.update({ timeSearchState: this.state.timeSearchCancelRequested ? 'canceling' : 'recovering', timeSearchError: null, timeSearchRetry: '' });
+    this.ensureTimeSearch();
+  }
+  private clearTimeSearch(): void {
+    this.timeSearchRequest = null; this.timeSearchPaused = false; this.timeSearchPolls = 0; this.timeSearchExpectedStart = null;
+    this.stopTimeSearchTimer?.(); this.stopTimeSearchTimer = null;
+    this.replyStops.get('timeSearch')?.();
+    this.update({ timeSearchPage: null, timeSearchState: '', timeSearchRunning: false, timeSearchCancelRequested: false,
+      timeSearchError: null, timeSearchRetry: '', timeSearchCursor: '0', timeSearchFilter: 'regressions', timeSearchGapThreshold: '1000' });
+  }
+  private ensureTimeSearch(): void {
+    if (this.disposed || this.timeSearchBusy || this.timeSearchPaused || this.stopTimeSearchTimer || !this.timeSearchRequest || !this.state.timeSearchRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.timeSearchPhase !== 'get') void this.loadTimeSearch();
+    else this.stopTimeSearchTimer = this.clock.after(() => { this.stopTimeSearchTimer = null; void this.loadTimeSearch(); }, POLL_MS);
+  }
+  private async loadTimeSearch(): Promise<void> {
+    const request = this.timeSearchRequest;
+    if (!request || this.timeSearchBusy || !this.ready() || this.disposed) return;
+    const current = () => !this.disposed && this.timeSearchRequest === request && this.state.session?.sessionId === request.sessionId && this.ready();
+    const phase = this.timeSearchPhase;
+    this.timeSearchBusy = true;
+    try {
+      const response = await this.awaitReply('timeSearch', () => phase === 'start' ? this.api.startTimeSearch(request) : phase === 'cancel' ? this.api.cancelTimeSearch(request) : this.api.timeSearchResult(request));
+      if (!current()) return;
+      try { validateTimeSearch(response, request, this.state.session!.progress!.tagCount, this.state.session!.progress!.sourceSize, this.timeSearchExpectedStart); } catch { throw new RequestError('invalid_response'); }
+      if (response.page && response.page.scanComplete !== this.state.session!.scan!.complete) throw new RequestError('invalid_response');
+      if (response.state === 'ready') {
+        this.timeSearchPaused = true;
+        this.update({ timeSearchPage: response.page, timeSearchState: 'ready', timeSearchRunning: false, timeSearchCancelRequested: false, timeSearchError: null, timeSearchRetry: '' });
+        this.ensurePage();
+      } else if (response.state === 'failed') {
+        const code = response.error!.code;
+        if (code === 'source_changed') { this.invalidateSource(); return; }
+        this.timeSearchPaused = true;
+        const uncertain = code === 'time_search_not_found';
+        this.update({ timeSearchState: 'failed', timeSearchRunning: uncertain, timeSearchCancelRequested: uncertain && this.state.timeSearchCancelRequested,
+          timeSearchError: code, timeSearchRetry: uncertain ? 'confirm' : ['time_search_failed', 'deadline_exceeded', 'canceled'].includes(code) ? 'reload' : '' });
+        if (!uncertain) this.ensurePage();
+      } else {
+        this.timeSearchPhase = 'get';
+        if (this.state.timeSearchCancelRequested && response.state === 'pending') {
+          this.timeSearchPaused = true;
+          this.update({ timeSearchState: 'canceling', timeSearchError: 'time_search_cancel_unconfirmed', timeSearchRetry: 'confirm' });
+        } else if (phase === 'get' && ++this.timeSearchPolls >= DETAIL_POLL_LIMIT) {
+          this.timeSearchPaused = true;
+          this.update({ timeSearchState: response.state, timeSearchError: 'time_search_wait_paused', timeSearchRetry: 'confirm' });
+        } else this.update({ timeSearchState: response.state, timeSearchCancelRequested: response.state === 'canceling' || this.state.timeSearchCancelRequested, timeSearchError: null, timeSearchRetry: '' });
+      }
+    } catch (error) {
+      if (!current()) return;
+      if ((phase === 'start' || phase === 'cancel') && !(error instanceof RequestError)) {
+        this.timeSearchPhase = 'get';
+        this.update({ timeSearchState: this.state.timeSearchCancelRequested ? 'canceling' : 'recovering', timeSearchError: null });
+      } else {
+        this.timeSearchPaused = true;
+        this.update({ timeSearchState: this.state.timeSearchCancelRequested ? 'canceling' : 'failed', timeSearchError: errorCode(error), timeSearchRetry: 'confirm' });
+      }
+    } finally { this.timeSearchBusy = false; this.ensureTimeSearch(); }
+  }
+  locateTimeSearchRow(row: TimeSearchRow): void {
+    if (this.disposed || this.state.timeSearchState !== 'ready' || !this.state.timeSearchPage?.rows.includes(row) ||
+        this.state.timeSearchRunning || this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning ||
+        !this.ready() || this.refreshStatus || this.pollFailed) return;
+    this.setTrendOptions({ trendType: 'all', trendMetric: 'delta', trendGapThreshold: this.state.timeSearchPage.gapThreshold });
+    this.loadTagTrends((unsigned(row.point.tagId) / BigInt(TREND_PAGE_SIZE) * BigInt(TREND_PAGE_SIZE)).toString());
+    this.timeSearchLocateTag = row.point.tagId;
+  }
   startCodecSearch(kind: CodecSearchKind = this.state.codecSearchKind, filter: CodecSearchFilter = kind === this.state.codecSearchKind ? this.state.codecSearchFilter : 'all'): void {
-    if (this.disposed || this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
     try { codecSearchKind(kind); codecSearchFilter(kind, filter); } catch { return; }
     this.requestCodecSearch('0', kind, filter, { tagId: '0', frameIndex: 0 });
   }
   continueCodecSearch(): void {
     const page = this.state.codecSearchPage;
-    if (this.disposed || !page || this.state.codecSearchState !== 'ready' || page.exhausted || this.state.codecSearchRunning || this.state.avcSearchRunning || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || !page || this.state.codecSearchState !== 'ready' || page.exhausted || this.state.codecSearchRunning || this.state.timeSearchRunning || this.state.avcSearchRunning || this.state.summaryRunning || !this.ready() || this.refreshStatus || this.pollFailed) return;
     this.requestCodecSearch(page.nextCursor, page.kind, page.filter, page.next);
   }
   private requestCodecSearch(cursor: string, kind: CodecSearchKind, filter: CodecSearchFilter, expectedStart: CodecSearchPosition | null): void {
@@ -1149,7 +1292,7 @@ export class Controller {
     this.ensureCodecSearch();
   }
   retryCodecSearch(): void {
-    if (this.disposed || this.codecSearchBusy || !this.codecSearchPaused || !this.codecSearchRequest || !this.state.codecSearchRetry || !this.ready() || this.state.summaryRunning || this.state.avcSearchRunning || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || this.state.timeSearchRunning || this.codecSearchBusy || !this.codecSearchPaused || !this.codecSearchRequest || !this.state.codecSearchRetry || !this.ready() || this.state.summaryRunning || this.state.avcSearchRunning || this.refreshStatus || this.pollFailed) return;
     if (this.state.codecSearchRetry === 'reload') { this.requestCodecSearch(this.codecSearchRequest.cursor, this.codecSearchRequest.kind, this.codecSearchRequest.filter, this.codecSearchExpectedStart); return; }
     this.codecSearchRequest = { ...this.codecSearchRequest };
     this.codecSearchPhase = this.state.codecSearchCancelRequested ? 'cancel' : this.state.codecSearchError === 'codec_search_not_found' ? 'start' : 'get';
@@ -1224,7 +1367,7 @@ export class Controller {
     if (span) this.showHex(selectionFromSpan(span, `编解码器证据 ${codecRowID(row)} ${destination}`));
   }
   startSummary(): void {
-    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || (this.state.summaryRunning || this.state.avcSearchRunning || this.state.codecSearchRunning || this.state.timeSearchRunning) || !this.ready() || this.refreshStatus || this.pollFailed) return;
     if (this.nextReadID === 18446744073709551615n) { this.update({ summaryError: 'id_exhausted' }); return; }
     this.clearSummary();
     this.clearDetail();
@@ -1247,7 +1390,7 @@ export class Controller {
     this.ensureSummary();
   }
   retrySummary(): void {
-    if (this.disposed || this.summaryBusy || !this.summaryPaused || !this.summaryRequest || !this.state.summaryRetry || !this.ready() || this.state.codecSearchRunning || this.state.avcSearchRunning || this.refreshStatus || this.pollFailed) return;
+    if (this.disposed || this.summaryBusy || !this.summaryPaused || !this.summaryRequest || !this.state.summaryRetry || !this.ready() || this.state.codecSearchRunning || this.state.timeSearchRunning || this.state.avcSearchRunning || this.refreshStatus || this.pollFailed) return;
     if (this.state.summaryRetry === 'reload') { this.startSummary(); return; }
     this.summaryRequest = { ...this.summaryRequest };
     this.summaryPhase = this.state.summaryCancelRequested ? 'cancel' : this.state.summaryError === 'summary_not_found' ? 'start' : 'get';
@@ -1321,12 +1464,14 @@ export class Controller {
     } finally { this.summaryBusy = false; this.ensureSummary(); }
   }
   selectSummaryKind(kind: SummaryKind): void {
+    if (this.state.timeSearchRunning) return;
     if (this.disposed || this.state.summaryState !== 'ready' || !this.ready()) return;
     try { summaryKind(kind); } catch { return; }
     this.summaryHistory = [];
     this.requestSummaryPage(kind, '0');
   }
   pageSummary(direction: 'first' | 'previous' | 'next'): void {
+    if (this.state.timeSearchRunning) return;
     const page = this.state.summaryPage;
     if (!page || this.state.summaryPageLoading || this.state.summaryState !== 'ready' || !this.ready()) return;
     let start: string;
@@ -1336,6 +1481,7 @@ export class Controller {
     this.requestSummaryPage(this.state.summaryKind, start);
   }
   retrySummaryPage(): void {
+    if (this.state.timeSearchRunning) return;
     if (!this.state.summaryPageError || this.state.summaryPageLoading || this.state.summaryState !== 'ready' || !this.ready()) return;
     this.requestSummaryPage(this.state.summaryKind, this.state.summaryStart);
   }
@@ -1346,6 +1492,7 @@ export class Controller {
     this.ensureSummaryPage();
   }
   private ensureSummaryPage(): void {
+    if (this.state.timeSearchRunning) return;
     if (this.disposed || this.summaryPageBusy || !this.state.summaryPageLoading || !this.summaryRequest || this.state.summaryState !== 'ready' || !this.ready()) return;
     void this.loadSummaryPage();
   }
@@ -1387,6 +1534,7 @@ export class Controller {
     this.update({ curvePage: null, curveLoading: false, curveError: null, curveStart: '0', curveSelectedIndex: null, curveMetric: 'audio' });
   }
   loadMediaCurves(start = '0'): void {
+    if (this.state.timeSearchRunning) return;
     if (this.disposed || !this.ready() || this.refreshStatus || this.pollFailed || this.state.summaryState !== 'ready' || !this.state.summary) return;
     try { if (unsigned(start) > (unsigned(this.state.summary.indexedTags) + 255n) / 256n) throw Error('Out of curve range.'); }
     catch { this.update({ curveError: 'invalid_argument' }); return; }
@@ -1409,6 +1557,7 @@ export class Controller {
     this.loadMediaCurves(this.state.curveStart);
   }
   private ensureCurves(): void {
+    if (this.state.timeSearchRunning) return;
     if (this.disposed || this.curveBusy || !this.state.curveLoading || !this.summaryRequest || this.state.summaryState !== 'ready' || !this.ready() || this.refreshStatus || this.pollFailed) return;
     void this.readCurves();
   }
@@ -1464,6 +1613,8 @@ export class Controller {
     this.stopDetailTimer?.(); this.stopDetailTimer = null;
     this.hexRequest = null;
     this.stopHexTimer?.(); this.stopHexTimer = null;
+    this.timeSearchRequest = null; this.timeSearchLocateTag = null;
+    this.stopTimeSearchTimer?.(); this.stopTimeSearchTimer = null;
     this.codecSearchRequest = null;
     this.stopCodecSearchTimer?.(); this.stopCodecSearchTimer = null;
     this.avcSearchRequest = null;

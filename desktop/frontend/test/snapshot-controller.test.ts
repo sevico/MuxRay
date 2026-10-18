@@ -27,6 +27,7 @@ function setup(overrides: Partial<API> = {}) {
   let opens = 0;
   const session = (id = `scan-${opens}`): Session => ({ sessionId: id, state: 'canceled', terminal: true, closed: false, scan: { complete: false, hasErrors: false }, failure: null, progress: { sourceSize: '10000', bytesScanned: '10000', tagCount: '2', diagnosticCount: 0 } });
   const api: API = {
+    startTimeSearch: async () => { throw Error('unexpected timestamp search'); }, timeSearchResult: async () => { throw Error('unexpected timestamp search result'); }, cancelTimeSearch: async () => { throw Error('unexpected timestamp search cancel'); },
     startCodecSearch: async () => { throw Error('unexpected codec search'); }, codecSearchResult: async () => { throw Error('unexpected codec search result'); }, cancelCodecSearch: async () => { throw Error('unexpected codec search cancel'); },
     startAVCSearch: async () => { throw Error('unexpected AVC search'); }, avcSearchResult: async () => { throw Error('unexpected AVC search result'); }, cancelAVCSearch: async () => { throw Error('unexpected AVC search cancel'); },
     mediaCurves: async () => { throw Error('unexpected media curves'); },

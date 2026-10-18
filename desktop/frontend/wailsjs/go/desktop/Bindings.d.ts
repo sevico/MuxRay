@@ -10,6 +10,8 @@ export function CancelScan(arg1:string):Promise<desktop.SessionResponse>;
 
 export function CancelSummary(arg1:desktop.SummaryQuery):Promise<desktop.SummaryResponse>;
 
+export function CancelTimeSearch(arg1:desktop.DetailQuery):Promise<desktop.TimeSearchResponse>;
+
 export function CloseFile(arg1:string):Promise<desktop.SessionResponse>;
 
 export function GetAVCSearch(arg1:desktop.DetailQuery):Promise<desktop.AVCSearchResponse>;
@@ -36,6 +38,8 @@ export function GetTagTrends(arg1:desktop.PageRequest):Promise<desktop.TagTrendP
 
 export function GetTags(arg1:desktop.PageRequest):Promise<desktop.TagPageResponse>;
 
+export function GetTimeSearch(arg1:desktop.DetailQuery):Promise<desktop.TimeSearchResponse>;
+
 export function OpenFile(arg1:desktop.OpenRequest):Promise<desktop.SessionResponse>;
 
 export function StartAVCSearch(arg1:desktop.AVCSearchRequest):Promise<desktop.AVCSearchResponse>;
@@ -47,3 +51,5 @@ export function StartDetail(arg1:desktop.DetailRequest):Promise<desktop.DetailRe
 export function StartHex(arg1:desktop.HexRequest):Promise<desktop.HexResponse>;
 
 export function StartSummary(arg1:desktop.SummaryQuery):Promise<desktop.SummaryResponse>;
+
+export function StartTimeSearch(arg1:desktop.TimeSearchRequest):Promise<desktop.TimeSearchResponse>;

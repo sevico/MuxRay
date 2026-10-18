@@ -34,6 +34,7 @@ function setup(overrides: Partial<API> = {}, indexed = '33000') {
     progress: { sourceSize: '9007199254742000', bytesScanned: '20000', tagCount: indexed, diagnosticCount: 0 } };
   let session = base;
   const api: API = {
+    startTimeSearch: async () => { throw Error('unexpected timestamp search'); }, timeSearchResult: async () => { throw Error('unexpected timestamp search result'); }, cancelTimeSearch: async () => { throw Error('unexpected timestamp search cancel'); },
     startCodecSearch: async () => { throw Error('unexpected codec search'); }, codecSearchResult: async () => { throw Error('unexpected codec search result'); }, cancelCodecSearch: async () => { throw Error('unexpected codec search cancel'); },
     startAVCSearch: async () => { throw Error('unexpected AVC search'); }, avcSearchResult: async () => { throw Error('unexpected AVC search result'); }, cancelAVCSearch: async () => { throw Error('unexpected AVC search cancel'); },
     open: async requestId => { session = { ...base, sessionId: `s${++opens}` }; return { apiVersion: 1, requestId, pending: false, canceled: false, fileName: 'curves.flv', session, error: null }; },

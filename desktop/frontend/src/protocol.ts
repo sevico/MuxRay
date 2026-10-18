@@ -65,6 +65,17 @@ export interface AVCSearchPage {
 export interface AVCSearchResponse extends DetailQuery {
   apiVersion: number; state: 'pending' | 'canceling' | 'ready' | 'failed'; page: AVCSearchPage | null; error: Fault | null;
 }
+export type TimeSearchFilter = 'all' | 'regressions' | 'duplicates' | 'gaps';
+export type TimeSearchKind = 'regression' | 'duplicate' | 'gap' | 'unknown';
+export interface TimeSearchRequest extends DetailQuery { cursor: string; filter: TimeSearchFilter; gapThreshold: string }
+export interface TimeSearchRow { kind: TimeSearchKind; point: TagTrendPoint }
+export interface TimeSearchPage {
+  cursor: string; nextCursor: string; start: string; next: string; total: string; scanned: number;
+  filter: TimeSearchFilter; gapThreshold: string; exhausted: boolean; scanComplete: boolean; unknownPredecessors: number; rows: TimeSearchRow[];
+}
+export interface TimeSearchResponse extends DetailQuery {
+  apiVersion: number; state: 'pending' | 'canceling' | 'ready' | 'failed'; page: TimeSearchPage | null; error: Fault | null;
+}
 export type CodecSearchKind = 'mp3' | 'sei';
 export type CodecSearchFilter = 'all' | 'parameters' | 'bitrate' | 'stops' | 'bufferingPeriod' | 'pictureTiming' | 'unknown';
 export interface CodecSearchRequest extends DetailQuery { cursor: string; kind: CodecSearchKind; filter: CodecSearchFilter }
@@ -173,6 +184,9 @@ export interface API {
   startAVCSearch(request: AVCSearchRequest): Promise<AVCSearchResponse>;
   avcSearchResult(request: DetailQuery): Promise<AVCSearchResponse>;
   cancelAVCSearch(request: DetailQuery): Promise<AVCSearchResponse>;
+  startTimeSearch(request: TimeSearchRequest): Promise<TimeSearchResponse>;
+  timeSearchResult(request: DetailQuery): Promise<TimeSearchResponse>;
+  cancelTimeSearch(request: DetailQuery): Promise<TimeSearchResponse>;
   startCodecSearch(request: CodecSearchRequest): Promise<CodecSearchResponse>;
   codecSearchResult(request: DetailQuery): Promise<CodecSearchResponse>;
   cancelCodecSearch(request: DetailQuery): Promise<CodecSearchResponse>;

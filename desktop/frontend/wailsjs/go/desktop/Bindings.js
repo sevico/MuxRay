@@ -18,6 +18,10 @@ export function CancelSummary(arg1) {
   return window['go']['desktop']['Bindings']['CancelSummary'](arg1);
 }
 
+export function CancelTimeSearch(arg1) {
+  return window['go']['desktop']['Bindings']['CancelTimeSearch'](arg1);
+}
+
 export function CloseFile(arg1) {
   return window['go']['desktop']['Bindings']['CloseFile'](arg1);
 }
@@ -70,6 +74,10 @@ export function GetTags(arg1) {
   return window['go']['desktop']['Bindings']['GetTags'](arg1);
 }
 
+export function GetTimeSearch(arg1) {
+  return window['go']['desktop']['Bindings']['GetTimeSearch'](arg1);
+}
+
 export function OpenFile(arg1) {
   return window['go']['desktop']['Bindings']['OpenFile'](arg1);
 }
@@ -92,4 +100,8 @@ export function StartHex(arg1) {
 
 export function StartSummary(arg1) {
   return window['go']['desktop']['Bindings']['StartSummary'](arg1);
+}
+
+export function StartTimeSearch(arg1) {
+  return window['go']['desktop']['Bindings']['StartTimeSearch'](arg1);
 }

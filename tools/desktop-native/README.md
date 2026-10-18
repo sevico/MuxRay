@@ -894,3 +894,23 @@ gate 仍阻塞时没有 orderly source Close；进程退出后由 OS 回收句�
 取证不会重复点击关闭，不会把原始失败改成通过，也不据不完整的 AT-SPI 树推断
 产品根因。测试继续使用独立 Xvfb/D-Bus 和 `GSETTINGS_BACKEND=memory`，不写系统
 辅助功能配置。原生窗口偶发关闭超时仍需凭实际动作、资源与进程证据判断。
+
+## 长索引时间戳检索样本（ADR-033）
+
+标准库生成器在新的绝对目录中写入 `time-search-long.flv` 和 `fixtures.json`，
+随后独立遍历已写字节，验证完整 Tag framing、DTS、PreviousTagSize 和预期差值：
+
+```powershell
+python -B tools/desktop-native/time_search_fixtures.py --output-dir 'C:\work\time-search-fixtures-new'
+```
+
+样本为 190,013 byte、10,000 Tag；Tag 0 是 AAC sequence header，其余为小型 AAC
+raw packet。正常 DTS 为 `Tag ID × 20 ms`，Tag 8,192 比同流前驱 8,191 回退 100 ms，
+Tag 8,193 恢复正常时间线，因此产生 +140 ms 间隔。它仅具有完整 FLV framing 和
+AAC packet 头，不声明可播放或完整解码音频，也不代表真实损坏录像。
+
+从 Tag 0 开始，使用“全部观察”和 1,000 ms 阈值，三批检查范围依次为
+`[0,4096)`、`[4096,8192)`、`[8192,10000)`；仅第三批命中 Tag 8,192。
+若阈值设为 100 ms，恢复时间线的 Tag 8,193 也应作为间隔命中。清单记录 SHA-256、
+批次边界、命中及前驱的精确偏移和 DTS，供检索 → 趋势 → 详情/Hex → 原生导出
+验收复用；生成成功不等同于桌面验收通过。媒体产物不加入 Git。

@@ -10,7 +10,7 @@ const contexts: Record<string, string> = { resolved: '上下文已确定', missi
 
 export function CodecSearchPanel({ view, controller, disabled, message }: { view: ViewState; controller: Controller; disabled: boolean; message: (code: string) => string }) {
   const page = view.codecSearchPage, running = view.codecSearchRunning, kind = view.codecSearchKind;
-  const blocked = disabled || view.summaryRunning || view.avcSearchRunning;
+  const blocked = disabled || view.timeSearchRunning || view.summaryRunning || view.avcSearchRunning;
   return <section className="summary-panel" aria-label="编解码器批量检索">
     <div className="detail-heading"><div><p className="eyebrow">按批查找变化与来源</p><h2>MP3 / SEI 批量检索</h2></div><div className="actions">
       <label>类型 <select aria-label="编解码器检索类型" disabled={blocked || running} value={kind} onChange={event => controller.startCodecSearch(codecSearchKind(event.target.value))}>

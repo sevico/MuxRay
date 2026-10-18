@@ -52,6 +52,7 @@ const (
 	summaryWork
 	avcSearchWork
 	codecSearchWork
+	timeSearchWork
 )
 
 type work struct {
@@ -66,6 +67,8 @@ type work struct {
 	filter        string
 	codec         string
 	codecSeed     *codecSearchCursor
+	timeSeed      *timeSearchCursor
+	gapThreshold  uint32
 }
 
 // DetailResult is the latest selected request. Its value is copied on return;
@@ -105,6 +108,8 @@ type Document struct {
 	avcSearch      AVCSearchResult
 	codecSearch    CodecSearchResult
 	codecCursors   []codecSearchCursor
+	timeSearch     TimeSearchResult
+	timeCursors    []timeSearchCursor
 	summary        SummaryResult
 	summaryReport  *summaryview.Report
 	pending        *work
@@ -167,6 +172,7 @@ func (d *Document) run() {
 			d.summary.Overview, d.summaryReport = nil, nil
 			d.avcSearch.Page = nil
 			d.codecSearch.Page, d.codecCursors = nil, nil
+			d.timeSearch.Page, d.timeCursors = nil, nil
 			d.avcParameters.Clear()
 			d.mp3Pages = nil
 			d.mu.Unlock()
@@ -205,6 +211,8 @@ func (d *Document) run() {
 		var searchPage *avcsearch.Page
 		var codecPage *CodecSearchPage
 		var codecNext *codecSearchCursor
+		var timePage *TimeSearchPage
+		var timeNext *timeSearchCursor
 		var checkpoint *avccontext.ParameterCheckpoint
 		var mp3Checkpoints []mp3PageCheckpoint
 		var err error
@@ -214,6 +222,8 @@ func (d *Document) run() {
 			summary, err = d.readSummary(ctx, selected.id)
 		} else if selected.kind == codecSearchWork {
 			codecPage, codecNext, err = d.readCodecSearch(ctx, *selected)
+		} else if selected.kind == timeSearchWork {
+			timePage, timeNext, err = d.readTimeSearch(ctx, *selected)
 		} else if selected.kind == avcSearchWork {
 			searchPage, err = d.readAVCSearch(ctx, selected.offset, selected.filter)
 		} else {
@@ -264,6 +274,18 @@ func (d *Document) run() {
 			} else {
 				d.commitCodecCursorLocked(*selected, codecNext)
 			}
+		} else if !d.closed && selected.kind == timeSearchWork && d.timeSearch.RequestID == selected.id {
+			if d.changed {
+				err = ErrSourceChanged
+			} else if d.timeSearch.State == "canceling" || d.request.id != selected.id {
+				err = context.Canceled
+			}
+			d.timeSearch.State, d.timeSearch.Err, d.timeSearch.Page = "ready", err, timePage
+			if err != nil {
+				d.timeSearch.State, d.timeSearch.Page = "failed", nil
+			} else {
+				d.commitTimeCursorLocked(*selected, timeNext)
+			}
 		} else if !d.closed && d.request.id == selected.id {
 			if selected.kind == hexWork {
 				d.hex.Window, d.hex.Err, d.hex.State = window, err, "ready"
@@ -309,6 +331,7 @@ func (d *Document) sourceUnchanged() error {
 		d.invalidateSummaryLocked(ErrSourceChanged)
 		d.invalidateAVCSearchLocked(ErrSourceChanged)
 		d.invalidateCodecSearchLocked(ErrSourceChanged)
+		d.invalidateTimeSearchLocked(ErrSourceChanged)
 		d.mu.Unlock()
 		return ErrSourceChanged
 	}
@@ -453,6 +476,7 @@ func (d *Document) admitLocked(task work) {
 	d.cancelSummaryLocked()
 	d.cancelAVCSearchLocked()
 	d.cancelCodecSearchLocked()
+	d.cancelTimeSearchLocked()
 	d.request = task
 	d.pending = &task
 	d.latest, d.hex = DetailResult{}, HexResult{}
@@ -468,6 +492,8 @@ func (d *Document) admitLocked(task work) {
 		d.summaryReport = nil
 	} else if task.kind == codecSearchWork {
 		d.codecSearch = CodecSearchResult{RequestID: task.id, State: "pending"}
+	} else if task.kind == timeSearchWork {
+		d.timeSearch = TimeSearchResult{RequestID: task.id, State: "pending"}
 	} else if task.kind == avcSearchWork {
 		d.avcSearch = AVCSearchResult{RequestID: task.id, State: "pending"}
 	}
@@ -566,6 +592,7 @@ func (d *Document) Close(ctx context.Context) error {
 	d.summary.Overview, d.summaryReport = nil, nil
 	d.avcSearch.Page = nil
 	d.codecSearch.Page, d.codecCursors = nil, nil
+	d.timeSearch.Page, d.timeCursors = nil, nil
 	if d.activeCancel != nil {
 		d.activeCancel()
 	}
