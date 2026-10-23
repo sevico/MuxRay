@@ -53,6 +53,8 @@ AVC 配置定位分别见 [ADR-012](../docs/decisions/012-recoverable-native-ope
 CLI 合同保持不变。检索协议及资源界限见
 [ADR-033](../docs/decisions/033-bounded-timestamp-observation-search.md)，快照扩展见
 [ADR-034](../docs/decisions/034-timestamp-search-snapshot-v5.md)。
+本次固定候选程序的 Windows 原生保存、源字节核对与退出结果见
+[时间戳快照 v5 验收](../docs/desktop-timestamp-snapshot-v5-20261024.md)。
 
 ## 完整普通 H.264 头与 MP3 全帧汇总
 
