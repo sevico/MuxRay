@@ -106,10 +106,10 @@ class SnapshotCheckTests(unittest.TestCase):
                     checker.check_snapshot(self.report_path)
 
     def test_snapshot_versions_and_omissions_remain_distinct(self):
-        for name in ("minimal-v1", "minimal-v2", "full-v1", "full-v2", "minimal-v3", "full-v3", "minimal-v4", "full-v4", "mp3-v4"):
+        for name in ("minimal-v1", "minimal-v2", "full-v1", "full-v2", "minimal-v3", "full-v3", "minimal-v4", "full-v4", "mp3-v4", "minimal-v5", "full-v5"):
             path = checker.ROOT / f"testdata/golden/desktop-diagnostic-snapshot-{name}.json"
             self.assertTrue(checker.check_snapshot(path)["schemaValid"])
-        for version in (0, 5, True, "2"):
+        for version in (0, 6, True, "2"):
             report = self.v2_report()
             report["schemaVersion"] = version
             self.report_path.write_text(json.dumps(report), encoding="utf-8")
@@ -432,6 +432,127 @@ class SnapshotCheckTests(unittest.TestCase):
         changed["omitted"].append({"section": "selectedTag", "reason": "not_requested"})
         with self.assertRaisesRegex(ValueError, "different Tag"):
             self.check(changed)
+
+
+    def test_v5_committed_codec_and_timestamp_pages_share_verified_source(self):
+        report = json.loads((checker.ROOT / "testdata/golden/desktop-diagnostic-snapshot-full-v5.json").read_text())
+        data = bytearray(b"FLV\x01\x05\x00\x00\x00\x09\x00\x00\x00\x00")
+        payload = bytearray(1 + 417 * 3000)
+        payload[0] = 0x2f
+        for i in range(3000):
+            payload[1+i*417:5+i*417] = bytes.fromhex("fffb9064")
+        payload[1+2600*417+3] = 0xe4
+        for body in (payload, bytes.fromhex("2f00000000")):
+            header = bytearray(11)
+            header[0], header[1:4] = 8, len(body).to_bytes(3, "big")
+            data.extend(header + body + (11+len(body)).to_bytes(4, "big"))
+        source = self.directory / report["fileName"]
+        source.write_bytes(data)
+        result = self.check(report, source)
+        self.assertEqual(result["timeSearchRowsMatchingSource"], 1)
+        self.assertEqual(result["codecSearchRowsMatchingSource"], 3)
+        self.assertEqual(result["sourceSHA256"], hashlib.sha256(data).hexdigest())
+
+    def time_report(self, tags, rows, start=0, end=None, filter="all", complete=True):
+        report = json.loads((checker.ROOT / "testdata/golden/desktop-diagnostic-snapshot-minimal-v5.json").read_text())
+        end = len(tags) if end is None else end
+        data = bytearray(b"FLV\x01\x05\x00\x00\x00\x09\x00\x00\x00\x00")
+        for typ, stream, dts in tags:
+            data.extend(bytes([typ, 0, 0, 0]) + (dts & 0xffffff).to_bytes(3, "big") + bytes([dts >> 24]) + stream.to_bytes(3, "big") + (11).to_bytes(4, "big"))
+        report["fileName"] = "time.flv"
+        report["session"]["progress"].update(sourceSize=str(len(data)), bytesScanned=str(len(data)), tagCount=str(len(tags)))
+        report["session"]["scan"]["complete"] = complete
+        report["session"]["state"] = "finished" if complete else "canceled"
+        report["selection"]["timeSearch"] = dict(requestId="9007199254740999", start=str(start), filter=filter, gapThreshold="1000")
+        report["timeSearchPage"] = dict(apiVersion=1, sessionId="scan-1", requestId="9007199254740999", state="ready", error=None,
+            page=dict(start=str(start), next=str(end), total=str(len(tags)), scanned=end-start, filter=filter, gapThreshold="1000", exhausted=end==len(tags), scanComplete=complete,
+                      unknownPredecessors=sum(r["kind"] == "unknown" for r in rows), rows=rows, inspectedStart="0", inspectedEnd=str(end)))
+        report["omitted"] = [x for x in report["omitted"] if x["section"] != "timeSearchPage"]
+        source = self.directory / "time.flv"
+        source.write_bytes(data)
+        return report, source
+
+    @staticmethod
+    def time_row(tag, dts, previous, prior_dts, kind="regression", typ=9, stream=0):
+        return dict(kind=kind, point=dict(tagId=str(tag), offset=str(13 + tag * 15), dts=str(dts), typeCode=typ, streamId=stream,
+            dataSize=0, availableDataSize=0, payloadComplete=True, previousTagSizeState="valid", filtered=False,
+            previousTagId=str(previous) if previous is not None else None, previousDts=str(prior_dts) if prior_dts is not None else None,
+            deltaMs=str(dts-prior_dts) if prior_dts is not None else None, context="found" if prior_dts is not None else "budget_exhausted"))
+
+    def test_v5_tail_regression_uses_earlier_batch_predecessor_and_partial_coverage(self):
+        tags = [(9, 0, n * 20) for n in range(8193)]
+        tags[-1] = (9, 0, 163720)
+        row = self.time_row(8192, 163720, 8191, 163820)
+        report, source = self.time_report(tags, [row], start=8192, filter="regressions", complete=False)
+        result = self.check(report, SourcePathSpy(source))
+        self.assertEqual(result["timeSearchRowsMatchingSource"], 1)
+        self.assertEqual(result["timeSearchInspectedRange"], ["0", "8193"])
+        self.assertFalse(result["scanComplete"])
+        for name, mutate in {
+            "missing_row": lambda r: r["timeSearchPage"]["page"].update(rows=[]),
+            "false_predecessor": lambda r: r["timeSearchPage"]["page"]["rows"][0]["point"].update(previousTagId="8190", previousDts="163800", deltaMs="-80"),
+            "invented_point": lambda r: r["timeSearchPage"]["page"]["rows"][0]["point"].update(dts="163700", deltaMs="-120"),
+            "wrong_stream": lambda r: r["timeSearchPage"]["page"]["rows"][0]["point"].update(streamId=1),
+            "wrong_flags": lambda r: r["timeSearchPage"]["page"]["rows"][0]["point"].update(filtered=True),
+            "wrong_trailer": lambda r: r["timeSearchPage"]["page"]["rows"][0]["point"].update(previousTagSizeState="invalid"),
+        }.items():
+            broken = copy.deepcopy(report)
+            mutate(broken)
+            with self.subTest(name=name), self.assertRaises((ValueError, ValidationError)):
+                self.check(broken, source)
+
+    def test_v5_forged_complete_index_cannot_hide_remaining_source_tags(self):
+        report, source = self.time_report([(9, 0, 0), (9, 0, 20)], [])
+        report["session"]["progress"]["tagCount"] = "1"
+        report["timeSearchPage"]["page"].update(next="1", total="1", scanned=1, inspectedEnd="1")
+        with self.assertRaisesRegex(ValueError, "source boundary"):
+            self.check(report, source)
+
+    def test_v5_unknown_track_eviction_is_not_a_fabricated_regression(self):
+        tags = [(9, n, n) for n in range(513)] + [(9, 0, 0)]
+        rows = [self.time_row(512, 512, None, None, "unknown", stream=512), self.time_row(513, 0, None, None, "unknown")]
+        report, source = self.time_report(tags, rows, filter="regressions")
+        self.assertEqual(self.check(report, source)["timeSearchRowsMatchingSource"], 2)
+        broken = copy.deepcopy(report)
+        broken["timeSearchPage"]["page"]["rows"][1] = self.time_row(513, 0, 0, 0, "duplicate")
+        broken["timeSearchPage"]["page"]["unknownPredecessors"] = 1
+        with self.assertRaises((ValueError, ValidationError)):
+            self.check(broken, source)
+
+    def test_v5_equal_threshold_does_not_become_gap_and_64_row_stop_is_exact(self):
+        tags = [(9, 0, 0), (9, 0, 1000), (9, 0, 2001)]
+        report, source = self.time_report(tags, [self.time_row(2, 2001, 1, 1000, "gap")], filter="gaps")
+        self.assertEqual(self.check(report, source)["timeSearchRowsMatchingSource"], 1)
+        tags = [(9, 0, 0)] * 80
+        rows = [self.time_row(n, 0, n-1, 0, "duplicate") for n in range(1, 65)]
+        report, source = self.time_report(tags, rows, end=65, filter="duplicates")
+        self.assertEqual(self.check(report, source)["timeSearchRowsMatchingSource"], 64)
+        report["timeSearchPage"]["page"].update(next="66", inspectedEnd="66", scanned=66)
+        with self.assertRaisesRegex(ValueError, "batch boundary"):
+            self.check(report, source)
+
+    def test_v5_identity_coverage_budget_and_arithmetic_corruption_fail_without_source(self):
+        report, _ = self.time_report([(9, 0, 200), (9, 0, 100)], [self.time_row(1, 100, 0, 200)])
+        for name, mutate in {
+            "session": lambda r: r["timeSearchPage"].update(sessionId="scan-2"),
+            "request": lambda r: r["timeSearchPage"].update(requestId="2"),
+            "inspected_end": lambda r: r["timeSearchPage"]["page"].update(inspectedEnd="1"),
+            "scanned": lambda r: r["timeSearchPage"]["page"].update(scanned=1),
+            "total": lambda r: r["timeSearchPage"]["page"].update(total="3"),
+            "query": lambda r: r["selection"]["timeSearch"].update(gapThreshold="2000"),
+            "delta": lambda r: r["timeSearchPage"]["page"]["rows"][0]["point"].update(deltaMs="-99"),
+            "kind": lambda r: r["timeSearchPage"]["page"]["rows"][0].update(kind="gap"),
+            "unknown_count": lambda r: r["timeSearchPage"]["page"].update(unknownPredecessors=1),
+            "offset": lambda r: r["timeSearchPage"]["page"]["rows"][0]["point"].update(offset="999999"),
+        }.items():
+            broken = copy.deepcopy(report)
+            mutate(broken)
+            self.report_path.write_text(json.dumps(broken))
+            with self.subTest(name=name), self.assertRaises((ValueError, ValidationError)):
+                checker.check_snapshot(self.report_path)
+        with mock.patch.object(checker, "MAX_TAG_VISITS", 1), self.assertRaisesRegex(ValueError, "coverage"):
+            self.check(report, self.directory / "time.flv")
+
 
 
 if __name__ == "__main__":

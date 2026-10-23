@@ -1275,6 +1275,24 @@ export namespace desktop {
 	        this.metric = source["metric"];
 	    }
 	}
+	export class SnapshotTimeSearchRequest {
+	    requestId: string;
+	    start: string;
+	    filter: string;
+	    gapThreshold: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SnapshotTimeSearchRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.requestId = source["requestId"];
+	        this.start = source["start"];
+	        this.filter = source["filter"];
+	        this.gapThreshold = source["gapThreshold"];
+	    }
+	}
 	export class SnapshotTrendRequest {
 	    start: string;
 	    count: number;
@@ -1323,6 +1341,7 @@ export namespace desktop {
 	    mediaCurve?: SnapshotMediaCurveRequest;
 	    avcSearch?: SnapshotAVCSearchRequest;
 	    codecSearch?: SnapshotCodecSearchRequest;
+	    timeSearch?: SnapshotTimeSearchRequest;
 	
 	    static createFrom(source: any = {}) {
 	        return new SnapshotRequest(source);
@@ -1341,6 +1360,7 @@ export namespace desktop {
 	        this.mediaCurve = this.convertValues(source["mediaCurve"], SnapshotMediaCurveRequest);
 	        this.avcSearch = this.convertValues(source["avcSearch"], SnapshotAVCSearchRequest);
 	        this.codecSearch = this.convertValues(source["codecSearch"], SnapshotCodecSearchRequest);
+	        this.timeSearch = this.convertValues(source["timeSearch"], SnapshotTimeSearchRequest);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1361,6 +1381,7 @@ export namespace desktop {
 		    return a;
 		}
 	}
+	
 	
 	
 	

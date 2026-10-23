@@ -30,14 +30,14 @@ function accessible(node: ReactNode, name: string) {
   assert.equal(result.length, 1, name); return result[0];
 }
 
-test('timestamp panel shows bounded partial coverage, explicit continuation and snapshot omission', async () => {
+test('timestamp panel shows bounded partial coverage, explicit continuation and snapshot coverage', async () => {
   const { controller } = setup(); await controller.open(); await settle(); controller.startTimeSearch(); await settle();
   const options: unknown[] = []; let starts = 0, continued = 0;
   controller.setTimeSearchOptions = q => options.push(q); controller.startTimeSearch = () => { starts++; }; controller.continueTimeSearch = () => { continued++; };
   const node = TimeSearchPanel({ view: controller.getSnapshot(), controller, disabled: false, message: x => x });
   const markup = renderToStaticMarkup(node);
   assert.match(markup, /连续已检范围 \[0, 4096\)/); assert.match(markup, /尚未到索引末尾/); assert.match(markup, /仅本批范围未命中/);
-  assert.match(markup, /部分索引，本次检索不覆盖全文件/); assert.match(markup, /不包含此检索页/); assert.match(markup, /时间观察不等于媒体损坏/);
+  assert.match(markup, /部分索引，本次检索不覆盖全文件/); assert.match(markup, /当前已完成的时间戳检索页/); assert.match(markup, /不包含历史批次或可恢复游标/); assert.match(markup, /时间观察不等于媒体损坏/);
   (accessible(node, '时间戳检索筛选').props.onChange as (e: unknown) => void)({ target: { value: 'gaps' } });
   (accessible(node, '时间戳检索大间隔阈值').props.onChange as (e: unknown) => void)({ target: { value: '9000' } });
   (accessible(node, '从头检索时间戳').props.onClick as () => void)(); (accessible(node, '继续下一批时间戳').props.onClick as () => void)();

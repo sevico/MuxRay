@@ -99,6 +99,21 @@ func (d *Document) GetTimeSearch(id uint64) (TimeSearchResult, error) {
 	}
 	return cloneTimeSearch(d.timeSearch), nil
 }
+
+// SnapshotTimeSearch freezes the current retained page without Stat, ReadAt or
+// another search. A ready page survives detail/Hex navigation; same-kind
+// admission replaces it and the document's close/change fences take priority.
+func (d *Document) SnapshotTimeSearch(id uint64) (TimeSearchResult, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if err := d.snapshotAvailableLocked(); err != nil {
+		return TimeSearchResult{}, err
+	}
+	if err := d.timeSearchIDLocked(id); err != nil {
+		return TimeSearchResult{}, err
+	}
+	return cloneTimeSearch(d.timeSearch), nil
+}
 func (d *Document) CancelTimeSearch(id uint64) (TimeSearchResult, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()

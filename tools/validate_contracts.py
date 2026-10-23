@@ -12,6 +12,8 @@ from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parent.parent
 CONTRACTS = (
+    ("docs/schemas/desktop-diagnostic-snapshot-v5.schema.json", "testdata/golden/desktop-diagnostic-snapshot-minimal-v5.json"),
+    ("docs/schemas/desktop-diagnostic-snapshot-v5.schema.json", "testdata/golden/desktop-diagnostic-snapshot-full-v5.json"),
     ("docs/schemas/desktop-diagnostic-snapshot-v4.schema.json", "testdata/golden/desktop-diagnostic-snapshot-minimal-v4.json"),
     ("docs/schemas/desktop-diagnostic-snapshot-v4.schema.json", "testdata/golden/desktop-diagnostic-snapshot-full-v4.json"),
     ("docs/schemas/desktop-diagnostic-snapshot-v4.schema.json", "testdata/golden/desktop-diagnostic-snapshot-mp3-v4.json"),
@@ -363,6 +365,47 @@ def validate_desktop_snapshot_v4_edge_cases(validator: Draft202012Validator) -> 
         require_valid(validator, mp3, "MP3 exact read budget")
     mp3["codecSearchPage"]["page"]["bytesRead"] = "65537"
     require_invalid(validator, mp3, "MP3 independent read ceiling")
+
+
+def validate_desktop_snapshot_v5_edge_cases() -> None:
+    validator = Draft202012Validator(load_json("docs/schemas/desktop-diagnostic-snapshot-v5.schema.json"))
+    full = load_json("testdata/golden/desktop-diagnostic-snapshot-full-v5.json")
+    page = ["timeSearchPage", "page"]
+    point = page + ["rows", 0, "point"]
+    for path, value in (
+        (["schemaVersion"], 4), (["selection", "schemaVersion"], 4),
+        (["selection", "timeSearch", "requestId"], "0"), (["selection", "timeSearch", "start"], "01"),
+        (["selection", "timeSearch", "gapThreshold"], "0"), (["selection", "timeSearch", "gapThreshold"], "4294967296"),
+        (page + ["cursor"], "1"), (page + ["nextCursor"], "2"), (page + ["inspectedStart"], "1"),
+        (page + ["scanned"], 4097), (page + ["unknownPredecessors"], 65),
+        (page + ["rows"], full["timeSearchPage"]["page"]["rows"] * 65),
+        (page + ["filter"], "regressions"), (point + ["context"], "start"),
+        (point + ["typeCode"], 32), (point + ["streamId"], 16777216), (point + ["previousTagId"], None),
+        (["timeSearchPage", "state"], "pending"), (["timeSearchPage", "page"], None),
+    ):
+        changed = deepcopy(full)
+        target = changed
+        for key in path[:-1]:
+            target = target[key]
+        target[path[-1]] = value
+        require_invalid(validator, changed, "snapshot v5 bounded timestamp page: " + str(path))
+    for version in range(1, 5):
+        legacy = Draft202012Validator(load_json(f"docs/schemas/desktop-diagnostic-snapshot-v{version}.schema.json"))
+        changed = deepcopy(full)
+        changed["schemaVersion"] = changed["selection"]["schemaVersion"] = version
+        require_invalid(legacy, changed, f"timestamp fields must not leak into snapshot v{version}")
+    for missing in ("timeSearchPage", "selection"):
+        changed = deepcopy(full)
+        del changed[missing]
+        require_invalid(validator, changed, "v5 required " + missing)
+    changed = deepcopy(full)
+    changed["timeSearchPage"] = None
+    require_invalid(validator, changed, "null timestamp page requires an omission")
+    changed["omitted"].append({"section": "timeSearchPage", "reason": "not_requested"})
+    require_valid(validator, changed, "explicit timestamp omission")
+    changed["omitted"].append({"section": "timeSearchPage", "reason": "not_requested"})
+    require_invalid(validator, changed, "duplicate timestamp omission")
+    print("validated desktop snapshot v5 page budgets, canonical selections, no resume tokens and frozen v1-v4")
 
 
 def validate_media_summary_edge_cases(validator: Draft202012Validator) -> None:
@@ -1994,6 +2037,7 @@ def main() -> None:
         seen_ids.add(manifest["id"])
         seen_hashes.add(manifest["file"]["sha256"])
     print(f"validated {len(seen_ids)} corpus manifest identities (media presence checked separately)")
+    validate_desktop_snapshot_v5_edge_cases()
     validate_codec_detail_v2_edge_cases()
     validate_avc_v3_edge_cases()
     validate_mp3_v3_edge_cases()

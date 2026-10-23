@@ -397,8 +397,10 @@ export class Controller {
     const curvePage = !this.state.curveLoading && !this.state.curveError ? this.state.curvePage : null;
     const searchPage = this.state.avcSearchState === 'ready' && !this.state.avcSearchRunning ? this.state.avcSearchPage : null;
     const codecPage = this.state.codecSearchState === 'ready' && !this.state.codecSearchRunning ? this.state.codecSearchPage : null;
+    const timePage = this.state.timeSearchState === 'ready' && !this.state.timeSearchRunning ? this.state.timeSearchPage : null;
     return Object.freeze({
-      schemaVersion: codecPage ? 4 : 3,
+      schemaVersion: timePage ? 5 : codecPage ? 4 : 3,
+      ...(timePage && this.timeSearchRequest ? { timeSearch: Object.freeze({ requestId: this.timeSearchRequest.requestId, start: timePage.start, filter: timePage.filter, gapThreshold: timePage.gapThreshold }) } : {}),
       ...(codecPage && this.codecSearchRequest ? { codecSearch: Object.freeze({ requestId: this.codecSearchRequest.requestId, cursor: codecPage.cursor, kind: codecPage.kind, filter: codecPage.filter }) } : {}),
       ...(curvePage ? { mediaCurve: Object.freeze({ start: curvePage.bounds.start, count: curvePage.bounds.limit, metric: this.state.curveMetric }) } : {}),
       ...(searchPage && this.avcSearchRequest ? { avcSearch: Object.freeze({ requestId: this.avcSearchRequest.requestId, start: searchPage.start, filter: searchPage.filter }) } : {}),

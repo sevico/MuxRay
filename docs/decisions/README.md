@@ -38,3 +38,4 @@ Repository-wide architecture and compatibility decisions are recorded here. An a
 - [ADR-031: Direct MP3 navigation and contextual SEI timing fields](031-direct-mp3-and-sei-timing.md)
 - [ADR-032: Bounded MP3 change and SEI message search](032-codec-change-and-sei-search.md)
 - [ADR-033: Bounded timestamp-observation search](033-bounded-timestamp-observation-search.md)
+- [ADR-034: Retained timestamp-search evidence in desktop snapshot v5](034-timestamp-search-snapshot-v5.md)

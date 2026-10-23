@@ -49,6 +49,8 @@ jobs:
         run: python tools/validate_contracts.py
       - name: Test offline corpus tools
         run: python -B -m unittest discover -s tools -p 'test_*.py'
+      - name: Test candidate packaging tools (no build or publication)
+        run: python -B -m unittest discover -s tools/release -p 'test_*.py' -v
       - name: Race detector
         run: go test -race ./...
       - name: Fuzz byte cursor

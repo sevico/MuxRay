@@ -24,6 +24,14 @@ type snapshotAVCSearchSession interface {
 func (s DiagnosticSnapshot) MarshalJSON() ([]byte, error) {
 	type plain DiagnosticSnapshot
 	switch s.SchemaVersion {
+	case 5:
+		return json.Marshal(struct {
+			plain
+			MediaCurvePage  *MediaCurveResponse         `json:"mediaCurvePage"`
+			AVCSearchPage   *AVCSearchResponse          `json:"avcSearchPage"`
+			CodecSearchPage *CodecSearchResponse        `json:"codecSearchPage"`
+			TimeSearchPage  *SnapshotTimeSearchResponse `json:"timeSearchPage"`
+		}{plain(s), s.MediaCurvePage, s.AVCSearchPage, s.CodecSearchPage, s.TimeSearchPage})
 	case 4:
 		return json.Marshal(struct {
 			plain

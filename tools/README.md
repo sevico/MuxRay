@@ -2,6 +2,10 @@
 
 本目录用于保存确定性制样、Golden 更新、差异比较和性能基准辅助工具。Golden 更新必须人工审阅。
 
+## 候选发行包
+
+[`release`](release/README.md) 从显式版本与完整提交号构建 Windows 桌面候选，采集实际 EXE 的许可证通知，生成 ZIP、构建信息和 SHA-256，并解压核验。支持本地命令和手动 GitHub Actions Artifact；不会自动公开发行，CI、安全扫描及原生验收状态保留为独立门禁。
+
 `validate_contracts.py` 使用固定版本的 Draft 2020-12 validator 检查公开 Schema 本身以及已登记的 Golden/manifest 实例。CI 会从 `requirements-schema.txt` 安装该开发期依赖；MuxRay 二进制不依赖 Python。
 
 本地首次运行 Schema、corpus 工具或 Python 单元测试前，在仓库根目录安装依赖：

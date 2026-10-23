@@ -5,6 +5,7 @@ import type { PageResponse, SaveRequest, TagTrendPage, TimeSearchRequest, TimeSe
 import { timeSearchFilter, validateTimeSearch } from '../src/time-search.ts';
 import { timeSearchResponse } from '../src/normalize.ts';
 import { deferred, failed, pending, point, ready, setup, settle, trend } from './time-search-fixture.ts';
+import { ready as codecReady } from './codec-search-fixture.ts';
 
 test('timestamp search is explicit, advances opaque cursors across empty batches, and finds a tail boundary regression', async () => {
   const { controller, calls } = setup(); await controller.open(); await settle(); assert.equal(calls.length, 0);
@@ -16,7 +17,7 @@ test('timestamp search is explicit, advances opaque cursors across empty batches
   controller.continueTimeSearch(); await settle(); assert.equal(calls.length, 3); controller.dispose();
 });
 
-test('locating a hit waits for its trend window, preserves search evidence, and leaves the existing snapshot contract intact', async () => {
+test('locating a hit waits for its trend window, preserves search evidence, and exports the ready page in snapshot v5', async () => {
   const waiting = deferred<PageResponse<TagTrendPage>>(), saves: SaveRequest[] = []; let requested!: Parameters<typeof trend>[0];
   const { controller } = setup({ tagTrends: q => { requested = q; return waiting.promise; }, saveSnapshot: async q => { saves.push(q); return { apiVersion: 1, requestId: q.requestId, pending: false, canceled: false, error: null, fileName: 'report.json', bytesWritten: '1000' }; } });
   await controller.open(); await settle(); for (let i = 0; i < 3; i++) { if (i === 0) controller.startTimeSearch('regressions', '2000'); else controller.continueTimeSearch(); await settle(); }
@@ -24,7 +25,7 @@ test('locating a hit waits for its trend window, preserves search evidence, and 
   assert.equal(requested.start, '8192'); assert.equal(controller.getSnapshot().selectedTag, null); assert.equal(controller.getSnapshot().trendGapThreshold, '2000');
   waiting.resolve(trend(requested)); await settle(); assert.equal(controller.getSnapshot().trendSelectedId, '8192'); assert.equal(controller.getSnapshot().selectedTag!.id, '8192');
   controller.showTrendHex('8192', 'payload'); await settle(); assert.equal(controller.getSnapshot().timeSearchPage, p);
-  await controller.saveSnapshot(); assert.equal(saves[0].snapshot.schemaVersion, 3); assert.equal('timeSearch' in saves[0].snapshot, false);
+  await controller.saveSnapshot(); assert.equal(saves[0].snapshot.schemaVersion, 5); assert.deepEqual(saves[0].snapshot.timeSearch, { requestId: '3', start: '8192', filter: 'regressions', gapThreshold: '2000' });
   assert.equal(saves[0].snapshot.trend?.start, '8192'); assert.equal(saves[0].snapshot.selectedTagId, '8192'); controller.dispose();
 });
 
@@ -143,4 +144,44 @@ test('normalizer restores nullable unknown context without coercing decimal toke
   const normalized = timeSearchResponse(raw); validateTimeSearch(normalized, q, '10000', '201000');
   assert.equal(normalized.page!.nextCursor, q.requestId); assert.equal(normalized.page!.rows[0].point.deltaMs, null);
   assert.throws(() => timeSearchResponse({ ...raw, state: 'bad' })); raw.page.rows[0].kind = 'bad'; assert.throws(() => timeSearchResponse(raw));
+});
+
+
+test('snapshot v5 freezes completed timestamp options while the UI edits, advances, and recovers a lost save', async () => {
+  const saves: SaveRequest[] = [], lost = deferred<import('../src/protocol.ts').SaveResponse>();
+  const { controller, clock } = setup({ saveSnapshot: q => { saves.push(q); return lost.promise; }, saveResult: async requestId => ({ apiVersion: 1, requestId, pending: false, canceled: false, error: null, fileName: 'report.json', bytesWritten: '1000' }) });
+  await controller.open(); await settle(); controller.startTimeSearch('regressions', '2000'); await settle();
+  controller.setTimeSearchOptions({ timeSearchFilter: 'gaps', timeSearchGapThreshold: '9000' });
+  const saving = controller.saveSnapshot(); await settle();
+  assert.deepEqual(saves[0].snapshot.timeSearch, { requestId: '1', start: '0', filter: 'regressions', gapThreshold: '2000' });
+  controller.continueTimeSearch(); await settle(); assert.equal(controller.getSnapshot().timeSearchPage!.start, '4096');
+  assert.equal(saves[0].snapshot.timeSearch!.start, '0'); assert.equal(Object.isFrozen(saves[0].snapshot.timeSearch), true);
+  clock.tick(REPLY_TIMEOUT_MS); await saving; clock.tick(); await settle();
+  assert.equal(saves.length, 1); assert.equal(controller.getSnapshot().saveState, 'saved');
+  controller.dispose();
+});
+
+test('pending, canceled, and failed timestamp batches never select snapshot v5 or invent a page', async () => {
+  for (const state of ['pending', 'canceled', 'failed'] as const) {
+    const saves: SaveRequest[] = [];
+    const { controller } = setup({ startTimeSearch: async q => state === 'pending' ? pending(q) : failed(q, state === 'canceled' ? 'canceled' : 'time_search_failed'),
+      saveSnapshot: async q => { saves.push(q); return { apiVersion: 1, requestId: q.requestId, pending: false, canceled: true, error: null, fileName: '', bytesWritten: '0' }; } });
+    await controller.open(); await settle(); controller.startTimeSearch(); await settle(); await controller.saveSnapshot();
+    assert.equal(saves[0].snapshot.schemaVersion, 3); assert.equal(saves[0].snapshot.timeSearch, undefined); controller.dispose();
+  }
+});
+
+
+test('snapshot v5 retains a coexisting codec page and uses v4 again after timestamp restart fails', async () => {
+  const saves: SaveRequest[] = []; let starts = 0;
+  const { controller } = setup({ startTimeSearch: async q => ++starts === 1 ? ready(q) : failed(q),
+    startCodecSearch: async q => { const r = codecReady(q); r.page!.total = '10000'; return r; },
+    saveSnapshot: async q => { saves.push(q); return { apiVersion: 1, requestId: q.requestId, pending: false, canceled: true, error: null, fileName: '', bytesWritten: '0' }; } });
+  await controller.open(); await settle(); controller.startCodecSearch(); await settle(); controller.startTimeSearch(); await settle();
+  await controller.saveSnapshot(); assert.equal(saves[0].snapshot.schemaVersion, 5);
+  assert.deepEqual(saves[0].snapshot.codecSearch, { requestId: '1', cursor: '0', kind: 'mp3', filter: 'all' });
+  assert.deepEqual(saves[0].snapshot.timeSearch, { requestId: '2', start: '0', filter: 'regressions', gapThreshold: '1000' });
+  controller.startTimeSearch(); await settle(); await controller.saveSnapshot();
+  assert.equal(saves[1].snapshot.schemaVersion, 4); assert.equal(saves[1].snapshot.timeSearch, undefined);
+  assert.deepEqual(saves[1].snapshot.codecSearch, saves[0].snapshot.codecSearch); controller.dispose();
 });

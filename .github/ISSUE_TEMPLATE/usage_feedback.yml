@@ -1,0 +1,40 @@
+name: 使用体验与建议
+description: 告诉我们实际任务中有帮助的功能与遇到的阻碍
+title: "[体验] "
+body:
+  - type: input
+    id: version
+    attributes:
+      label: 使用版本与系统
+      placeholder: "例如：MuxRay 0.1.0，Windows 11"
+    validations:
+      required: true
+  - type: textarea
+    id: task
+    attributes:
+      label: 你想完成什么任务？
+      placeholder: "例如：查找录制文件中的时间戳回退，并将相关字段发给同事复核。"
+    validations:
+      required: true
+  - type: dropdown
+    id: completion
+    attributes:
+      label: 任务完成情况
+      options:
+        - 已完成
+        - 部分完成
+        - 未完成
+    validations:
+      required: true
+  - type: textarea
+    id: experience
+    attributes:
+      label: 哪一步有帮助，哪一步不顺利？
+      description: 可以从下载启动、定位信息、查看字段与字节、保存分享几个步骤描述。
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: 期望的改进（可选）
+      description: 描述想得到的结果即可；截图与附件请先去除不适合公开的信息。

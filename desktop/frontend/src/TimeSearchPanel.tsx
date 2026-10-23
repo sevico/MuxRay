@@ -30,6 +30,6 @@ export function TimeSearchPanel({ view, controller, disabled, message }: { view:
       <div className="pagination"><span>本批阈值 {page.gapThreshold} ms；继续使用本批筛选与阈值。</span><button disabled={blocked || running || page.exhausted} onClick={() => controller.continueTimeSearch()}>继续下一批时间戳</button></div>
       {view.trendPage && <p className="summary-note"><a href="#tag-trends">前往已加载趋势 ↓</a>{view.selectedTag && <> · <a href="#tag-detail">前往当前 Tag {view.selectedTag.id} 详情 ↓</a></>}</p>}
     </>}
-    <p className="summary-note">命中后加载所在 256 Tag 趋势窗口并读取详情，可继续查看 Hex。窗口独立回查最多 4096 个 Tag，稀疏轨道可能显示前驱未知。诊断 JSON 导出已加载的趋势、详情和 Hex，不包含此检索页。</p>
+    <p className="summary-note">命中后加载所在 256 Tag 趋势窗口并读取详情，可继续查看 Hex。窗口独立回查最多 4096 个 Tag，稀疏轨道可能显示前驱未知。诊断 JSON 同时保存当前已完成的时间戳检索页、条件、阈值、前驱依据和连续已检范围，以及已加载的趋势、详情和 Hex。仅保存当前批结果，不包含历史批次或可恢复游标。</p>
   </section>;
 }

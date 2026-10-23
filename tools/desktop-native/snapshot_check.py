@@ -6,6 +6,7 @@ Source bytes are read in bounded chunks, never loaded as one media object.
 """
 
 import argparse
+from collections import OrderedDict
 import hashlib
 import json
 import os
@@ -93,14 +94,14 @@ def check_snapshot(report_path, source_path=None, max_source_bytes=MAX_FIXTURE):
     raw = report_path.read_bytes()
     report = json.loads(raw.decode("utf-8"))
     version = report.get("schemaVersion")
-    if type(version) is not int or version not in (1, 2, 3, 4):
+    if type(version) is not int or version not in (1, 2, 3, 4, 5):
         raise ValueError("Unsupported snapshot version")
     schema = json.loads((ROOT / f"docs/schemas/desktop-diagnostic-snapshot-v{version}.schema.json").read_text(encoding="utf-8"))
     Draft202012Validator(schema, format_checker=Draft202012Validator.FORMAT_CHECKER).validate(report)
     session_id = report["session"]["sessionId"]
     if report["selection"]["sessionId"] != session_id:
         raise ValueError("Selection belongs to a different session")
-    sections = (("mediaCurvePage",) if version >= 2 else ()) + (("avcSearchPage",) if version >= 3 else ()) + (("codecSearchPage",) if version >= 4 else ())
+    sections = (("mediaCurvePage",) if version >= 2 else ()) + (("avcSearchPage",) if version >= 3 else ()) + (("codecSearchPage",) if version >= 4 else ()) + (("timeSearchPage",) if version >= 5 else ())
     for name in ("scanDiagnostics", "detail", "hex", "summary", "summaryPage", "trend") + sections:
         section = report[name]
         if section is not None and section["sessionId"] != session_id:
@@ -130,12 +131,117 @@ def check_snapshot(report_path, source_path=None, max_source_bytes=MAX_FIXTURE):
         check_avc_search_page(report)
     if version >= 4 and report["codecSearchPage"] is not None:
         check_codec_search_page(report)
+    if version >= 5 and report["timeSearchPage"] is not None:
+        check_time_search_page(report)
     result = {"report": report_path.name, "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(),
               "fileName": report["fileName"], "scanComplete": report["session"]["scan"]["complete"],
               "omitted": report["omitted"], "schemaValid": True}
     if source_path is not None:
         result.update(check_source(report, source_path, max_source_bytes))
     return result
+
+
+def check_time_search_page(report):
+    response, query = report["timeSearchPage"], report["selection"].get("timeSearch")
+    if not query or response["requestId"] != query["requestId"]:
+        raise ValueError("Timestamp search request identity mismatch")
+    p = response["page"]
+    start, end, total = (int(p[key]) for key in ("start", "next", "total"))
+    if (any(p[key] != query[key] for key in ("start", "filter", "gapThreshold")) or
+            total != int(report["session"]["progress"]["tagCount"]) or total > MAX_TAG_VISITS or
+            p["scanComplete"] != report["session"]["scan"]["complete"] or not 0 <= start <= end <= total or
+            p["inspectedStart"] != "0" or p["inspectedEnd"] != p["next"] or p["scanned"] != end - start or
+            p["exhausted"] != (end == total) or len(p["rows"]) > p["scanned"] or
+            (end != total and p["scanned"] != 4096 and len(p["rows"]) != 64)):
+        raise ValueError("Timestamp search coverage or scan budget mismatch")
+    previous, offset, unknown = start - 1, -1, 0
+    size = int(report["session"]["progress"]["sourceSize"])
+    for row in p["rows"]:
+        point = row["point"]
+        tag, current = int(point["tagId"]), int(point["offset"])
+        if (not previous < tag < end or current <= offset or current + 11 + point["availableDataSize"] > size or
+                point["availableDataSize"] > point["dataSize"] or
+                point["payloadComplete"] != (point["dataSize"] == point["availableDataSize"])):
+            raise ValueError("Timestamp observation source range or order mismatch")
+        previous, offset = tag, current
+        if row["kind"] == "unknown":
+            unknown += 1
+        else:
+            delta = int(point["dts"]) - int(point["previousDts"])
+            kind = "regression" if delta < 0 else "duplicate" if delta == 0 else "gap" if delta > int(p["gapThreshold"]) else None
+            if int(point["previousTagId"]) >= tag or int(point["deltaMs"]) != delta or row["kind"] != kind:
+                raise ValueError("Timestamp predecessor, delta or kind mismatch")
+    if unknown != p["unknownPredecessors"]:
+        raise ValueError("Timestamp unknown predecessor count mismatch")
+
+
+def check_time_search_source(report, source):
+    """Replay source-order headers with 512 LRU tracks and <=64 retained rows.
+
+    This is an independent oracle: no application imports, source payload reads,
+    cursor recovery or unbounded history. All visits share the source deadline.
+    """
+    p = report["timeSearchPage"]["page"]
+    start, end, total = (int(p[key]) for key in ("start", "next", "total"))
+    if len(source) < 13 or source[:3] != b"FLV":
+        raise ValueError("Timestamp source is not a complete FLV header")
+    offset = int.from_bytes(source[5:9], "big") + 4
+    if not 13 <= offset <= len(source):
+        raise ValueError("Timestamp source data offset is invalid")
+    tracks, evicted, expected, batch_start, batch_hits = OrderedDict(), False, [], 0, 0
+    for tag in range(total):
+        if tag >= MAX_TAG_VISITS:
+            raise ValueError("Timestamp source exceeds one million Tag headers")
+        header = source[offset:offset + 11]
+        if len(header) != 11:
+            raise ValueError("Timestamp indexed coverage exceeds source headers")
+        dts = int.from_bytes(header[4:7], "big") | header[7] << 24
+        typ, stream, declared = header[0] & 31, int.from_bytes(header[8:11], "big"), int.from_bytes(header[1:4], "big")
+        available = min(declared, len(source) - offset - 11)
+        payload_end = offset + 11 + declared
+        trailer = source[payload_end:payload_end + 4]
+        key = (typ, stream)
+        prior = tracks.pop(key, None)
+        if prior is None and len(tracks) == 512:
+            tracks.popitem(last=False)
+            evicted = True
+        kind, context, delta = None, "start", None
+        if prior is not None:
+            delta = dts - prior[1]
+            kind = "regression" if delta < 0 else "duplicate" if delta == 0 else "gap" if delta > int(p["gapThreshold"]) else None
+            context = "found"
+        elif evicted:
+            kind, context = "unknown", "budget_exhausted"
+        matches = kind is not None and (kind == "unknown" or p["filter"] == "all" or p["filter"] == kind + "s")
+        if tag < end:
+            if tag == start and batch_start != start:
+                raise ValueError("Timestamp page start is not a completed batch boundary")
+            if matches:
+                batch_hits += 1
+                if tag >= start:
+                    if len(expected) >= 64:
+                        raise ValueError("Timestamp source exceeds retained row budget")
+                    expected.append({"kind": kind, "point": {
+                        "tagId": str(tag), "offset": str(offset), "dts": str(dts), "typeCode": typ, "streamId": stream,
+                        "dataSize": declared, "availableDataSize": available, "payloadComplete": declared == available,
+                        "previousTagSizeState": "missing" if len(trailer) != 4 else "valid" if int.from_bytes(trailer, "big") == 11 + declared else "invalid",
+                        "filtered": bool(header[0] & 32), "context": context,
+                        "previousTagId": str(prior[0]) if prior else None, "previousDts": str(prior[1]) if prior else None,
+                        "deltaMs": str(delta) if delta is not None else None}})
+            boundary = tag + 1 == total or tag + 1 - batch_start == 4096 or batch_hits == 64
+            if boundary:
+                if batch_start == start and tag + 1 != end:
+                    raise ValueError("Timestamp inspected end differs from source batch boundary")
+                batch_start, batch_hits = tag + 1, 0
+            elif tag + 1 == end:
+                raise ValueError("Timestamp page stopped before its bounded source batch ended")
+        tracks[key] = (tag, dts)
+        offset = payload_end + 4
+    if p["scanComplete"] and offset != len(source):
+        raise ValueError("Timestamp complete index does not cover the source boundary")
+    if expected != p["rows"]:
+        raise ValueError("Timestamp rows or nearest retained predecessors differ from source")
+    return {"timeSearchRowsMatchingSource": len(expected), "timeSearchInspectedRange": ["0", p["next"]]}
 
 
 def check_codec_search_page(report):
@@ -386,6 +492,8 @@ def check_source(report, source_path, max_source_bytes):
                         raise ValueError("MP3 current parameters or frame span differ from source")
         if codec_page is not None:
             result["codecSearchRowsMatchingSource"] = len(codec_rows)
+        if report.get("timeSearchPage") is not None:
+            result.update(check_time_search_source(report, source))
         result["sourceSHA256"] = source.digest()
     return result
 

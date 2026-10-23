@@ -148,7 +148,8 @@ export interface SnapshotTrend {
   metric: 'dts' | 'delta' | 'size'; gapThreshold: string;
 }
 export interface SnapshotRequest {
-  schemaVersion?: 1 | 2 | 3 | 4;
+  schemaVersion?: 1 | 2 | 3 | 4 | 5;
+  timeSearch?: { requestId: string; start: string; filter: TimeSearchFilter; gapThreshold: string };
   codecSearch?: { requestId: string; cursor: string; kind: CodecSearchKind; filter: CodecSearchFilter };
   mediaCurve?: { start: string; count: number; metric: 'audio' | 'video' | 'mp3' | 'gopAverage' | 'gopMax' };
   avcSearch?: { requestId: string; start: string; filter: AVCSearchFilter };

@@ -48,9 +48,11 @@ AVC 配置定位分别见 [ADR-012](../docs/decisions/012-recoverable-native-ope
 命中项加载所在 256 Tag 趋势窗，再读取详情，可通过字段位置进入 Hex。
 检索页在证据导航后保留；普通趋势的独立 4096 Tag 回查仍可能对稀疏轨道显示未知。
 
-原生 JSON 保存当前已加载的趋势、详情和 Hex；时间戳检索页、累计检索范围及游标
-不在快照中，未扩展快照版本或 CLI。协议及资源界限见
-[ADR-033](../docs/decisions/033-bounded-timestamp-observation-search.md)。
+当前已完成的时间戳检索页使原生 JSON 导出选择快照 v5，保存本批条件、连续已检范围、
+观察及已知前驱；可同时保留已加载的趋势、详情和 Hex。不会保存内部游标或历史全部页，
+CLI 合同保持不变。检索协议及资源界限见
+[ADR-033](../docs/decisions/033-bounded-timestamp-observation-search.md)，快照扩展见
+[ADR-034](../docs/decisions/034-timestamp-search-snapshot-v5.md)。
 
 ## 完整普通 H.264 头与 MP3 全帧汇总
 
@@ -75,8 +77,8 @@ MP3 每批最多 256 Tag / 1,024 帧头；在大 Tag 内保留准确帧边界和
 不会用最新 SPS 猜测时序。停止行不进入 MP3 帧详情，普通 VBR 变化不标成损坏。
 
 检索与详情、Hex、概览共用读取 worker。界面只保留当前批次，后端最多保留八个
-不透明续查游标；过期后从头检索。当前 ready 检索页使导出选择快照 v4，其他导出
-仍使用 v3。v4 仅冻结当前页，不遍历历史或补做分析；v1–v3 输出保持兼容。
+不透明续查游标；过期后从头检索。当前 ready 检索页使导出选择快照 v4；同时有 ready
+时间戳页时选择 v5，其余导出仍使用 v3。仅冻结当前页，不遍历历史或补做分析；旧版本输出保持兼容。
 完整规则见 [ADR-032](../docs/decisions/032-codec-change-and-sei-search.md)。
 固定构建、Linux 原生结果和工具性能计量见 [检索与回归工具验收](../docs/desktop-codec-change-sei-search-20261015.md)。
 Windows 实际快照的独立重检入口见 [Windows codec 验收说明](../tools/codec-regression/WINDOWS_ACCEPTANCE.md)，2026-10-16 的实际结果与限制见 [Windows 稳定性记录](../docs/desktop-windows-stability-20261016.md)。
@@ -103,7 +105,8 @@ GOP 依据 FLV 关键帧声明，不证明 IDR。未知值不补零，可在精�
 ## 诊断快照导出
 
 扫描结束后点击“导出诊断 JSON”，先冻结当前会话的有界结果，再选择保存位置。
-界面默认请求独立的 `desktopDiagnosticSnapshot` v3 格式；存在当前编解码器检索页时使用 v4。
+界面默认请求独立的 `desktopDiagnosticSnapshot` v3 格式；存在当前编解码器检索页时使用 v4，
+存在当前已完成时间戳检索页时使用 v5。这是开发分支行为，已发布的 v0.1.0 不包含 v5。
 快照包含文件名、生成时间、扫描
 覆盖、前 100 条保留结构诊断、选中 Tag、匹配的已完成详情/Hex、已有 Summary 概览
 与当前事件页，以及当前趋势窗口、阈值和局部观察项。v2 还包含当前已完成的媒体曲线页，
@@ -118,6 +121,12 @@ v3 增加当前已完成的 H.264 检索页，最多 64 条结果。`avcSearch` 
 `avcSearchPage` 始终为已有页或 null，并明确省略原因。未完成、已取消或已淘汰的批次
 不会导出；没有命中的已完成批次仍会保存。详情/Hex 跳转不丢失该页，导出不会重新
 检索或遍历历史批次。范围与生命周期见 [ADR-028](../docs/decisions/028-search-snapshot-v3-and-native-regression.md)。
+
+v5 增加 `timeSearchPage`，始终为当前已完成页或 null，并保留明确省略原因。
+它冻结页自身的筛选、阈值、批次起止、连续已检范围、索引完整性及最多 64 条观察；
+前驱 Tag/DTS 和有符号差值保持已知或未知，不导出续查游标和内部前驱缓存。
+连续范围表示已检查的索引前缀，不代表保留所有历史观察。导出只复制已保留结果，
+不重新读取或扫描媒体；旧 v1–v4 形状保持不变。
 
 快照最多 2 MiB，Hex 最多为已有窗口的 4 KiB 实际字节；报告可能包含 AMF 字段文本
 和原始媒体字节。只保存源文件名，不包含源绝对路径。它不是完整 CLI 报告，也不是

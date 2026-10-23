@@ -115,7 +115,7 @@ export function App({ controller }: { controller: Controller }) {
           </div>
           <div className="progress-line"><progress max="100" value={percent} aria-label="扫描进度" /><span>{percent.toFixed(1)}%</span></div>
           <p className="scan-note" role="status">{scanNote(session)}</p>
-          <p className="snapshot-scope">导出诊断 JSON 保存当前已载入的概览、事件页、Tag 详情、Hex、趋势、媒体曲线页与 H.264 检索页，不代表全文件分析。报告可能包含有限媒体字节和 AMF 字段文本。</p>
+          <p className="snapshot-scope">导出诊断 JSON 保存当前已载入的概览、事件页、Tag 详情、Hex、趋势、媒体曲线页、H.264、编解码证据与时间戳检索的当前已完成页，不代表全文件分析。报告可能包含有限媒体字节和 AMF 字段文本。</p>
         </section>
 
         <nav className="analysis-nav" aria-label="分析导航">

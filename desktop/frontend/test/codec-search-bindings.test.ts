@@ -22,3 +22,17 @@ test('generated Wails snapshot constructor retains codec v4 selection alongside 
   const old = JSON.parse(JSON.stringify(new generated.desktop.SnapshotRequest({ sessionId: 'session', schemaVersion: 3 })));
   assert.equal(old.codecSearch, undefined); assert.equal(old.schemaVersion, 3);
 });
+
+
+test('generated Wails constructor preserves exact snapshot v5 timestamp selection with codec evidence', () => {
+  const selection = { sessionId: 'session', schemaVersion: 5,
+    timeSearch: { requestId: '18446744073709551615', start: '9007199254740993', filter: 'regressions', gapThreshold: '4294967295' },
+    codecSearch: { requestId: '10', cursor: '9', kind: 'mp3', filter: 'all' } };
+  const roundTrip = JSON.parse(JSON.stringify(new generated.desktop.SnapshotRequest(selection)));
+  assert.deepEqual(roundTrip.timeSearch, selection.timeSearch); assert.deepEqual(roundTrip.codecSearch, selection.codecSearch);
+  assert.equal(roundTrip.schemaVersion, 5);
+  for (const version of [1, 2, 3, 4]) {
+    const old = JSON.parse(JSON.stringify(new generated.desktop.SnapshotRequest({ sessionId: 'session', schemaVersion: version })));
+    assert.equal(old.timeSearch, undefined); assert.equal(old.schemaVersion, version);
+  }
+});

@@ -1,0 +1,57 @@
+name: Release candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'SemVer without v prefix; matching docs/releases/vVERSION.md must exist'
+        type: string
+        required: true
+      commit:
+        description: 'Full 40-character commit SHA to build'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  windows-candidate:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      CANDIDATE_VERSION: ${{ inputs.version }}
+      CANDIDATE_COMMIT: ${{ inputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: desktop/go.mod
+          cache: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Candidate tooling tests (no GUI)
+        run: python -B -m unittest discover -s tools/release -p 'test_*.py' -v
+      - name: Install reviewed Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.14.0
+      - name: Install locked frontend dependencies
+        working-directory: desktop/frontend
+        run: npm ci --no-audit --no-fund
+      - name: Build and verify Windows candidate
+        run: python -B tools/release/candidate.py build --version "$env:CANDIDATE_VERSION" --commit "$env:CANDIDATE_COMMIT" --output .cache/release-candidate
+      - name: Upload candidate assets only (no public Release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: MuxRay-windows-candidate-${{ github.run_id }}
+          path: .cache/release-candidate/assets/*
+          if-no-files-found: error
+          retention-days: 14

@@ -13,6 +13,8 @@ The public Draft 2020-12 contracts are:
 - [`desktop-diagnostic-snapshot-v1.schema.json`](./desktop-diagnostic-snapshot-v1.schema.json) for bounded desktop diagnostic snapshots saved through the native file dialog.
 - [`desktop-diagnostic-snapshot-v2.schema.json`](./desktop-diagnostic-snapshot-v2.schema.json) adds the currently retained media curve page to an explicitly requested desktop snapshot v2.
 - [`desktop-diagnostic-snapshot-v3.schema.json`](./desktop-diagnostic-snapshot-v3.schema.json) retains v2 sections and adds only the selected current H.264 search page.
+- [`desktop-diagnostic-snapshot-v4.schema.json`](./desktop-diagnostic-snapshot-v4.schema.json) adds the current bounded codec evidence search page.
+- [`desktop-diagnostic-snapshot-v5.schema.json`](./desktop-diagnostic-snapshot-v5.schema.json) adds the current completed timestamp search page and inspected prefix.
 
 Scan and default detail use `schemaVersion: 1`; AVC detail may select 2, 3 or 4; MP3 detail may select 2 or 3; media summary explicitly selects 1, 2 or 3
 and defaults to 1. These are independent contracts. The scan report
@@ -33,7 +35,7 @@ document now exists. V2 adds MP3 classification, header observations, and audio
 codec counts under its own closed Schema. See [v2 semantics](../media-summary-v2.md).
 
 Desktop snapshots use `documentType: "desktopDiagnosticSnapshot"` and
-`schemaVersion: 1`, `2` or `3`. They preserve the selected, already completed bounded desktop
+`schemaVersion: 1` through `5`. They preserve the selected, already completed bounded desktop
 results, including explicit coverage and omissions, rather than extending a CLI
 report. They include a source basename, creation timestamp and opaque session/
 request identities, so repeated saves are not byte-identical. Source absolute
@@ -54,7 +56,7 @@ reread or reanalysis and retains the whole-report 2 MiB limit. Absent or explici
 request version 1 preserves the original v1 members and rejects curve selection.
 See [ADR-026](../decisions/026-desktop-codec-evidence-snapshot-v2.md).
 
-The desktop UI now explicitly selects v3. It retains v2 media curves and always
+Without a completed timestamp or codec search page, the desktop UI explicitly selects v3. It retains v2 media curves and always
 includes `avcSearchPage`: the current retained ready `AVCSearchResponse`, or null
 with exactly one omission reason. `selection.avcSearch` carries only a positive
 canonical decimal `requestId`, canonical decimal `start`, and `mismatches`,
@@ -72,6 +74,25 @@ and cursor invariants are checked by the producer and regression tools where
 JSON Schema cannot express them portably. See
 [ADR-028](../decisions/028-search-snapshot-v3-and-native-regression.md).
 
+
+
+Snapshot v5 is selected when a timestamp page is ready. It preserves v4 sections,
+including a coexisting codec search page, and adds `timeSearchPage` (ready response
+or explicit null plus one omission). `selection.timeSearch` identifies only the
+retained `requestId`, `start`, `filter` and positive uint32 `gapThreshold`, all
+coordinates as canonical decimal strings. Export freezes the completed page's
+options, not unsubmitted edits. The page has at most 64 rows and 4096 scanned Tags,
+with same-type/same-Stream-ID predecessor evidence, raw DTS deltas, and explicit
+unknowns when the 512-track LRU context is exhausted. `[start,next)` is the current
+batch; `[inspectedStart,inspectedEnd)` is the continuously inspected prefix
+`[0,next)`. Only current batch rows are retained. Earlier rows, cursor tokens and
+restart state are absent. An exhausted partial index still does not cover the
+whole file. Observation is not corruption or playback proof. Capture performs no
+source reread or new search; v1–v4 remain frozen. Cross-field and source-order
+checks are independently enforced by `tools/desktop-native/snapshot_check.py`.
+The optional source oracle replays headers with 512 tracks and 64 retained rows,
+at most one million Tags, a cooperative 120-second deadline, and at most 1 MiB
+per read; limits are reported as validation failures, not successful coverage.
 
 ## Opt-in AVC prefix detail v3
 

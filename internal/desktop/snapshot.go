@@ -35,6 +35,7 @@ type SnapshotRequest struct {
 	MediaCurve       *SnapshotMediaCurveRequest  `json:"mediaCurve,omitempty"`
 	AVCSearch        *SnapshotAVCSearchRequest   `json:"avcSearch,omitempty"`
 	CodecSearch      *SnapshotCodecSearchRequest `json:"codecSearch,omitempty"`
+	TimeSearch       *SnapshotTimeSearchRequest  `json:"timeSearch,omitempty"`
 }
 
 type SnapshotSummaryPageRequest struct {
@@ -77,26 +78,27 @@ type SnapshotOmission struct {
 // DiagnosticSnapshot is an independent format, not a CLI report schema. The
 // selection describes display rules; trend gaps are not parser diagnostics.
 type DiagnosticSnapshot struct {
-	SchemaVersion   uint8                `json:"schemaVersion"`
-	DocumentType    string               `json:"documentType"`
-	FileName        string               `json:"fileName"`
-	CreatedAt       string               `json:"createdAt"`
-	Producer        SnapshotProducer     `json:"producer"`
-	Scope           SnapshotScope        `json:"scope"`
-	Session         *SessionSnapshot     `json:"session"`
-	Selection       SnapshotRequest      `json:"selection"`
-	ScanDiagnostics *DiagnosticPage      `json:"scanDiagnostics"`
-	SelectedTag     *Tag                 `json:"selectedTag"`
-	Detail          *DetailResponse      `json:"detail"`
-	Hex             *HexResponse         `json:"hex"`
-	Summary         *SummaryResponse     `json:"summary"`
-	SummaryPage     *SummaryPageResponse `json:"summaryPage"`
-	Trend           *TagTrendPage        `json:"trend"`
-	TrendIssues     []SnapshotTrendIssue `json:"trendIssues"`
-	Omitted         []SnapshotOmission   `json:"omitted"`
-	MediaCurvePage  *MediaCurveResponse  `json:"mediaCurvePage,omitempty"`
-	AVCSearchPage   *AVCSearchResponse   `json:"avcSearchPage,omitempty"`
-	CodecSearchPage *CodecSearchResponse `json:"codecSearchPage,omitempty"`
+	SchemaVersion   uint8                       `json:"schemaVersion"`
+	DocumentType    string                      `json:"documentType"`
+	FileName        string                      `json:"fileName"`
+	CreatedAt       string                      `json:"createdAt"`
+	Producer        SnapshotProducer            `json:"producer"`
+	Scope           SnapshotScope               `json:"scope"`
+	Session         *SessionSnapshot            `json:"session"`
+	Selection       SnapshotRequest             `json:"selection"`
+	ScanDiagnostics *DiagnosticPage             `json:"scanDiagnostics"`
+	SelectedTag     *Tag                        `json:"selectedTag"`
+	Detail          *DetailResponse             `json:"detail"`
+	Hex             *HexResponse                `json:"hex"`
+	Summary         *SummaryResponse            `json:"summary"`
+	SummaryPage     *SummaryPageResponse        `json:"summaryPage"`
+	Trend           *TagTrendPage               `json:"trend"`
+	TrendIssues     []SnapshotTrendIssue        `json:"trendIssues"`
+	Omitted         []SnapshotOmission          `json:"omitted"`
+	MediaCurvePage  *MediaCurveResponse         `json:"mediaCurvePage,omitempty"`
+	AVCSearchPage   *AVCSearchResponse          `json:"avcSearchPage,omitempty"`
+	CodecSearchPage *CodecSearchResponse        `json:"codecSearchPage,omitempty"`
+	TimeSearchPage  *SnapshotTimeSearchResponse `json:"timeSearchPage,omitempty"`
 }
 
 type SnapshotProducer struct {
@@ -123,6 +125,8 @@ type SnapshotScope struct {
 	AVCSearchInterpretation   string `json:"avcSearchInterpretation,omitempty"`
 	CodecSearch               string `json:"codecSearch,omitempty"`
 	CodecSearchInterpretation string `json:"codecSearchInterpretation,omitempty"`
+	TimeSearch                string `json:"timeSearch,omitempty"`
+	TimeSearchInterpretation  string `json:"timeSearchInterpretation,omitempty"`
 }
 
 // CaptureSnapshot runs only bounded in-memory queries. Holding the slot lock
@@ -221,6 +225,11 @@ func (a *App) CaptureSnapshot(request SnapshotRequest) (SnapshotCapture, *Fault)
 		report.Scope.CodecSearchInterpretation = "bounded_syntax_evidence_not_corruption_or_decodability_proof"
 		a.captureCodecSearch(e, &report, omit)
 	}
+	if version >= 5 {
+		report.Scope.TimeSearch = "requested_retained_current_page_only"
+		report.Scope.TimeSearchInterpretation = "raw_container_dts_observation_not_corruption_or_playback_proof"
+		a.captureTimeSearch(e, &report, omit)
+	}
 	if request.Trend == nil {
 		omit("trend", "not_requested")
 	} else {
@@ -257,7 +266,7 @@ func (a *App) CaptureSnapshot(request SnapshotRequest) (SnapshotCapture, *Fault)
 }
 
 func validSnapshotRequest(q SnapshotRequest) bool {
-	if q.SessionID == "" || len(q.SessionID) > 64 || q.SchemaVersion > 4 {
+	if q.SessionID == "" || len(q.SessionID) > 64 || q.SchemaVersion > 5 {
 		return false
 	}
 	if q.MediaCurve != nil && (q.SchemaVersion < 2 || !validSnapshotMediaCurve(*q.MediaCurve)) {
@@ -266,7 +275,10 @@ func validSnapshotRequest(q SnapshotRequest) bool {
 	if q.AVCSearch != nil && (q.SchemaVersion < 3 || !validSnapshotAVCSearch(*q.AVCSearch)) {
 		return false
 	}
-	if q.CodecSearch != nil && (q.SchemaVersion != 4 || !validSnapshotCodecSearch(*q.CodecSearch)) {
+	if q.CodecSearch != nil && (q.SchemaVersion < 4 || !validSnapshotCodecSearch(*q.CodecSearch)) {
+		return false
+	}
+	if q.TimeSearch != nil && (q.SchemaVersion < 5 || !validSnapshotTimeSearch(*q.TimeSearch)) {
 		return false
 	}
 	for _, id := range []*string{q.SelectedTagID, q.DetailRequestID, q.HexRequestID, q.SummaryRequestID} {

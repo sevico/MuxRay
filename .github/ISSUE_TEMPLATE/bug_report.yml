@@ -1,0 +1,44 @@
+name: 问题反馈
+description: 报告应用操作或分析结果的问题
+title: "[问题] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请描述可以重复的最短步骤；附件可能含媒体字节、文件路径或元数据，分享前请检查。
+  - type: input
+    id: version
+    attributes:
+      label: MuxRay 版本
+      description: 窗口标题中的版本；自行构建时请补充提交号。
+      placeholder: "例如：0.1.0 / 提交号"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 系统与运行环境
+      description: 系统版本；Windows 桌面问题可补充 WebView2 版本。
+      placeholder: "例如：Windows 11 x64，桌面便携版"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从打开程序或执行命令开始，列出操作。
+      placeholder: "1. 打开文件……\n2. 选择……\n3. 出现……"
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: 预期与实际结果
+      description: 请说明希望发生什么、实际发生什么；有错误文本时可附上。
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 样本与相关信息（可选）
+      description: 可提供扫描完整性、Tag ID、检索条件、截图或诊断 JSON。媒体样本仅在有权公开分享时提供，优先最小样本。

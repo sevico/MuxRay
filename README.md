@@ -8,6 +8,7 @@ MuxRay 帮助音视频开发者检查 FLV 封装、时间戳和编解码器信�
 
 [下载桌面版](https://github.com/sevico/MuxRay/releases/latest) ·
 [使用指南](docs/preview-guide.md) ·
+[操作示例](docs/quick-start-example.md) ·
 [命令行指南](docs/cli-guide.md) ·
 [反馈问题](https://github.com/sevico/MuxRay/issues)
 
@@ -61,10 +62,12 @@ go run ./cmd/muxray summary --schema-version 3 --pretty sample.flv
 | 文档 | 内容 |
 | --- | --- |
 | [桌面使用指南](docs/preview-guide.md) | 打开文件、查找观察项、详情/Hex 与导出 |
+| [操作示例](docs/quick-start-example.md) | 用可生成样本走通时间戳观察、详情与 JSON 保存 |
 | [命令行指南](docs/cli-guide.md) | inspect、tags、summary、detail 和版本化输出 |
 | [JSON schemas](docs/schemas/README.md) | 机器可读的报告与快照格式 |
 | [架构决策](docs/decisions/README.md) | 解析、索引、读取与桌面交互设计 |
 | [开发工具](tools/README.md) | 样本校验、测量与回归工具 |
+| [候选包工具](tools/release/README.md) | 构建身份、许可证与校验和核验；不自动发布 |
 | [发行说明](docs/releases/v0.1.0.md) | 当前版本功能、下载与运行要求 |
 
 欢迎通过 [Issues](https://github.com/sevico/MuxRay/issues) 提交建议或反馈。
