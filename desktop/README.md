@@ -1,7 +1,7 @@
 # MuxRay 桌面开发
 
 桌面程序使用 Wails **v2.14.0**、React **18.3.1**、TypeScript **5.9.3** 和
-Vite **7.3.6**，采用 [MIT 许可证](../LICENSE)。本页面向桌面开发与集成，介绍
+Vite **7.3.7**，采用 [MIT 许可证](../LICENSE)。本页面向桌面开发与集成，介绍
 构建、测试、接口和资源边界。
 
 使用软件请先阅读[使用指南](../docs/preview-guide.md)、[支持范围](../docs/preview-scope.md)
