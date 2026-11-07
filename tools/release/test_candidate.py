@@ -90,8 +90,17 @@ class CandidateTest(unittest.TestCase):
 
     def test_dirty_source(self):
         for status in [' M README.md', '?? secret.txt']:
-            with patch.object(c, 'run', side_effect=[COMMIT, status]), self.assertRaisesRegex(ValueError, 'clean'):
+            with patch.object(c, 'run', side_effect=[COMMIT, status]), self.assertRaisesRegex(ValueError, 'clean') as raised:
                 c.check_source(self.repo, COMMIT)
+            self.assertIn(status, str(raised.exception))
+
+    def test_dirty_source_diagnostic_is_bounded(self):
+        status = '\n'.join(f'?? untracked-{i}.txt' for i in range(25))
+        with patch.object(c, 'run', side_effect=[COMMIT, status]), self.assertRaises(ValueError) as raised:
+            c.check_source(self.repo, COMMIT)
+        self.assertIn('?? untracked-19.txt', str(raised.exception))
+        self.assertNotIn('?? untracked-20.txt', str(raised.exception))
+        self.assertIn('5 more entries', str(raised.exception))
 
     def test_abbreviated_commit(self):
         with self.assertRaisesRegex(ValueError, 'full lowercase'):

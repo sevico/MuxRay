@@ -53,8 +53,14 @@ def validate_version(version):
 def check_source(repo, commit):
     require(re.fullmatch('[0-9a-f]{40}', commit), 'Commit must be the full lowercase 40-character SHA.')
     require(run(['git', 'rev-parse', 'HEAD'], repo).strip() == commit, 'HEAD does not match requested commit.')
-    require(not run(['git', 'status', '--porcelain', '--untracked-files=all'], repo).strip(),
-            'Source must be clean, including untracked files. Commit changes or use a clean checkout.')
+    status = run(['git', 'status', '--porcelain', '--untracked-files=all'], repo).rstrip()
+    if status:
+        paths = status.splitlines()
+        diagnostic = '\n'.join(paths[:20])
+        if len(paths) > 20:
+            diagnostic += f'\n... {len(paths) - 20} more entries'
+        raise ValueError('Source must be clean, including untracked files. '
+                         'Commit changes or use a clean checkout.\n' + diagnostic)
 
 
 def relative_name(name):
