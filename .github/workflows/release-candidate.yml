@@ -40,13 +40,16 @@ jobs:
         with:
           python-version: '3.13'
       - name: Candidate tooling tests (no GUI)
-        run: python -B -m unittest discover -s tools/release -p 'test_*.py' -v
+        run: python -B -X warn_default_encoding -W error::EncodingWarning -m unittest discover -s tools/release -p 'test_*.py' -v
       - name: Install reviewed Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.14.0
       - name: Install locked frontend dependencies
         working-directory: desktop/frontend
         run: npm ci --no-audit --no-fund
       - name: Build and verify Windows candidate
+        env:
+          PYTHONWARNDEFAULTENCODING: '1'
+          PYTHONWARNINGS: 'error::EncodingWarning'
         run: python -B tools/release/candidate.py build --version "$env:CANDIDATE_VERSION" --commit "$env:CANDIDATE_COMMIT" --output .cache/release-candidate
       - name: Upload candidate assets only (no public Release)
         uses: actions/upload-artifact@v4

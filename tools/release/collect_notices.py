@@ -157,7 +157,7 @@ for name in packages:
 
 vite = FRONTEND / "node_modules/vite"
 vite_package = read_json(vite / "package.json")
-vite_lines = (vite / "LICENSE.md").read_text().splitlines()
+vite_lines = (vite / "LICENSE.md").read_text(encoding="utf-8-sig").splitlines()
 end = next(i for i, line in enumerate(vite_lines) if line.startswith("# Licenses of bundled dependencies"))
 assert any(m["id"] == "\0vite/modulepreload-polyfill.js" for m in rendered)
 component("vite-modulepreload", "Vite injected modulepreload polyfill", vite_package["version"], "MIT",
@@ -167,7 +167,7 @@ component("vite-modulepreload", "Vite injected modulepreload polyfill", vite_pac
 component("go-runtime", "Go runtime and standard library", GO_VERSION, "BSD-3-Clause",
           {"kind": "linked-toolchain-runtime", "standardPackages": [p["importPath"] for p in production["packages"] if p["standard"] and not p["importPath"].startswith("vendor/")]},
           [GOROOT / "LICENSE"], "https://go.dev/", ["Source-header third-party notices are preserved separately below."])
-vendor_versions = dict(re.findall(r"^# (golang.org/x/\S+) (\S+)", (GOROOT / "src/vendor/modules.txt").read_text(), re.M))
+vendor_versions = dict(re.findall(r"^# (golang.org/x/\S+) (\S+)", (GOROOT / "src/vendor/modules.txt").read_text(encoding="utf-8-sig"), re.M))
 for name in ["crypto", "net", "sys", "text"]:
     path = "golang.org/x/" + name
     relevant = [p["importPath"] for p in production["packages"] if p["importPath"].startswith("vendor/" + path + "/")]
@@ -179,7 +179,7 @@ for name in ["crypto", "net", "sys", "text"]:
 # Preserve complete in-source permissions for selected standard-library files.
 for name, key, label in [("acosh.go", "go-math-sun-1993", "Sun fdlibm notice (1993)"), ("exp.go", "go-math-sun-2004", "Sun fdlibm notice (2004)"), ("atan.go", "go-math-cephes", "Cephes / Stephen L. Moshier notice")]:
     path = GOROOT / "src/math" / name
-    lines = path.read_text().splitlines()
+    lines = path.read_text(encoding="utf-8-sig").splitlines()
     if "cephes" in key:
         start = next(i for i, line in enumerate(lines) if "// Cephes Math Library Release" in line)
         end = next(i for i in range(start, len(lines)) if "moshier@" in lines[i])
@@ -189,7 +189,7 @@ for name, key, label in [("acosh.go", "go-math-sun-1993", "Sun fdlibm notice (19
     component(key, label, "as distributed with " + GO_VERSION, "source-specific permissive notice", {"kind": "standard-library-source-notice"}, [(path, (start + 1, end + 1))])
 for name, key in [("nistec/p256_ordinv.go", "go-fiat-nistec"), ("edwards25519/scalar.go", "go-fiat-edwards25519")]:
     path = GOROOT / "src/crypto/internal/fips140" / name
-    lines = path.read_text().splitlines()
+    lines = path.read_text(encoding="utf-8-sig").splitlines()
     start = next(i for i, line in enumerate(lines) if "Copyright" in line and "fiat-crypto" in line)
     end = next(i for i in range(start, len(lines)) if "SOFTWARE, EVEN IF ADVISED" in lines[i])
     component(key, "Fiat Cryptography notice in Go " + name, "as distributed with " + GO_VERSION, "BSD-1-Clause-like original text",

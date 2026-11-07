@@ -42,7 +42,7 @@ class CandidateTest(unittest.TestCase):
         (self.audit / 'licenses/library').mkdir(parents=True)
         self.notice = self.audit / 'licenses/library/LICENSE'
         self.notice.write_text('Test library permissive notice.\n', encoding='utf-8')
-        (self.audit / 'THIRD-PARTY-NOTICES.txt').write_text('Third party notices\n' + self.notice.read_text(), encoding='utf-8')
+        (self.audit / 'THIRD-PARTY-NOTICES.txt').write_text('Third party notices\n' + self.notice.read_text(encoding='utf-8'), encoding='utf-8')
         self.metadata = c.binary_metadata(RAW)
         self.inventory = {
             'schemaVersion': 1,
