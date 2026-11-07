@@ -25,6 +25,8 @@ python -B tools/release/candidate.py verify --assets .cache/release-0.2.0-dev-ru
 
 生产构建前、构建后和采集后均检查 HEAD 与工作区。未知版本、dirty 工作区、构建修改已跟踪文件、错误平台/tag、旧 EXE 的许可证库存、遗漏通知、越界路径和个人绝对路径都会使命令失败。失败目录保留用于排查；修复后换一个新输出目录，不覆盖证据。
 
+生成绑定目录由 `.gitattributes` 固定为 LF，与 Wails 的输出一致，避免 Windows checkout 使用 CRLF 后产生仅换行转换导致的 dirty 状态。此规则不忽略绑定文件，也不放宽源码检查；失败信息会列出最多 20 项相对路径，方便定位真正的构建改动。
+
 `assets/` 中只有候选 ZIP、`BUILD-INFO.json` 和 `SHA256SUMS.txt`。ZIP 包含桌面 EXE、MIT 许可证、使用说明、该版本说明、构建身份、第三方通知、许可证库存及原始通知副本。不分发 CLI、WebView2 Runtime、安装器或本地媒体。程序需要预装 Microsoft Edge WebView2 Runtime。
 
 其余 `build.log`、`license-audit/`、中间 EXE 和校验收据是本地证据，可能包含机器路径，**不要将整个输出目录上传**。公开附件使用固定白名单；ZIP 会在临时目录实际解压，并逐项核对大小、SHA-256、许可副本及清单引用。

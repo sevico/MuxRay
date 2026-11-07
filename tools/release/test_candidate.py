@@ -116,6 +116,38 @@ class CandidateTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'clean'):
             c.check_source(self.repo, commit)
 
+    def test_generated_bindings_stay_clean_after_autocrlf_checkout(self):
+        source = c.HERE.parents[1]
+        (self.repo / '.gitattributes').write_bytes((source / '.gitattributes').read_bytes())
+        bindings = {
+            path.relative_to(source): path.read_bytes().replace(b'\r\n', b'\n')
+            for path in (source / 'desktop/frontend/wailsjs/go').rglob('*') if path.is_file()
+        }
+        self.assertTrue(bindings)
+        for relative, content in bindings.items():
+            path = self.repo / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+        subprocess.run(['git', 'init', '-q', self.repo], check=True)
+        subprocess.run(['git', 'add', '.'], cwd=self.repo, check=True)
+        subprocess.run(['git', '-c', 'user.name=Candidate Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'fixture'], cwd=self.repo, check=True)
+        checkout = self.root / 'checkout'
+        subprocess.run(['git', 'clone', '-q', '--no-hardlinks', '--config', 'core.autocrlf=true', self.repo, checkout], check=True)
+        commit = c.run(['git', 'rev-parse', 'HEAD'], checkout).strip()
+        c.check_source(checkout, commit)
+        # A fresh Windows checkout must already match Wails' LF output. A
+        # content-only git diff can miss this CRLF-to-LF status difference.
+        for relative, content in bindings.items():
+            with self.subTest(binding=str(relative)):
+                self.assertEqual((checkout / relative).read_bytes(), content)
+                (checkout / relative).write_bytes(content)
+        c.check_source(checkout, commit)
+        relative = next(iter(bindings))
+        (checkout / relative).write_bytes(bindings[relative] + b'\n// changed binding\n')
+        with self.assertRaisesRegex(ValueError, 'clean') as raised:
+            c.check_source(checkout, commit)
+        self.assertIn(relative.as_posix(), str(raised.exception))
+
     def test_license_wrong_binary(self):
         self.exe.write_bytes(b'different executable')
         with self.assertRaisesRegex(ValueError, 'different executable'):
