@@ -405,7 +405,7 @@ sudo apt-get install --no-install-recommends build-essential pkg-config libgtk-3
 ./desktop/build/bin/MuxRay
 ```
 
-脚本固定调用 Wails v2.14.0，默认使用 `GOTOOLCHAIN=go1.27.2`，允许调用者
+脚本固定调用 Wails v2.14.0，默认使用 `GOTOOLCHAIN=go1.27.4`，允许调用者
 显式覆盖该环境变量；不会修改全局 Go 配置。首次运行需要下载对应工具链和
 依赖。构建使用 `webkit2_41` 标记、真实生成的绑定及 lockfile 中的前端依赖，
 并将该版本生成器在 Unix 上添加的绑定文件执行位恢复为 0644。
@@ -416,8 +416,8 @@ Linux 使用 Wails 的 GTK 原生打开/保存对话框，不启用 Windows 的
 
 ```bash
 # 在 desktop/ 下，先完成上述构建
-GOTOOLCHAIN=go1.27.2 go test -race -tags webkit2_41 -count=1 ./...
-GOTOOLCHAIN=go1.27.2 go vet -tags webkit2_41 ./...
+GOTOOLCHAIN=go1.27.4 go test -race -tags webkit2_41 -count=1 ./...
+GOTOOLCHAIN=go1.27.4 go vet -tags webkit2_41 ./...
 ```
 
 Linux CI 在 Ubuntu 24.04 构建并核对生成物、运行前端单测和 Go race/vet，
@@ -520,7 +520,7 @@ Go 与前端依赖版本分别由模块文件和 npm lockfile 固定；构建时
 
 ## 构建版本与退出采集
 
-Go 最低版本为 **1.27.2**。Windows 生产入口可指定版本：
+桌面构建要求 Go **1.27.4** 或更新版本。Windows 生产入口可指定版本：
 `./build-production.ps1 -Version 0.1.0-dev`；默认仍为 `0.1.0-dev`。
 CLI、原生窗口标题和诊断快照的 `producer.version` 共用构建版本，
 `-Version` 不会自动改变预览成熟度、创建 Git tag 或发布 Release。

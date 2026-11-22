@@ -43,7 +43,7 @@ python -B tools/release/candidate.py verify --assets .cache/release-0.2.0-dev-ru
 
 `collect_notices.py` 延续首版实际二进制许可审查，包括 Go 标准库源内通知、Wails vendored 组件、内嵌 JS runtime、WebView2 Go loader、React/scheduler、Vite polyfill 和 Unicode 数据通知。`Unicode-LICENSE.txt` 是首次发行核对并保留的 Unicode License V3 原文，来源为 [Unicode 官方许可](https://www.unicode.org/license.txt)，保留原版权年份。
 
-当前摘录规则已经审查的依赖为 Go `1.27.2`、Wails `v2.14.0`、go-webview2 `v1.0.22`、uniseg `v0.4.7`；升级这些依赖时工具会失败，需复核源内许可与数据版本后更新规则。出现新的前端运行时依赖、未知模块许可、缺少源文件或嵌入内容变化也会失败。此约束有意保留，避免泛化采集器静默漏掉通知。Wails runtime 的许可元数据差异继续保存在库存中供发行者复核，不能把库存视为法律背书。
+当前摘录规则已经审查的依赖为 Go `1.27.4`、Wails `v2.14.0`、go-webview2 `v1.0.22`、uniseg `v0.4.7`；升级这些依赖时工具会失败，需复核源内许可与数据版本后更新规则。出现新的前端运行时依赖、未知模块许可、缺少源文件或嵌入内容变化也会失败。此约束有意保留，避免泛化采集器静默漏掉通知。Wails runtime 的许可元数据差异继续保存在库存中供发行者复核，不能把库存视为法律背书。
 
 `license-inventory.json` 是逐文件可核验的归属证据；合并通知必须覆盖每份原文。采集脚本拒绝 `python -O`，入口会清除 `PYTHONOPTIMIZE`，不允许跳过这些核对。
 

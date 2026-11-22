@@ -104,7 +104,7 @@ webview_module = module_index["github.com/wailsapp/go-webview2"]
 wails = Path(wails_module["Dir"])
 webview = Path(webview_module["Dir"])
 assert wails_module["Version"] == "v2.14.0" and webview_module["Version"] == "v1.0.22", "Review vendored notice policy after upgrading Wails/WebView2"
-assert GO_VERSION == "go1.27.2", "Review standard-library source notices after upgrading the Go toolchain"
+assert GO_VERSION == "go1.27.4", "Review standard-library source notices after upgrading the Go toolchain"
 children = [
     ("wails-winc", "Wails vendored winc", "MIT", wails / "internal/frontend/desktop/windows/winc/LICENSE", "Windows window/control integration"),
     ("wails-file-dialog", "Wails vendored go-common-file-dialog", "MIT", wails / "internal/go-common-file-dialog/LICENSE", "Default Windows native file dialog"),
