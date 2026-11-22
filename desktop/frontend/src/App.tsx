@@ -171,7 +171,7 @@ export function App({ controller }: { controller: Controller }) {
         <HexPanel view={view} controller={controller} disabled={!canPage || !!isClosing} message={fault} />
       </>}
     </main>
-    <footer><span><i aria-hidden="true" /> 源文件只读 · 不上传媒体</span><span>桌面预览版 / 单文件会话</span></footer>
+    <footer><span><i aria-hidden="true" /> 源文件只读 · 不上传媒体</span><span>桌面版 / 单文件会话</span></footer>
   </div>;
 }
 
