@@ -5,7 +5,7 @@ Vite **7.3.7**，采用 [MIT 许可证](../LICENSE)。本页面向桌面开发�
 构建、测试、接口和资源边界。
 
 使用软件请先阅读[使用指南](../docs/preview-guide.md)、[支持范围](../docs/preview-scope.md)
-和 [v0.1.0 发行说明](../docs/releases/v0.1.0.md)。开发环境从
+和 [v0.2.0 发行说明](../docs/releases/v0.2.0.md)。开发环境从
 [Windows 构建](#windows-构建)或 [Linux 构建](#linux-构建)开始，日常验证见
 [检查与开发](#检查与开发)。
 
@@ -108,7 +108,7 @@ GOP 依据 FLV 关键帧声明，不证明 IDR。未知值不补零，可在精�
 
 扫描结束后点击“导出诊断 JSON”，先冻结当前会话的有界结果，再选择保存位置。
 界面默认请求独立的 `desktopDiagnosticSnapshot` v3 格式；存在当前编解码器检索页时使用 v4，
-存在当前已完成时间戳检索页时使用 v5。这是开发分支行为，已发布的 v0.1.0 不包含 v5。
+自 v0.2.0 起，存在当前已完成时间戳检索页时使用 v5。
 快照包含文件名、生成时间、扫描
 覆盖、前 100 条保留结构诊断、选中 Tag、匹配的已完成详情/Hex、已有 Summary 概览
 与当前事件页，以及当前趋势窗口、阈值和局部观察项。v2 还包含当前已完成的媒体曲线页，
@@ -514,10 +514,9 @@ Go 与前端依赖版本分别由模块文件和 npm lockfile 固定；构建时
 升级依赖时同步检查生成绑定、许可通知及安全检查，构建选项参考对应版本源码和
 [官方 CLI 文档](https://wails.io/docs/reference/cli/)。
 
-当前 [v0.1.0 发行版](../docs/releases/v0.1.0.md) 提供 Windows x64 portable ZIP，
+[GitHub Releases](https://github.com/sevico/MuxRay/releases/latest) 提供 Windows x64 便携 ZIP，
 需预装 WebView2 Runtime，不附安装器。项目采用 MIT，发行包包含对应构建的第三方
-许可通知及构建身份；后续发行应重新核对产物与依赖。准备过程另存为
-[历史开发记录](../docs/release-readiness-20261018.md)。
+许可通知及构建身份。发行流程见[打包工具说明](../tools/release/README.md)。
 
 ## 构建版本与退出采集
 

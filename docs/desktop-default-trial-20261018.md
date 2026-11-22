@@ -16,7 +16,7 @@
 
 ## 本轮范围和完成条件
 
-1. 真实长录像：打开现有 `sample.flv`，查看一个有界趋势窗口，选 Tag，读取详情与
+1. 生成长媒体：打开现有 `sample.flv`，查看一个有界趋势窗口，选 Tag，读取详情与
    原始 Hex，导出当前证据，再关闭文件。
 2. 合成问题样本：打开既有 `trends-mixed.flv`，从趋势定位 Tag 257 的时间戳回退，
    对照前驱 Tag 255、详情及原始字节，导出证据。该样本是构造输入，不是真实损坏录像。
@@ -38,10 +38,15 @@
 
 | 任务 | 实际观察与导出 | 结果 |
 | --- | --- | --- |
-| 真实长录像 `sample.flv` | 41,698,926 byte，172,504 Tags，0 条结构诊断；趋势窗口 `[0,256)`，从时间戳观察定位 Tag 2、AVC 详情和 IDR NAL；Hex `[874,1386)`，导出 `long-recording.json`（83,150 byte） | schema 校验通过，256 个趋势点与源文件一致，512 byte Hex 与源文件一致 |
+| 生成长媒体 `sample.flv` | 41,698,926 byte，172,504 Tags，0 条结构诊断；趋势窗口 `[0,256)`，从时间戳观察定位 Tag 2、AVC 详情和 IDR NAL；Hex `[874,1386)`，导出 `long-recording.json`（83,150 byte） | schema 校验通过，256 个趋势点与源文件一致，512 byte Hex 与源文件一致 |
 | 合成回退样本 `trends-mixed.flv` | 6,496 byte，300 Tags，5 条结构诊断；窗口 `[256,300)` 的 Tag 257 DTS 为 4,900 ms，对照前驱 Tag 255 的 5,000 ms，回退 100 ms；查看详情和 AVC video 字段 Hex `[5601,6113)`，导出 `timestamp-regression.json`（24,925 byte） | schema 校验通过，44 个趋势点及 512 byte Hex 与源文件一致 |
 
-长录像中 Tag 2 与 Tag 0 的 DTS 重复只作为时间戳观察，不据此判定媒体损坏。
+后续核对发现，`sample.flv` 的关闭收据 SHA-256 与
+[`generated-long-avc-aac-2400s` 清单](../testdata/manifests/longmedia/generated-long-avc-aac-2400s.sample.json)
+完全一致。它是 FFmpeg 生成的媒体。真实录像转封装的测试另见
+[10 月 1 日的验收](desktop-stability-20261001.md#真实长录制样本)。
+
+生成长媒体中 Tag 2 与 Tag 0 的 DTS 重复只作为时间戳观察，不据此判定媒体损坏。
 合成样本的 AVC 详情按预期显示部分解析与 `AVC_RBSP_SYNTAX_TRUNCATED`；该既有最小
 样本未包含完整 slice header，不把它记作本轮产品回归。两份导出仅包含当时已加载的证据，
 未请求的概览、媒体曲线和 H.264 检索页等明确记录为省略。

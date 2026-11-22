@@ -60,9 +60,10 @@ class CandidateTest(unittest.TestCase):
     def save_inventory(self):
         c.write_json(self.audit / 'license-inventory.json', self.inventory)
 
-    def package(self):
+    def package(self, *, status='candidate'):
         with patch.object(c, 'check_source'):
-            return c.package(self.repo, '1.2.3', COMMIT, self.exe, self.audit, self.notes, self.output, self.metadata)
+            return c.package(self.repo, '1.2.3', COMMIT, self.exe, self.audit, self.notes, self.output, self.metadata,
+                             status=status)
 
     def check_audit(self):
         return c.validate_audit(self.audit, self.exe, self.metadata, self.repo)
@@ -83,6 +84,28 @@ class CandidateTest(unittest.TestCase):
                 c.validate_version(value)
         for value in ['0.2.0-dev', '1.2.3', '1.2.3-rc.1+build.1']:
             c.validate_version(value)
+
+    def test_release_package_round_trip(self):
+        assets = self.package(status='release')
+        root = 'MuxRay-v1.2.3-windows-x64'
+        self.assertEqual(c.verify(assets), {'status': 'release', 'checksums': 'verified', 'extractedFiles': 8})
+        self.assertEqual({p.name for p in assets.iterdir()}, {root + '.zip', 'BUILD-INFO.json', 'SHA256SUMS.txt'})
+        with zipfile.ZipFile(assets / (root + '.zip')) as archive:
+            usage = archive.read(root + '/README.txt').decode('utf-8')
+            self.assertNotIn('build candidate', usage)
+            self.assertEqual(archive.read(root + '/MuxRay.exe'), self.exe.read_bytes())
+        info = c.read_json(assets / 'BUILD-INFO.json')
+        self.assertEqual(info['verification']['nativeAcceptance'], 'not-run-by-this-tool')
+        info['status'] = 'candidate'
+        c.write_json(assets / 'BUILD-INFO.json', info)
+        self.rehash_assets(assets)
+        with self.assertRaisesRegex(ValueError, 'Unexpected archive root'):
+            c.verify(assets)
+
+    def test_release_layout_rejects_prerelease_and_build_metadata(self):
+        for version in ['0.2.0-dev', '1.2.3+build.1']:
+            with self.subTest(version=version), self.assertRaisesRegex(ValueError, 'plain major.minor.patch'):
+                c.archive_root(version, 'release')
 
     def test_wrong_commit(self):
         with patch.object(c, 'run', return_value='b' * 40), self.assertRaisesRegex(ValueError, 'HEAD'):

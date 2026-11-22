@@ -1,4 +1,4 @@
-"""Build, attribute, package and verify a Windows desktop candidate; never publish it."""
+"""Build, attribute, package and verify Windows desktop distribution assets."""
 from __future__ import annotations
 
 import argparse
@@ -48,6 +48,14 @@ def run(argv, cwd, env=None):
 
 def validate_version(version):
     require(len(version) <= 64 and VERSION.fullmatch(version), 'Version must be SemVer without a v prefix (not dev).')
+
+
+def archive_root(version, status):
+    validate_version(version)
+    require(status in ('candidate', 'release'), 'Expected candidate or release metadata.')
+    if status == 'release':
+        require('-' not in version and '+' not in version, 'Release packages require a plain major.minor.patch version.')
+    return f'MuxRay-v{version}-windows-x64' + ('-candidate' if status == 'candidate' else '')
 
 
 def check_source(repo, commit):
@@ -169,15 +177,14 @@ def collect_audit(repo, exe, audit, raw, metadata, env):
     validate_audit(audit, exe, metadata, repo)
 
 
-def package(repo, version, commit, exe, audit, notes, output, metadata):
+def package(repo, version, commit, exe, audit, notes, output, metadata, *, status='candidate'):
     """Only the build entry point calls this after building and checking clean source."""
-    validate_version(version)
+    name = archive_root(version, status)
     check_source(repo, commit)
-    inventory, licenses = validate_audit(audit, exe, metadata, repo)
+    _, licenses = validate_audit(audit, exe, metadata, repo)
     note_text = public_text(notes)
     require(note_text.splitlines()[0].strip() == '# MuxRay v' + version, 'Release notes heading must match Version exactly.')
     public_text(repo / 'LICENSE')
-    name = 'MuxRay-v' + version + '-windows-x64-candidate'
     stage = output / 'package' / name
     stage.mkdir(parents=True)
     assets = output / 'assets'
@@ -189,18 +196,23 @@ def package(repo, version, commit, exe, audit, notes, output, metadata):
         destination = stage / file
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(audit / file, destination)
+    usage_kind = 'candidate' if status == 'candidate' else 'portable'
+    candidate_notice = (
+        'This is a build candidate, not a published or accepted release. CI, security and native acceptance are separate gates.\n'
+        if status == 'candidate' else ''
+    )
     (stage / 'README.txt').write_text(
-        f'MuxRay {version} — Windows x64 candidate\n\n'
+        f'MuxRay {version} — Windows x64 {usage_kind}\n\n'
         'Extract the complete folder and run MuxRay.exe. Microsoft Edge WebView2 Runtime must already be installed.\n'
         'This portable desktop package includes no installer, CLI, or WebView2 Runtime.\n'
         'Open an FLV file to inspect tags, codec details and bytes, then export a diagnostic JSON snapshot.\n'
         'Review snapshots before sharing; they may contain filenames and media-derived values.\n'
-        'This is a build candidate, not a published or accepted release. CI, security and native acceptance are separate gates.\n'
+        f'{candidate_notice}'
         'See RELEASE-NOTES.md, BUILD-INFO.json, LICENSE and THIRD-PARTY-NOTICES.txt.\n'
         'Project: https://github.com/sevico/MuxRay\n', encoding='utf-8')
     files = licenses | {'MuxRay.exe', 'LICENSE', 'README.txt', 'RELEASE-NOTES.md'}
     info = {
-        'schemaVersion': 1, 'product': 'MuxRay', 'version': version, 'status': 'candidate',
+        'schemaVersion': 1, 'product': 'MuxRay', 'version': version, 'status': status,
         'sourceCommit': commit, 'sourceURL': 'https://github.com/sevico/MuxRay/tree/' + commit,
         'platform': 'windows-amd64', 'license': 'MIT', 'archiveRoot': name,
         'build': {'command': 'desktop/build-production.ps1 -Version ' + version,
@@ -237,11 +249,10 @@ def verify(assets):
         require(sha(contained_file(assets, name)) == digest, 'Asset checksum mismatch.')
         checksums[name] = digest
     info = read_json(contained_file(assets, 'BUILD-INFO.json'))
-    validate_version(info['version'])
-    require(info['schemaVersion'] == 1 and info['status'] == 'candidate', 'Expected candidate metadata.')
+    require(info['schemaVersion'] == 1, 'Unsupported package metadata schema.')
+    root = archive_root(info['version'], info['status'])
     require(all(info['verification'].get(k) == 'not-run-by-this-tool' for k in ('ci', 'nativeAcceptance', 'securityScan')),
-            'Candidate metadata makes unsupported validation claims.')
-    root = 'MuxRay-v' + info['version'] + '-windows-x64-candidate'
+            'Package metadata makes unsupported validation claims.')
     require(info['archiveRoot'] == root, 'Unexpected archive root.')
     require(set(checksums) == {root + '.zip', 'BUILD-INFO.json'}, 'Unexpected asset list.')
     files = info['files']
@@ -254,7 +265,7 @@ def verify(assets):
     with tempfile.TemporaryDirectory(prefix='muxray-candidate-verify-') as temporary:
         with zipfile.ZipFile(assets / (root + '.zip')) as zipped:
             require(len(zipped.infolist()) == len(expected) and set(zipped.namelist()) == expected, 'Archive whitelist or duplicate mismatch.')
-            require(len(expected) <= 1000 and sum(i.file_size for i in zipped.infolist()) <= 512 * 1024 * 1024, 'Archive exceeds candidate bounds.')
+            require(len(expected) <= 1000 and sum(i.file_size for i in zipped.infolist()) <= 512 * 1024 * 1024, 'Archive exceeds package bounds.')
             require(all((i.external_attr >> 16) & 0o170000 == 0o100000 for i in zipped.infolist()), 'Archive contains non-regular files.')
             require(zipped.testzip() is None, 'ZIP CRC mismatch.')
             zipped.extractall(temporary)
@@ -270,14 +281,15 @@ def verify(assets):
             c['name']: c['version'] for c in inventory['components'] if c['inclusionBasis']['kind'] == 'production-go-module'}}
         _, notices = validate_audit(extracted, extracted / 'MuxRay.exe', metadata)
         require(set(files) == notices | {'MuxRay.exe', 'LICENSE', 'README.txt', 'RELEASE-NOTES.md'}, 'Unapproved package contents.')
-    return {'status': 'candidate', 'checksums': 'verified', 'extractedFiles': len(expected)}
+    return {'status': info['status'], 'checksums': 'verified', 'extractedFiles': len(expected)}
 
 
 def build(args):
     repo, output = args.repo.resolve(), args.output.resolve()
-    validate_version(args.version)
+    status = 'release' if args.release_package else 'candidate'
+    archive_root(args.version, status)
     check_source(repo, args.commit)
-    require(os.name == 'nt', 'Windows x64 candidate builds require Windows.')
+    require(os.name == 'nt', 'Windows x64 desktop builds require Windows.')
     notes = contained_file(repo, 'docs/releases/v' + args.version + '.md')
     require(not output.exists(), 'Use a new output directory; existing evidence is never overwritten.')
     # Output inside a checkout is supported only under the ignored .cache/ directory.
@@ -288,7 +300,7 @@ def build(args):
                PYTHONOPTIMIZE='', PYTHONDONTWRITEBYTECODE='1', GOTELEMETRY='off')
     shell = shutil.which('pwsh') or shutil.which('powershell')
     require(shell, 'PowerShell is required.')
-    print('Building exact production candidate...', flush=True)
+    print(f'Building Windows x64 {status} package...', flush=True)
     try:
         log = run([shell, '-NoProfile', '-File', repo / 'desktop/build-production.ps1', '-Version', args.version], repo, env)
     except subprocess.CalledProcessError as error:
@@ -304,9 +316,9 @@ def build(args):
     audit = output / 'license-audit'
     collect_audit(repo, exe, audit, raw, metadata, env)
     check_source(repo, args.commit)
-    assets = package(repo, args.version, args.commit, exe, audit, notes, output, metadata)
+    assets = package(repo, args.version, args.commit, exe, audit, notes, output, metadata, status=status)
     write_json(output / 'verification.json', {**verify(assets), 'verifiedUTC': datetime.now(timezone.utc).isoformat()})
-    print('Candidate assets verified: ' + str(assets))
+    print('Package assets verified: ' + str(assets))
 
 
 def main():
@@ -317,6 +329,8 @@ def main():
     create.add_argument('--version', required=True)
     create.add_argument('--commit', required=True)
     create.add_argument('--output', type=Path, required=True)
+    create.add_argument('--release-package', action='store_true',
+                        help='use the public ZIP layout for a major.minor.patch version')
     check = commands.add_parser('verify')
     check.add_argument('--assets', type=Path, required=True)
     args = parser.parse_args()
@@ -326,7 +340,7 @@ def main():
         else:
             print(json.dumps(verify(args.assets.resolve()), indent=2))
     except (ValueError, OSError, KeyError, subprocess.CalledProcessError, zipfile.BadZipFile) as error:
-        parser.exit(1, 'Candidate failed: ' + str(error) + '\n')
+        parser.exit(1, 'Package failed: ' + str(error) + '\n')
 
 
 if __name__ == '__main__':

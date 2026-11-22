@@ -11,6 +11,10 @@ on:
         description: 'Full 40-character commit SHA to build'
         type: string
         required: true
+      release_package:
+        description: 'Use the public ZIP layout for a major.minor.patch version'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -22,6 +26,7 @@ jobs:
     env:
       CANDIDATE_VERSION: ${{ inputs.version }}
       CANDIDATE_COMMIT: ${{ inputs.commit }}
+      RELEASE_PACKAGE: ${{ inputs.release_package }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -46,11 +51,17 @@ jobs:
       - name: Install locked frontend dependencies
         working-directory: desktop/frontend
         run: npm ci --no-audit --no-fund
-      - name: Build and verify Windows candidate
+      - name: Build and verify Windows package
         env:
           PYTHONWARNDEFAULTENCODING: '1'
           PYTHONWARNINGS: 'error::EncodingWarning'
-        run: python -B tools/release/candidate.py build --version "$env:CANDIDATE_VERSION" --commit "$env:CANDIDATE_COMMIT" --output .cache/release-candidate
+        run: |
+          $buildArgs = @('build', '--version', $env:CANDIDATE_VERSION, '--commit', $env:CANDIDATE_COMMIT,
+                         '--output', '.cache/release-candidate')
+          if ($env:RELEASE_PACKAGE -eq 'true') {
+            $buildArgs += '--release-package'
+          }
+          python -B tools/release/candidate.py @buildArgs
       - name: Upload candidate assets only (no public Release)
         uses: actions/upload-artifact@v4
         with:

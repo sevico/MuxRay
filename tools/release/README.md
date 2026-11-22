@@ -1,6 +1,6 @@
-# Windows 候选发行包
+# Windows 发行包
 
-`candidate.py` 将生产构建、第三方通知采集、便携 ZIP、构建信息和 SHA-256 校验文件串成一条命令。工具只生成 **candidate**，不创建 Git tag，不上传 GitHub Release，不覆盖已发布附件。
+`candidate.py` 将生产构建、第三方通知采集、便携 ZIP、构建信息和 SHA-256 校验文件串成一条命令。默认生成候选格式，正式包使用 `--release-package`。两种格式都只生成本地附件。
 
 ## 准备与运行
 
@@ -22,6 +22,10 @@ $releaseCommit = git rev-parse HEAD
 python -B tools/release/candidate.py build --version 0.2.0-dev --commit $releaseCommit --output .cache/release-0.2.0-dev-run1
 python -B tools/release/candidate.py verify --assets .cache/release-0.2.0-dev-run1/assets
 ```
+
+正式发行时对同一入口添加 `--release-package` 并传入 `0.2.0` 一类的正式版本号，
+生成 `MuxRay-v0.2.0-windows-x64.zip`。构建信息中的 `status: release` 表示 ZIP 格式；
+验收和公开发布仍由发行流程完成。两种格式使用相同的解包和许可核验。
 
 生产构建前、构建后和采集后均检查 HEAD 与工作区。未知版本、dirty 工作区、构建修改已跟踪文件、错误平台/tag、旧 EXE 的许可证库存、遗漏通知、越界路径和个人绝对路径都会使命令失败。失败目录保留用于排查；修复后换一个新输出目录，不覆盖证据。
 
@@ -53,6 +57,8 @@ python -B -m unittest discover -s tools/release -p 'test_*.py' -v
 
 `BUILD-INFO.json` 中 CI、原生验收和安全扫描固定记录 `not-run-by-this-tool`。版本字段来自本次构建传入的 linker 参数，实际窗口/导出 JSON 版本仍需原生验收。文件校验说明字节一致，不能替代来源信任或代码签名，也不证明 EXE 没有缺陷。
 
-GitHub Actions 的 **Release candidate** 工作流只支持手动启动，输入版本与完整提交号。它执行同一候选命令并仅上传 `assets/` 为 Actions Artifact，权限仅 `contents: read`。下载后可运行 `verify` 再检查。GitHub Artifact 本身不是公开发行。
+GitHub Actions 的 **Release candidate** 工作流只支持手动启动，输入版本与完整提交号。
+勾选 `release_package` 可生成正式 ZIP 格式。工作流仅上传 `assets/` 为 Actions Artifact，
+权限为 `contents: read`。下载后可运行 `verify` 复核。
 
 正式发行前，发行者应将该 SHA 的 CI、安全扫描及**这个 EXE SHA-256** 的原生验收分别核对，审核版本说明和许可，再显式决定发布。不要把“candidate 构建成功”改写成“全部门禁通过”，也不要用新附件覆盖已发布版本。
